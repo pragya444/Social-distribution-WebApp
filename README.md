@@ -8,6 +8,17 @@ See [the web page](https://uofa-cmput404.github.io/general/project.html) for a d
 
 Make a distributed social network!
 
+## Team Members
+
+| Name        | CCID   | GitHub Username |
+| ----------- | ------ | --------------- |
+| Utsha Samanta | usamanta | utshasamanta     |
+| Raiyana Rahman| raiyana2 | raiyana2     |
+| Pragya Das | pragya4 | pragya444     |
+| Ling Zhuo | lzhuo2 | lz22222     |
+| Kevin Ho He | hohe | kevinhh12     |
+| Kehan Chen | kehan | KarlFranzman     |
+
 ## License
 
 This project is licensed under the Apache License 2.0 – see the [LICENSE](LICENSE) file for details.  

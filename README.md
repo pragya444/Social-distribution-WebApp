@@ -10,10 +10,14 @@ Make a distributed social network!
 
 ## License
 
-* Choose an OSI approved license, name it here, and copy the license text to a file called `LICENSE`.
+This project is licensed under the Apache License 2.0 – see the [LICENSE](LICENSE) file for details.  
 
 ## Copyright
 
-The authors claiming copyright, if they wish to be known, can list their names here...
-
-* 
+The authors claiming copyright for this project:  
+- Utsha Samanta 
+- Raiyana Rahman  
+- Pragya Das  
+- Ling Zhuo  
+- Kevin Ho He  
+- Kehan Chen  

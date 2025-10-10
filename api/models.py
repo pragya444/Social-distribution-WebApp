@@ -1,0 +1,67 @@
+from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.conf import settings
+import secrets
+
+def generate_id():
+    return secrets.token_urlsafe(16)
+
+def get_url():
+    if hasattr(settings, 'DJANGO_ENV'):
+        if settings.DJANGO_ENV == 'development':
+            return "http://127.0.0.1:8000/"
+        elif settings.DJANGO_ENV == 'production':
+            return ""   # Have to replace with actual production URL
+    return "http://127.0.0.1:8000/"
+
+
+
+class UserManager(BaseUserManager):
+    def create_user(self, username, password, **kwargs):
+        if not username:
+            raise ValueError("User must have a username")
+        if not password:
+            raise ValueError("User must have a password")
+        
+        user = self.model(username=username)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+    
+    def create_superuser(self, username, password):
+        if not username:
+            raise ValueError("Superuser must have a username")
+        if not password:
+            raise ValueError("Superuser must have a password")
+        
+        user = self.create_user(username, password)
+        user.is_superuser = True
+        user.is_staff = True
+        user.save(using=self._db)
+        return user
+    
+
+class User(AbstractBaseUser, PermissionsMixin):
+    id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
+    username = models.CharField(max_length=255, unique=True, db_index=True)
+    github = models.URLField(max_length=255, default="")
+    profile_picture = models.URLField(max_length=255, default="")
+    url = models.CharField(max_length=255, default="", db_index=True, unique=True)
+    is_staff = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    USERNAME_FIELD = 'username'
+    objects = UserManager()
+
+    def __str__(self):
+        return self.username
+    
+    def save(self, *args, **kwargs):
+        self.url = get_url() + "authors/" + self.id  # Creates a fixed URL for each user
+        return super(User, self).save(*args, **kwargs)
+
+
+
+# Create your models here.

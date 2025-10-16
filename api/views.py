@@ -1,10 +1,39 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import Entry
+from .models import Entry, User
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 
 # Create your views here.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def author_stream(request, author_id):
     # simple placeholder queryset — adjust privacy rules as needed
     entries = Entry.objects.filter(deleted=False, visibility='PUBLIC').order_by('-updated')

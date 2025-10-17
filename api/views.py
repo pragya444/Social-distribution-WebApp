@@ -56,26 +56,6 @@ def author_stream(request, author_id):
 
 
 
-
-@login_required     # require login
-@csrf_protect   # use csrf token in browser posts
-@require_http_methods(['POST'])   # only allow post
-def make_entries_public(request, entry_id):
-    # only the owner can change visibility
-    entry = get_object_or_404(Entry, id=entry_id, is_deleted=False)
-    if entry.author_id != request.user.id:
-        return HttpResponseForbidden("only the author can change visibility for this entry.")
-
-    # set to public and save
-    entry.visibility = 'PUBLIC'
-    entry.updated = now()
-    entry.save()
-
-    return JsonResponse({'status': 'ok', 'entry_id': str(entry_id), 'visibility': entry.visibility}, status=200)
-
-
-
-
 # -------- helpers -------------------------------------------------------------
 def _json_from_request(request):
     # parse json body safely, return empty dict on failure
@@ -324,11 +304,6 @@ def entry_edit_page(request, author_id, entry_id):
     return redirect('author-all-entries', author_id=author_id)
 
 
-
-
-
-
-
 def _looks_like_markdown(t: str) -> bool:
     # normalize to empty string when none
     t = t or ""
@@ -417,3 +392,9 @@ def entry_delete(request, author_id, entry_id):
 
     # bounce back to the author's stream
     return redirect('author-all-entries', author_id=author_id)
+
+
+
+'''
+1. Entry delettion: Keep in database, but not show in streams or api results.
+'''

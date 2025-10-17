@@ -184,6 +184,7 @@ def entry_retrieve_update(request, author_id, entry_id):
 @login_required
 @csrf_protect
 def entry_create_page(request, author_id):
+    # TODO: Handle image being too large error
     # only the owner can open and submit this form
     if str(request.user.id) != str(author_id):
         return HttpResponseForbidden("only the author can create entries here.")

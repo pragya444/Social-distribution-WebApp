@@ -32,7 +32,14 @@ body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font);
   display:flex; align-items:center; gap:10px;
   padding:10px 12px; border-radius:10px; color:#1f2937; text-decoration:none;
 }
-.nav-item:hover{ background:var(--mint-deep); }
+.nav-item{
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+.nav-item:hover{ 
+  background:var(--mint-deep); 
+  transform:translateY(-1px);
+}
+
 .logout{
   display:block;
   width:100%;
@@ -79,7 +86,11 @@ body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font);
 .icons{ display:flex; align-items:center; gap:14px; }
 .bell, .avatar{ font-size:20px; }
 
-.content{ padding:24px; max-width:900px; }
+.content{
+  padding:24px;
+  max-width: none;    /* remove width cap so cards can fill the column */
+  width: 100%;
+}
 
 .feed-header{
   display:flex; align-items:center; gap:16px; margin-bottom:18px;
@@ -92,14 +103,43 @@ body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font);
 .btn{
   background:var(--accent); color:#000; border:0; padding:10px 14px; border-radius:999px; cursor:pointer;
   text-decoration:none; display:inline-block; font-weight:600;
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease, background-color .12s ease;
+  box-shadow:var(--shadow-soft);
 }
+.btn:hover{
+  transform:translateY(-2px);
+  filter:brightness(.98);
+  box-shadow:0 8px 26px rgba(0,0,0,.08);
+}
+.btn:active{
+  transform:translateY(0);
+  box-shadow:var(--shadow-soft);
+}
+.btn:focus{
+  outline:none;
+  box-shadow:0 0 0 4px rgba(255,178,107,.15);
+}
+
 .btn.ghost{
   background:#fff; border:1px solid var(--line); color:var(--ink);
+}
+.btn.ghost:hover{
+  background:#f8fafc;
+  transform:translateY(-1px);
+  box-shadow:var(--shadow-soft);
+}
+.btn.ghost:active{
+  transform:translateY(0);
+}
+.btn.ghost:focus{
+  outline:none;
+  box-shadow:0 0 0 4px rgba(59,130,246,.12);
 }
 
 .card{
   background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
   box-shadow:var(--shadow); padding:16px; margin-bottom:16px;
+  
 }
 .card-head{ display:flex; align-items:center; justify-content:space-between; }
 .author{ display:flex; align-items:center; gap:10px; }
@@ -124,7 +164,7 @@ body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font);
 .menu-pop .danger{ color:var(--danger); }
 
 .card-body{ padding:8px 2px; }
-.text{ font-size:15px; line-height:1.6; margin-bottom:8px; white-space:pre-wrap; }
+.text{ font-size:15px; line-height:1.6; margin: 20px; }
 .time{ font-size:12px; color:var(--muted); }
 
 .card-foot{ display:flex; gap:18px; color:#111; margin-top:6px; }

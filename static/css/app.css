@@ -33,7 +33,38 @@ body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font);
   padding:10px 12px; border-radius:10px; color:#1f2937; text-decoration:none;
 }
 .nav-item:hover{ background:var(--mint-deep); }
-.logout{ margin-top:auto; color:#e06b6f; }
+.logout{
+  display:block;
+  width:100%;
+  margin-top:auto;
+  padding:10px 12px;
+  text-align:center;
+  text-decoration:none;
+  background:var(--accent);
+  color:var(--accent-ink);
+  border-radius:10px;
+  border:0;
+  font-weight:600;
+  cursor:pointer;
+  box-shadow:var(--shadow-soft);
+  transition:transform .08s ease, box-shadow .08s ease, filter .08s ease;
+}
+
+.logout:hover{
+  transform:translateY(-2px);
+  box-shadow:0 6px 20px rgba(0,0,0,.08);
+  filter:brightness(.98);
+}
+
+.logout:active{
+  transform:translateY(0);
+  box-shadow:var(--shadow-soft);
+}
+
+.logout:focus{
+  outline:none;
+  box-shadow:0 0 0 4px rgba(255,178,107,.15);
+}
 
 .main{ display:flex; flex-direction:column; }
 .topbar{

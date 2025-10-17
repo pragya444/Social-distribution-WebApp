@@ -62,14 +62,18 @@ class User(AbstractBaseUser, PermissionsMixin):
         self.url = get_url() + "authors/" + self.id  # Creates a fixed URL for each user
         return super(User, self).save(*args, **kwargs)
     
+
+
+
+
 class Entry(models.Model):
-    '''
-    This model represents a blog entry or post created by an author. 
+    """
+    This model represents a blog entry or post created by an author.
     Each entry has a title, content, visibility settings, and timestamps for creation and updates.
     The visibility can be set to 'PUBLIC', 'FRIENDS', 'PRIVATE', or 'UNLISTED'.
     The foreign key relationship to the User model indicates which author created the entry.
-    '''
-    
+    """
+
     VISIBILITY_CHOICES = [
         ('PUBLIC', 'Public'),
         ('FRIENDS', 'Friends'),
@@ -80,24 +84,26 @@ class Entry(models.Model):
     id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='entries')
     title = models.CharField(max_length=255)
-    content = models.TextField()
+
+    content = models.TextField(blank=True, default="")  #stores text OR base64 image data
+    content_type = models.CharField(max_length=60, blank=True, default="")  # e.g. text/markdown,  image/png;base64
+
     visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='PUBLIC')
     is_deleted = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
+    @property
+    def is_image(self) -> bool:
+        """NEW: True if entry is an image entry encoded as base64 (e.g., image/png;base64)."""
+        ct = (self.content_type or "").lower()
+        return ct.startswith("image/") and ct.endswith(";base64")
+
+    @property
+    def is_markdown(self) -> bool:
+        """NEW: True if entry should be rendered as Markdown."""
+        return (self.content_type or "").lower() in {"text/markdown", "text/commonmark", "text/md"}
+
     def __str__(self):
         return self.title
-    
 
-
-
-# Create your models here.
-
-'''
-Write your reference here.
-
--The class Entry was written with autocompletion,OpenAI's GPT-5, 2025-10-15
-
-
-'''

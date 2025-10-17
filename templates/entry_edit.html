@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Edit Entry{% endblock %}
+{% block content %}
+<div class="page-form">
+  <h1>Edit Entry</h1>
+
+  <form method="post" class="form" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <label class="form-row">
+      <span>Title</span>
+      <input name="title" value="{{ entry.title }}" required>
+    </label>
+
+    <label class="form-row">
+      <span>Visibility</span>
+      <select name="visibility">
+        <option value="PUBLIC"   {% if entry.visibility == "PUBLIC" %}selected{% endif %}>PUBLIC</option>
+        <option value="UNLISTED" {% if entry.visibility == "UNLISTED" %}selected{% endif %}>UNLISTED</option>
+        <option value="FRIENDS"  {% if entry.visibility == "FRIENDS" %}selected{% endif %}>FRIENDS</option>
+      </select>
+    </label>
+
+    <label class="form-row">
+      <span>Content Type</span>
+      <select name="contentType">
+        <!-- keep text types; when uploading an image we'll overwrite this server-side -->
+        <option value="text/plain"    {% if contentType == "text/plain" %}selected{% endif %}>text/plain</option>
+        <option value="text/markdown" {% if contentType == "text/markdown" %}selected{% endif %}>text/markdown</option>
+      </select>
+    </label>
+
+    <label class="form-row">
+      <span>Content</span>
+      <textarea name="content" rows="10">{{ entry.content }}</textarea>
+    </label>
+
+    <label class="form-row" style="align-items:center; gap:8px;">
+      <input type="checkbox" name="as_image" id="as_image">
+      <span>Upload a new image to replace this entry</span>
+    </label>
+
+  
+    <label class="form-row">
+      <span>Image</span>
+      <input type="file" name="image" accept="image/*">
+    </label>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">Save</button>
+      <a class="btn ghost" href="{% url 'author-all-entries' author_id=author_id %}">Cancel</a>
+    </div>
+  </form>
+
+
+</div>
+{% endblock %}

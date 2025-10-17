@@ -1,0 +1,38 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}SocialDistribution{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="{% static 'css/app.css' %}" rel="stylesheet">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">Menu.........</div>
+      <nav class="nav">
+        <a class="nav-item" href="#">Feed</a>
+        <a class="nav-item" href="#">Discover</a>
+        <a class="nav-item" href="#">Following</a>
+        <a class="nav-item" href="#">Posts</a>
+      </nav>
+      <div class="logout">Log out</div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <input class="search" placeholder="Search">
+        <div class="icons">
+          <span class="bell">🔔</span>
+          <span class="avatar">🙂</span>
+        </div>
+      </header>
+
+      <section class="content">
+        {% block content %}{% endblock %}
+      </section>
+    </main>
+  </div>
+</body>
+</html>

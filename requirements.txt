@@ -7,3 +7,5 @@ dotenv==0.9.9
 PyJWT==2.10.1
 python-dotenv==1.1.1
 sqlparse==0.5.3
+commonmark>=0.9
+Pillow>=10.0,<12.0

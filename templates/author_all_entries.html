@@ -1,14 +1,105 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Author All Entries</title>
-</head>
-<body>
-    <h1>Author All Entries</h1>
-    <ul>
+{% extends "base.html" %}
+{% block title %}your stream/feed{% endblock %}
 
-    </ul>
-</body>
-</html>
+{% block content %}
+
+{# small, local styles to keep the pop menu stable #}
+<style>
+  .menu { position: relative; }
+  .menu .dots { cursor: pointer; padding: 4px 8px; user-select: none; }
+  .menu .menu-pop {
+    display: none;
+    position: absolute; right: 0; top: 28px;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.08); padding: 8px 10px; z-index: 20;
+    min-width: 120px;
+  }
+  /* keep the popover visible on hover/focus/hovering menu itself */
+  .menu:hover .menu-pop,
+  .menu:focus-within .menu-pop,
+  .menu .menu-pop:hover { display: block; }
+  .menu .menu-pop a,
+  .menu .menu-pop button.link { display:block; width:100%; text-align:left; padding:6px 8px; }
+  .menu .menu-pop a:hover,
+  .menu .menu-pop button.link:hover { background:#f3f4f6; border-radius:6px; }
+  .menu .menu-pop .danger { color:#b91c1c; }
+</style>
+
+<div class="feed-header">
+  <h1>Your Stream</h1>
+  <div class="filter-tabs">
+    <button class="tab active">All</button>
+    <button class="tab">Following</button>
+    <button class="tab">Friends</button>
+  </div>
+  <a class="btn" href="{% url 'entry-create-page' author_id=author_id %}">+ New Entry</a>
+</div>
+
+{% for e in entries %}
+  <article class="card">
+    <div class="card-head">
+      <div class="author">
+        <div class="avatar">👤</div>
+        <div class="name">
+          <div class="display">{{ e.author.username }}</div>
+          <div class="handle">@{{ e.author.username|lower }}</div>
+        </div>
+      </div>
+
+      <div class="meta">
+        {% if e.visibility == "PUBLIC" %}
+          <span class="badge badge-public">public</span>
+        {% elif e.visibility == "FRIENDS" %}
+          <span class="badge badge-friends">friends</span>
+        {% elif e.visibility == "UNLISTED" %}
+          <span class="badge badge-unlisted">unlisted</span>
+        {% endif %}
+
+        <div class="menu" tabindex="0" aria-label="entry actions">
+          <span class="dots">⋯</span>
+
+          <div class="menu-pop">
+            <a href="{% url 'entry-edit-page' author_id=author_id entry_id=e.id %}">Edit</a>
+
+            <form method="post"
+                  action="{% url 'entry-delete' author_id=author_id entry_id=e.id %}"
+                  style="margin:0;padding:0;">
+              {% csrf_token %}
+              <button type="submit" class="link danger"
+                      onclick="return confirm('Delete this entry?');">
+                Delete
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <div class="text">
+        {# image entries: show via binary endpoint #}
+        {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
+          <img
+            src="{% url 'entry-image' author_id=author_id entry_id=e.id %}"
+            alt="{{ e.title|default:'image' }}"
+            style="max-width:100%;height:auto;border-radius:8px;"
+          />
+        {% else %}
+          {# text/markdown or plain text: backend already pre-rendered to HTML #}
+          {{ e.rendered|safe }}
+        {% endif %}
+      </div>
+      <div class="time">{{ e.updated|timesince }} ago</div>
+    </div>
+
+    <div class="card-foot">
+      <div class="action">❤️ 0</div>
+      <div class="action">💬 0</div>
+      <div class="action">↗︎ Share</div>
+    </div>
+  </article>
+{% empty %}
+  <p>No entries yet.</p>
+{% endfor %}
+
+{% endblock %}

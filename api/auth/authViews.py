@@ -1,0 +1,59 @@
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.shortcuts import redirect
+from django.urls import reverse
+from .serializers import LoginSerializer, RegisterSerializer
+from ..utils import jwtUtils
+
+
+class LoginView(APIView):
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+
+    def get(self, request):
+        return Response(template_name="auth/login.html")
+    
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            print("Not Valid")
+            return Response(template_name="auth/login.html")
+        
+        user = serializer.validated_data["user"]
+        jwt_token = jwtUtils.make_access_token(user.id)
+        print(jwt_token)
+        response = redirect(reverse("author-all-entries", args=[user.id]))
+        response.set_cookie('jwt', jwt_token, httponly=True, max_age=60*60*24*7)
+        print("Redirecting")
+        return response
+
+class RegisterView(APIView):
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+
+    def get(self, request):
+        return Response(template_name="auth/register.html")
+    
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(template_name="auth/register.html")
+
+        user = serializer.save()
+
+        jwt_token = jwtUtils.make_access_token(user.id)
+        response = redirect(reverse("author-all-entries", args=[user.id]))
+
+        response.set_cookie('jwt', jwt_token, httponly=True, max_age=60*60*24*7)
+        return response
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        response = redirect('login')
+        response.delete_cookie('jwt')
+        return response

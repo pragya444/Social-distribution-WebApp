@@ -1,13 +1,12 @@
 from django.urls import path
 from . import views
-from .auth.viewsets import LoginViewSet, RegistrationViewSet
+from .auth import authViews
 
 
-
-urlpatterns = [
-    path('auth/login', LoginViewSet.as_view({'post': "create"}), name='login_user'),
-    path('auth/register', RegistrationViewSet.as_view({'post': 'create'}), name='register_user'),
-   
+urlpatterns = [   
+    path('auth/login/', authViews.LoginView.as_view(), name="login"),
+    path('auth/register', authViews.RegisterView.as_view(), name="register"),
+    path('auth/logout', authViews.LogoutView.as_view(), name='logout'),
     # author stream, show public entries for a given author
     path('authors/<str:author_id>/stream', views.author_stream, name='author-all-entries'),
 

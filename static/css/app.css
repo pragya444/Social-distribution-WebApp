@@ -19,13 +19,29 @@
 html,body{ height:100%; }
 body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font); }
 
+/* stop overscroll bounce / scroll chaining */
+html, body {
+  overscroll-behavior-y: none; /* prevents page bounce on top/bottom in modern browsers */
+  scroll-behavior: smooth;     /* enable smooth scrolling for anchor/link/JS scrolls */
+  -webkit-overflow-scrolling: touch; /* enable momentum scrolling on iOS */
+}
+
+
 .layout{ display:grid; grid-template-columns: 260px 1fr; min-height:100vh; }
 .sidebar{
   background:var(--mint);
   padding:24px 18px;
   display:flex; flex-direction:column; gap:24px;
   border-right:1px solid var(--mint-deep);
+
+  /* keep the sidebar fixed in the viewport while main content scrolls */
+  position:sticky;
+  top:0;
+  height:100vh;
+  overflow:auto;
 }
+
+
 .brand{ font-weight:700; font-size:20px; }
 .nav{ display:flex; flex-direction:column; gap:10px; }
 .nav-item{
@@ -91,6 +107,8 @@ body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font);
   max-width: none;    /* remove width cap so cards can fill the column */
   width: 100%;
 }
+
+
 
 .feed-header{
   display:flex; align-items:center; gap:16px; margin-bottom:18px;

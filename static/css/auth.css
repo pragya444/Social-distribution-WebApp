@@ -92,6 +92,14 @@ form button:hover {
     transform: scale(1.02);
 }
 
+.input-div .err {
+    color: red;
+}
+
+.err {
+    color: red;
+}
+
 @media (min-width: 768px) {
   .card { width: clamp(360px, 60vw, 480px); }
 }

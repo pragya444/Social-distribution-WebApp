@@ -30,7 +30,18 @@ class RegisterSerializer(serializers.ModelSerializer):
             'profile_picture': {'required': False, 'allow_blank': True}
         }
     
-    
+    def validate_github(self, value):
+        value = (value or "").strip()
+
+        if not value:
+            return ""
+        
+        if value.startswith("https://github.com"):
+            return value
+        
+        return f"https://github.com/{value}"
+
+
     def create(self, validated_data):
         username = validated_data.pop('username')
         password = validated_data.pop('password')

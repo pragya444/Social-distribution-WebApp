@@ -13,8 +13,9 @@
       <h1>Sign Up</h1>
       <h3>or <a href="{% url 'login' %}">Log In</a></h3>
 
-      {% csrf_token %}
       <form method="POST">
+        {% csrf_token %}
+
         <div class="input-div">
           <label for="username">Username</label>
           <input
@@ -24,11 +25,17 @@
             placeholder="Username"
             required
           />
+          {% if errors.username %}
+          <div class="err">{{ errors.username.0 }}</div>
+          {% endif %}
         </div>
 
         <div class="input-div">
           <label for="github">GitHub</label>
           <input type="text" name="github" id="github" placeholder="GitHub" />
+          {% if errors.github %}
+          <div class="err">{{ errors.github.0 }}</div>
+          {% endif %}
         </div>
 
         <div class="input-div">
@@ -41,6 +48,9 @@
             required
             minlength="8"
           />
+          {% if errors.password %}
+          <div class="err">{{ errors.password.0 }}</div>
+          {% endif %}
         </div>
 
         <button class="auth-btn" type="submit">Register</button>

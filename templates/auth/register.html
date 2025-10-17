@@ -1,0 +1,50 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Register</title>
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}" />
+  </head>
+  <body>
+    <article class="card">
+      <h1>Sign Up</h1>
+      <h3>or <a href="{% url 'login' %}">Log In</a></h3>
+
+      {% csrf_token %}
+      <form method="POST">
+        <div class="input-div">
+          <label for="username">Username</label>
+          <input
+            type="text"
+            name="username"
+            id="username"
+            placeholder="Username"
+            required
+          />
+        </div>
+
+        <div class="input-div">
+          <label for="github">GitHub</label>
+          <input type="text" name="github" id="github" placeholder="GitHub" />
+        </div>
+
+        <div class="input-div">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            name="password"
+            id="password"
+            placeholder="Password"
+            required
+            minlength="8"
+          />
+        </div>
+
+        <button class="auth-btn" type="submit">Register</button>
+      </form>
+    </article>
+  </body>
+</html>

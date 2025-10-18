@@ -27,4 +27,5 @@ urlpatterns = [
     path('api/authors/<author_id>/entries/<entry_id>/image/', views.entry_image_binary, name='entry-image'),
     
     path('authors/<author_id>/entries/<entry_id>/delete/', views.entry_delete, name='entry-delete'),
+    path('share/<uuid:token>/', views.entry_shared_view, name='entry-shared-view'),
 ]

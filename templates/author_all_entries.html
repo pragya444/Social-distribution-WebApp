@@ -91,22 +91,6 @@
       </div>
     </div>
 
-    <div class="card-body">
-      <div class="text">
-        {# image entries: show via binary endpoint #}
-        {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
-          <img
-            src="{% url 'entry-image' author_id=author_id entry_id=e.id %}"
-            alt="{{ e.title|default:'image' }}"
-            style="max-width:100%;height:auto;border-radius:8px;"
-          />
-        {% else %}
-          {# text/markdown or plain text: backend already pre-rendered to HTML #}
-          {{ e.rendered|safe }}
-        {% endif %}
-      </div>
-      <div class="time">{{ e.updated|timesince }} ago</div>
-    </div>
 
   <div class="card-foot">
   <div class="action">
@@ -125,7 +109,7 @@
   </div>
   <div class="action">
     <!-- Replaced share emoji with heroicon -->
-    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <svg class="share-icon" data-token="{{ e.share_token }}" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
       <circle cx="6" cy="12" r="3" />
       <circle cx="18" cy="6" r="3" />
@@ -134,8 +118,8 @@
       <line x1="8.7" y1="13.3" x2="15.3" y2="16.7" />
     </svg>
     Share
+   </div>
   </div>
-</div>
 
   </article>
 {% empty %}
@@ -150,6 +134,16 @@
     <button class="cancel" onclick="closeDeleteModal()">Cancel</button>
   </div>
 </div>
+<div id="shareModal" class="modal-overlay">
+  <div class="modal">
+    <h2>Link Copied</h2>
+    <p>Your share link has been copied to the clipboard.</p>
+    <input id="shareLinkInput" type="text" readonly style="width:100%;margin:0.5rem 0;" />
+    <button class="confirm" onclick="closeShareModal()">OK</button>
+  </div>
+</div>
+
+
 
 <script>
   /* Modal delete logic */
@@ -172,6 +166,33 @@
   }
   document.getElementById('deleteModal').addEventListener('click', function(e) {
     if (e.target === this) closeDeleteModal();
+  });
+  /* Share link logic */
+  // SHARE MODAL (simplified)
+  const shareModal = document.getElementById('shareModal');
+  const shareInput = document.getElementById('shareLinkInput');
+
+  // Event delegation: works for dynamically rendered icons
+  document.addEventListener('click', e => {
+    const icon = e.target.closest('.share-icon');
+    if (icon) {
+      const token = icon.dataset.token;
+      if (!token) return;
+      const link = `${window.location.origin}/api/share/${token}/`;
+      navigator.clipboard.writeText(link).then(() => {
+        shareInput.value = link;
+        shareModal.style.display = 'flex';
+        shareInput.select();
+      }).catch(err => console.error('Clipboard copy failed:', err));
+    }
+  });
+
+  // Close share modal
+  shareModal.addEventListener('click', e => {
+    if (e.target === shareModal) shareModal.style.display = 'none';
+  });
+  document.querySelector('#shareModal .confirm').addEventListener('click', () => {
+    shareModal.style.display = 'none';
   });
 </script>
 {% endblock %}

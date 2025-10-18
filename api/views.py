@@ -39,7 +39,7 @@ def author_stream(request, author_id):
     if str(request.user.id) == str(author_id):
         entries = (
             Entry.objects
-            .filter(author_id=author_id, is_deleted=False)
+            .filter(author_id=author_id, is_deleted=False) # entries that hasnt been deleted
             .order_by('-updated')
         )
         
@@ -54,6 +54,10 @@ def author_stream(request, author_id):
         'entries': entries,
     })
 
+def show_public_entries(request ):
+    #TODO: As an author, I want my stream page to show me all the public entries my node knows about, so I can find new people to follow.
+
+    pass
 
 
 # -------- helpers -------------------------------------------------------------

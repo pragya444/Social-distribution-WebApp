@@ -57,7 +57,13 @@
         {# image entries: show via binary endpoint #}
         {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
           <img
-            src="{% url 'entry-image' author_id=author_id entry_id=e.id %}"
+            {% if e.url %}
+                src="{{ e.url }}"
+            {% elif e.content and e.content_type %}
+                src="data:{{ e.content_type }};base64,{{ e.content|safe }}"
+            {% else %}
+                src="{% url 'entry-image' author_id=e.author.id entry_id=e.id %}"
+            {% endif %}
             alt="{{ e.title|default:'image' }}"
             style="max-width:100%;height:auto;border-radius:8px;"
           />

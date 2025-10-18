@@ -25,5 +25,7 @@ urlpatterns = [
     path('api/authors/<author_id>/entries/<entry_id>/image', views.entry_image_binary, name='entry-image'),
     
     path('authors/<author_id>/entries/<entry_id>/delete', views.entry_delete, name='entry-delete'),
-    
+
+    path('authors/<str:author_id>/public-entries', views.show_public_entries, name='public-entries'),
+
 ]

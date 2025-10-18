@@ -54,10 +54,28 @@ def author_stream(request, author_id):
         'entries': entries,
     })
 
-def show_public_entries(request ):
-    #TODO: As an author, I want my stream page to show me all the public entries my node knows about, so I can find new people to follow.
 
-    pass
+def show_public_entries(request, author_id):
+    '''
+    This method shows all public entries from all authors.
+    1. Fetch all entries with visibility set to 'public'.
+    2. Order them by the 'updated' timestamp in descending order.
+    3. Render each entry for display.
+    4. Render the 'author_all_entries.html' template with the list of public entries.
+    5. Return the rendered template as the HTTP response.
+    '''
+    #TODO: As an author, I want my stream page to show me all the public entries my node knows about, so I can find new people to follow.
+    public_entries = Entry.objects.filter(
+        visibility='PUBLIC',
+        is_deleted=False
+    ).order_by('-updated')
+    for e in public_entries:
+        e.rendered = _render_entry(e)
+
+    return render(request, 'public_entries.html', {
+        'author_id': author_id,
+        'entries': public_entries,
+    })
 
 
 # -------- helpers -------------------------------------------------------------

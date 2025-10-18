@@ -12,10 +12,20 @@
       <aside class="sidebar">
         <div class="brand">Menu.........</div>
         <nav class="nav">
+          {% if author and author.id %}
+            <a class="nav-item" href="{% url 'author-all-entries' author_id=author.id %}">My Entry</a>
+            <a class="nav-item" href="{% url 'public-entries' author_id=author.id %}">Discover</a>
+          {% elif user.is_authenticated and user.id %}
+            {# fallback to logged-in user if `author` isn't provided in context #}
+            <a class="nav-item" href="{% url 'author-all-entries' author_id=user.id %}">My Entry</a>
+            <a class="nav-item" href="{% url 'public-entries' author_id=user.id %}">Discover</a>
+          {% else %}
+            <a class="nav-item" href="#">My Entry</a>
+            <a class="nav-item" href="#">Discover</a>
+          {% endif %}
           <a class="nav-item" href="#">Feed</a>
-          <a class="nav-item" href="#">Discover</a>
-          <a class="nav-item" href="#">Following</a>
-          <a class="nav-item" href="#">Posts</a>
+           <a class="nav-item" href="#">Following</a>
+           <a class="nav-item" href="#">Posts</a>
         </nav>
 
         <a class="logout" href="{% url 'logout' %}">Log out</a>

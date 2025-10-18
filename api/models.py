@@ -92,6 +92,7 @@ class Entry(models.Model):
     is_deleted = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
+    followers = models.ManyToManyField('self', symmetrical=False, related_name='following')
 
     @property
     def is_image(self) -> bool:

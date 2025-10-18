@@ -55,7 +55,15 @@ def author_stream(request, author_id):
     })
 
 
-
+@login_required 
+def author_profile(request):
+    author = request.user
+    entries = Entry.objects.filter(author=author).order_by('-updated')
+    context = {
+        'author': author,
+        'entries': entries
+    }
+    return render(request, 'author_profile.html', context) 
 
 @login_required     # require login
 @csrf_protect   # use csrf token in browser posts
@@ -324,9 +332,19 @@ def entry_edit_page(request, author_id, entry_id):
     return redirect('author-all-entries', author_id=author_id)
 
 
+@login_required
+def browse_public_entries(request):
+    # querying for all public entries (local and received)
+    all_public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False).order_by('-created')
 
+    # pre-rendered HTML for each entry
+    for entry in all_public_entries:
+        entry.rendered = _render_entry(entry)  # Add a transient field for template use
 
-
+    # render the entries in the existing browse_entries.html template
+    return render(request, 'browse_entries.html', {
+        'entries': all_public_entries,
+    })
 
 
 def _looks_like_markdown(t: str) -> bool:
@@ -405,15 +423,13 @@ def entry_image_binary(request, author_id, entry_id):
 @login_required
 @csrf_protect
 def entry_delete(request, author_id, entry_id):
-    # hard delete only， make sure the caller is the owner
+    # only the author can delete
     if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("only the author can delete this entry.")
+        return HttpResponseForbidden("Only the author can delete this entry.")
 
-    # fetch the entry (no soft-delete filter here since we're hard-deleting anyway
-    e = get_object_or_404(Entry, id=entry_id, author_id=author_id)
-
-    # remove it from the database for real
-    e.delete()
-
-    # bounce back to the author's stream
+    # soft delete the entry because it says to delete my own entries locally
+    e = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+    e.is_deleted = True
+    e.updated = now()
+    e.save(update_fields=['is_deleted', 'updated'])
     return redirect('author-all-entries', author_id=author_id)

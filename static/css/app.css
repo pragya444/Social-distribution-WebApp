@@ -104,8 +104,7 @@ html, body {
 
 .content{
   padding:24px;
-  max-width: none;    /* remove width cap so cards can fill the column */
-  width: 100%;
+  max-width: 900px;    /* remove width cap so cards can fill the column */
 }
 
 
@@ -157,6 +156,7 @@ html, body {
 .card{
   background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
   box-shadow:var(--shadow); padding:16px; margin-bottom:16px;
+  
   
 }
 .card-head{ display:flex; align-items:center; justify-content:space-between; }

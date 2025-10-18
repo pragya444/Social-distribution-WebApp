@@ -22,12 +22,13 @@ class LoginSerializer(serializers.Serializer):
 class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['username', 'github', 'profile_picture', 'password']
+        fields = ['username', 'github', 'name', 'password']
         extra_kwargs = {
             'password': {'write_only': True, 'required': True, 'min_length': 8},
             'username': {'required': True},
+            'name': {'required': True},
             'github': {'required': False, 'allow_blank': True},
-            'profile_picture': {'required': False, 'allow_blank': True}
+            'profile_picture': {'required': False}
         }
     
     def validate_github(self, value):
@@ -40,6 +41,9 @@ class RegisterSerializer(serializers.ModelSerializer):
             return value
         
         return f"https://github.com/{value}"
+    
+    def validate_name(self, value):
+        return value.strip()
 
 
     def create(self, validated_data):

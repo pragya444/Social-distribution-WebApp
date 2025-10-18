@@ -74,7 +74,7 @@
                 <path d="M20.0229 30.625C19.7665 31.0669 19.3985 31.4338 18.9557 31.6889C18.513 31.9439 18.011 32.0781 17.5 32.0781C16.989 32.0781 16.487 31.9439 16.0443 31.6889C15.6015 31.4338 15.2335 31.0669 14.9771 30.625M26.25 11.6666C26.25 9.34598 25.3281 7.12038 23.6872 5.47944C22.0462 3.8385 19.8206 2.91663 17.5 2.91663C15.1794 2.91663 12.9538 3.8385 11.3128 5.47944C9.67187 7.12038 8.75 9.34598 8.75 11.6666C8.75 21.875 4.375 24.7916 4.375 24.7916H30.625C30.625 24.7916 26.25 21.875 26.25 11.6666Z" stroke="#F69673" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <a href="#" class="avatar-btn" title="Your Profile">
+            <a href="{% url 'profile' author_id=request.user.id %}" class="avatar-btn" title="Your Profile">
               {% if request.user.profile_photo %}
                 <img src="{{ request.user.profile_photo.url }}" alt="Profile" class="avatar-img"/>
               {% else %}

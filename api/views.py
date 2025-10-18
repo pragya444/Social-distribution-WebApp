@@ -1,6 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.db.models import Q
-from .models import Entry, User
+from django.db.models import F, Q
+from .models import Entry
+from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
@@ -10,11 +11,17 @@ from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import linebreaksbr
 from django.urls import reverse
+from django.db.models import F
 from .utils.images import handle_uploaded_image
 import json
 import base64
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
+from rest_framework.response import Response
+from .serializers import UserSerializer
 
-
+User = get_user_model()
 
 try:
     import markdown as md 
@@ -31,6 +38,76 @@ except Exception:
     PIL_AVAILABLE = False
     Image = None
     UnidentifiedImageError = Exception  # Fallback to a generic exception type
+
+
+class ProfileView(APIView):
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+    
+    def get(self, request, author_id):
+        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            if not request.user.is_authenticated:
+                return redirect('login')
+        else:
+            return Response({"Message": "Forbidden"}, status=403)
+
+
+        if (request.user.id != author_id):
+            user = get_object_or_404(User, id=author_id);
+            entries = Entry.objects.filter(author_id=author_id, visibility='PUBLIC', is_deleted=False).order_by('-updated')
+        else:
+            user = request.user
+            entries = Entry.objects.filter(author_id=author_id, is_deleted=False).order_by('-updated')
+
+        serializer = UserSerializer(user)
+
+        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            # attach pre-rendered html for template
+            for e in entries:
+                e.rendered = _render_entry(e)  # add a transient field for template use
+            return Response({ "user": user, "entries": entries }, template_name="author/profile.html")
+        
+        entries_data = (
+            entries.annotate(author_username=F("author__username"))
+            .values("id", "author_username", "title", "content_type", "visibility", "updated",)
+        )
+        return Response({"user": serializer.data, "entries": list(entries_data)}, status=200)
+
+
+
+class ProfileEditView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+
+    def get(self, request, author_id):
+        if getattr(request, "user", None) and request.user.is_authenticated and request.user.id == author_id:
+            return Response({"user": request.user }, template_name="author/profileEdit.html")
+        else:
+            return redirect('home')
+
+    def post(self, request, author_id):
+        if request.user.id != author_id:
+            return redirect('home')
+        
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+
+        if not serializer.is_valid():
+            if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+                return Response({"errors": serializer.errors, "user": request.user}, template_name="author/profileEdit.html", status=400)
+            return Response({"errors": serializer.errors}, status=400)
+
+        user = serializer.save()
+        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            return redirect('profile', author_id=user.id)
+        return Response({"user": serializer.data}, status=200)
+
+
+
+
+
+
+
+
+
 
 
 @login_required
@@ -78,17 +155,6 @@ def author_stream(request, author_id):
         'tab': tab,
     })
 
-
-@login_required 
-def author_profile(request):
-    # NOT IMPLEMENTED YET: view another author's profile page
-    author = request.user
-    entries = Entry.objects.filter(author=author).order_by('-updated')
-    context = {
-        'author': author,
-        'entries': entries
-    }
-    return render(request, 'author_profile.html', context) 
 
 @login_required     # require login
 @csrf_protect   # use csrf token in browser posts

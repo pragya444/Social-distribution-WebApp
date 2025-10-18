@@ -1,12 +1,13 @@
 asgiref==3.10.0
+commonmark==0.9.1
 dj-database-url==3.0.1
 Django==5.2.7
+django-cors-headers==4.9.0
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
 dotenv==0.9.9
+Markdown==3.9
+pillow==11.3.0
 PyJWT==2.10.1
 python-dotenv==1.1.1
 sqlparse==0.5.3
-commonmark>=0.9
-Pillow>=10.0,<12.0
-django-cors-headers>=4.0

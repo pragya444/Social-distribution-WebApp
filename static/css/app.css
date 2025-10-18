@@ -95,7 +95,7 @@ body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font);
 .menu-pop .danger {color: var(--danger);  background: none;}
 .menu-pop .danger:hover {color: var(--danger) !important;}
 .card-body{ padding:8px 2px; }
-.text{ font-size:15px; line-height:1.6; margin-bottom:8px; white-space:pre-wrap; }
+.text{ font-size:15px; line-height:1.6; margin-bottom:8px; }
 .time{ font-size:12px; color:var(--muted); }
 
 .card-foot{ display:flex; gap:40px; color:#111; margin-top:6px; padding: 6px}

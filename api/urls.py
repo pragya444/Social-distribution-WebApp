@@ -7,6 +7,8 @@ urlpatterns = [
     path('auth/login/', authViews.LoginView.as_view(), name="login"),
     path('auth/register/', authViews.RegisterView.as_view(), name="register"),
     path('auth/logout/', authViews.LogoutView.as_view(), name='logout'),
+    path('authors/<str:author_id>/', views.ProfileView.as_view(), name="profile"),
+    path("authors/<str:author_id>/edit/", views.ProfileEditView.as_view(), name="profile_edit"),
     # author stream, show public entries for a given author
     path('authors/<str:author_id>/stream/', views.author_stream, name='author-all-entries'),
 

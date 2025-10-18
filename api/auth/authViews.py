@@ -66,4 +66,5 @@ class LogoutView(APIView):
     def get(self, request):
         response = redirect('login')
         response.delete_cookie('jwt')
+        response.delete_cookie('csrftoken')
         return response

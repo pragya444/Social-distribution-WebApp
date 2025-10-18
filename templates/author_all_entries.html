@@ -44,9 +44,9 @@
 <div class="feed-header">
   <h1>Your Stream</h1>
   <div class="filter-tabs">
-    <button class="tab active">All</button>
-    <button class="tab">Following</button>
-    <button class="tab">Friends</button>
+    <a href="?tab=all" class="tab {% if tab == 'all' %}active{% endif %}">All</a>
+    <a href="?tab=following" class="tab {% if tab == 'following' %}active{% endif %}">Following</a>
+    <a href="?tab=friends" class="tab {% if tab == 'friends' %}active{% endif %}">Friends</a>
   </div>
   <a class="btn" href="{% url 'entry-create-page' author_id=author_id %}">+ New Entry</a>
 </div>

@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.db.models import Q
 from .models import Entry, User
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
 from django.views.decorators.http import require_POST, require_http_methods
@@ -32,31 +33,49 @@ except Exception:
     UnidentifiedImageError = Exception  # Fallback to a generic exception type
 
 
-
 @login_required
 def author_stream(request, author_id):
-    # self stream
-    if str(request.user.id) == str(author_id):
-        entries = (
-            Entry.objects
-            .filter(author_id=author_id, is_deleted=False)
-            .order_by('-updated')
+    # determine the selected tab (default to all)
+    tab = request.GET.get('tab', 'all')
+
+    if tab == 'following':
+        # fetch entries from authors the user follows, excluding the user's own entries
+        entries = Entry.objects.filter(
+            author__in=request.user.following.all(),
+            is_deleted=False
+        ).exclude(author=request.user).order_by('-updated')
+    elif tab == 'friends':
+        # fetch entries visible to friends
+        entries = Entry.objects.filter(
+            visibility='FRIENDS', is_deleted=False
+        ).order_by('-updated')
+    else:  
+        # fetch all public entries
+        public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False)
+
+        # fetch entries from authors the user follows
+        followed_entries = Entry.objects.filter(
+            Q(author__id=author_id) & Q(is_deleted=False)
         )
-        
-    # attach pre-rendered html for template
+
+        # combine followed entries and public entries
+        entries = public_entries.union(followed_entries).order_by('-updated')
+
+    # pre-rendered HTML for template
     for e in entries:
-        e.rendered = _render_entry(e)  # add a transient field for template use
+        e.rendered = _render_entry(e)
 
-
-    # render with author id and a markdown availability flag
+    # render with author ID and the selected tab
     return render(request, 'author_all_entries.html', {
         'author_id': author_id,
         'entries': entries,
+        'tab': tab,
     })
 
 
 @login_required 
 def author_profile(request):
+    # NOT IMPLEMENTED YET: view another author's profile page
     author = request.user
     entries = Entry.objects.filter(author=author).order_by('-updated')
     context = {
@@ -80,9 +99,6 @@ def make_entries_public(request, entry_id):
     entry.save()
 
     return JsonResponse({'status': 'ok', 'entry_id': str(entry_id), 'visibility': entry.visibility}, status=200)
-
-
-
 
 # -------- helpers -------------------------------------------------------------
 def _json_from_request(request):

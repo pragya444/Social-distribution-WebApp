@@ -91,7 +91,23 @@
       </div>
     </div>
 
-
+  <div class="card-body">
+      <div class="text">
+        {# image entries: show via binary endpoint #}
+        {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
+          <img
+            src="{% url 'entry-image' author_id=author_id entry_id=e.id %}"
+            alt="{{ e.title|default:'image' }}"
+            style="max-width:100%;height:auto;border-radius:8px;"
+          />
+        {% else %}
+          {# text/markdown or plain text: backend already pre-rendered to HTML #}
+          {{ e.rendered|safe }}
+        {% endif %}
+      </div>
+      <div class="time">{{ e.updated|timesince }} ago</div>
+    </div>
+    
   <div class="card-foot">
   <div class="action">
     <!-- Replaced heart emoji with heroicon -->

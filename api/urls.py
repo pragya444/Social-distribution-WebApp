@@ -28,6 +28,6 @@ urlpatterns = [
 
     path('authors/<str:author_id>/public-entries', views.show_public_entries, name='public-entries'),
     
-    path('authors/<str:author_id>/followers', views.followers_list, name='followers-list'),
+    # path('authors/<str:author_id>/followers', views.followers_list, name='followers-list'),
 
 ]

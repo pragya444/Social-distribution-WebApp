@@ -497,6 +497,17 @@ def entry_image_binary(request, author_id, entry_id):
     # send bytes back with an actual image/* mime type (strip the ;base64 suffix)
     return HttpResponse(raw, content_type=ct.replace(';base64', ''))
 
+def entry_shared_view(request, token):
+    entry = get_object_or_404(Entry, share_token=token, is_deleted=False)
+    
+    if entry.visibility not in ['PUBLIC', 'UNLISTED']:
+        return HttpResponseForbidden("This entry is not shareable.")
+
+    # render the entry content
+    entry.rendered = _render_entry(entry)
+
+    return render(request, "entry_shared.html", {"entry": entry})
+
 
 
 @require_POST

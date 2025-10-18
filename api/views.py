@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.db.models import Q
 from .models import Entry, User
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
 from django.views.decorators.http import require_POST, require_http_methods
@@ -32,30 +33,62 @@ except Exception:
     UnidentifiedImageError = Exception  # Fallback to a generic exception type
 
 
-
 @login_required
 def author_stream(request, author_id):
-    # self stream
-    if str(request.user.id) == str(author_id):
-        entries = (
-            Entry.objects
-            .filter(author_id=author_id, is_deleted=False)
-            .order_by('-updated')
+    # determine the selected tab (default to all)
+    tab = request.GET.get('tab', 'all')
+
+    if tab == 'following':
+        # fetch entries from authors the user follows, excluding the user's own entries
+        entries = Entry.objects.filter(
+            author__in=request.user.following.all(),
+            is_deleted=False
+        ).exclude(author=request.user).order_by('-updated')
+    elif tab == 'friends':
+        # get friends = mutual following
+        user_following_ids = set(request.user.following.values_list('id', flat=True))
+        user_follower_ids  = set(request.user.followers.values_list('id', flat=True))
+        friend_ids = user_following_ids & user_follower_ids  # mutual
+
+        entries = Entry.objects.filter(
+            author__id__in=friend_ids,
+            visibility='FRIENDS',
+            is_deleted=False
+        ).exclude(author=request.user).order_by('-updated')
+    else:  
+        # fetch all public entries
+        public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False)
+
+        # fetch entries from authors the user follows
+        followed_entries = Entry.objects.filter(
+            Q(author__id=author_id) & Q(is_deleted=False)
         )
-        
-    # attach pre-rendered html for template
+
+        # combine followed entries and public entries
+        entries = public_entries.union(followed_entries).order_by('-updated')
+
+    # pre-rendered HTML for template
     for e in entries:
-        e.rendered = _render_entry(e)  # add a transient field for template use
+        e.rendered = _render_entry(e)
 
-
-    # render with author id and a markdown availability flag
+    # render with author ID and the selected tab
     return render(request, 'author_all_entries.html', {
         'author_id': author_id,
         'entries': entries,
+        'tab': tab,
     })
 
 
-
+@login_required 
+def author_profile(request):
+    # NOT IMPLEMENTED YET: view another author's profile page
+    author = request.user
+    entries = Entry.objects.filter(author=author).order_by('-updated')
+    context = {
+        'author': author,
+        'entries': entries
+    }
+    return render(request, 'author_profile.html', context) 
 
 @login_required     # require login
 @csrf_protect   # use csrf token in browser posts
@@ -72,9 +105,6 @@ def make_entries_public(request, entry_id):
     entry.save()
 
     return JsonResponse({'status': 'ok', 'entry_id': str(entry_id), 'visibility': entry.visibility}, status=200)
-
-
-
 
 # -------- helpers -------------------------------------------------------------
 def _json_from_request(request):
@@ -324,9 +354,19 @@ def entry_edit_page(request, author_id, entry_id):
     return redirect('author-all-entries', author_id=author_id)
 
 
+@login_required
+def browse_public_entries(request):
+    # querying for all public entries (local and received)
+    all_public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False).order_by('-created')
 
+    # pre-rendered HTML for each entry
+    for entry in all_public_entries:
+        entry.rendered = _render_entry(entry)  # Add a transient field for template use
 
-
+    # render the entries in the existing browse_entries.html template
+    return render(request, 'browse_entries.html', {
+        'entries': all_public_entries,
+    })
 
 
 def _looks_like_markdown(t: str) -> bool:
@@ -405,15 +445,13 @@ def entry_image_binary(request, author_id, entry_id):
 @login_required
 @csrf_protect
 def entry_delete(request, author_id, entry_id):
-    # hard delete only， make sure the caller is the owner
+    # only the author can delete
     if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("only the author can delete this entry.")
+        return HttpResponseForbidden("Only the author can delete this entry.")
 
-    # fetch the entry (no soft-delete filter here since we're hard-deleting anyway
-    e = get_object_or_404(Entry, id=entry_id, author_id=author_id)
-
-    # remove it from the database for real
-    e.delete()
-
-    # bounce back to the author's stream
+    # soft delete the entry because it says to delete my own entries locally
+    e = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+    e.is_deleted = True
+    e.updated = now()
+    e.save(update_fields=['is_deleted', 'updated'])
     return redirect('author-all-entries', author_id=author_id)

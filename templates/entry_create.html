@@ -4,7 +4,7 @@
 <div class="page-form">
   <h1>New Entry</h1>
 
-  <form method="post" class="form">
+  <form method="post" class="form" enctype="multipart/form-data">
     {% csrf_token %}
 
     <label class="form-row">
@@ -15,22 +15,23 @@
     <label class="form-row">
       <span>Visibility</span>
       <select name="visibility">
-        <option value="PUBLIC">PUBLIC</option>
-        <option value="UNLISTED">UNLISTED</option>
-        <option value="FRIENDS">FRIENDS</option>
+        <option value="PUBLIC">Public</option>
+        <option value="UNLISTED">Unlisted</option>
+        <option value="FRIENDS">Friends</option>
       </select>
     </label>
 
-    <label class="form-row">
+    <div class="form-row">
       <span>Content Type</span>
-      <select name="contentType" id="contentType">
-        <option value="text/plain">text/plain</option>
-        <option value="text/markdown" selected>text/markdown</option>
-        <!-- Image entry content types required by the course spec (image/*;base64) -->
-        <option value="image/png;base64">image/png;base64</option>
-        <option value="image/jpeg;base64">image/jpeg;base64</option>
-      </select>
-    </label>
+      <!-- Added content type tab bar -->
+      <div class="filter-tabs" id="contentTypeTabs">
+        <button type="button" class="tab active" data-value="text/markdown">Markdown</button>
+        <button type="button" class="tab" data-value="text/plain">Plain</button>
+        <button type="button" class="tab" data-value="image/png;base64">PNG Image</button>
+        <button type="button" class="tab" data-value="image/jpeg;base64">JPEG Image</button>
+      </div>
+      <input type="hidden" name="contentType" id="contentType" value="text/markdown"> <!-- Hidden field -->
+    </div>
 
     <!-- Toggle: when on, this entry is created from an image file -->
     <label class="form-row" style="align-items:center; gap:.5rem;">
@@ -137,6 +138,27 @@
         reader.readAsDataURL(file);
       });
     })();
+
+    const contentTypeTabs = document.getElementById('contentTypeTabs');
+    contentTypeTabs.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Remove active from all tabs
+        contentTypeTabs.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        // Set active for clicked tab
+        tab.classList.add('active');
+        // Update hidden input value
+        contentType.value = tab.dataset.value;
+
+        // If switching to an image tab, check the "Upload as image" checkbox
+        if (tab.dataset.value.startsWith('image/')) {
+          asImage.checked = true;
+          asImage.dispatchEvent(new Event('change'));
+        } else {
+          asImage.checked = false;
+          asImage.dispatchEvent(new Event('change'));
+        }
+      });
+    });
   </script>
 </div>
 {% endblock %}

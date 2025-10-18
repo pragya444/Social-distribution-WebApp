@@ -15,20 +15,23 @@
     <label class="form-row">
       <span>Visibility</span>
       <select name="visibility">
-        <option value="PUBLIC"   {% if entry.visibility == "PUBLIC" %}selected{% endif %}>PUBLIC</option>
-        <option value="UNLISTED" {% if entry.visibility == "UNLISTED" %}selected{% endif %}>UNLISTED</option>
-        <option value="FRIENDS"  {% if entry.visibility == "FRIENDS" %}selected{% endif %}>FRIENDS</option>
+        <option value="PUBLIC"   {% if entry.visibility == "PUBLIC" %}selected{% endif %}>Public</option>
+        <option value="UNLISTED" {% if entry.visibility == "UNLISTED" %}selected{% endif %}>Unlisted</option>
+        <option value="FRIENDS"  {% if entry.visibility == "FRIENDS" %}selected{% endif %}>Friends</option>
       </select>
     </label>
 
-    <label class="form-row">
+     <div class="form-row">
       <span>Content Type</span>
-      <select name="contentType">
-        <!-- keep text types; when uploading an image we'll overwrite this server-side -->
-        <option value="text/plain"    {% if contentType == "text/plain" %}selected{% endif %}>text/plain</option>
-        <option value="text/markdown" {% if contentType == "text/markdown" %}selected{% endif %}>text/markdown</option>
-      </select>
-    </label>
+      <!-- Added content type tab bar -->
+      <div class="filter-tabs" id="contentTypeTabs">
+        <button type="button" class="tab active" data-value="text/markdown">Markdown</button>
+        <button type="button" class="tab" data-value="text/plain">Plain</button>
+        <button type="button" class="tab" data-value="image/png;base64">PNG Image</button>
+        <button type="button" class="tab" data-value="image/jpeg;base64">JPEG Image</button>
+      </div>
+      <input type="hidden" name="contentType" id="contentType" value="text/markdown"> <!-- Hidden field -->
+    </div>
 
     <label class="form-row">
       <span>Content</span>

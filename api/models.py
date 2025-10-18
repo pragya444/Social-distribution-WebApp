@@ -51,6 +51,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
+    following = models.ManyToManyField('self', symmetrical=False, related_name='followers')
+    follwers = models.ManyToManyField('self', symmetrical=False, related_name='following_set')
+    
 
     USERNAME_FIELD = 'username'
     objects = UserManager()
@@ -92,7 +95,7 @@ class Entry(models.Model):
     is_deleted = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
-
+    
     @property
     def is_image(self) -> bool:
         """NEW: True if entry is an image entry encoded as base64 (e.g., image/png;base64)."""

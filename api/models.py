@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.conf import settings
 import secrets
+import uuid
 
 def generate_id():
     return secrets.token_urlsafe(16)
@@ -54,7 +55,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     following = models.ManyToManyField('self', symmetrical=False, related_name='followers')
     follwers = models.ManyToManyField('self', symmetrical=False, related_name='following_set')
     
-
     USERNAME_FIELD = 'username'
     objects = UserManager()
 
@@ -95,6 +95,8 @@ class Entry(models.Model):
     is_deleted = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
+    share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
     
     @property
     def is_image(self) -> bool:

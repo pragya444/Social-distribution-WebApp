@@ -60,6 +60,8 @@ html, body {
 
 .feed-header{
   display:flex; align-items:center; gap:16px; margin-bottom:18px;
+  justify-items: center ;
+
 }
 .feed-header h1{ margin:0; font-size:28px; }
 .filter-tabs{ background:#eef2f1; border-radius:12px; padding:6px; display:flex; gap:4px; }
@@ -112,7 +114,7 @@ html, body {
 .author{ display:flex; align-items:center; gap:10px; }
 .avatar{ width:36px; height:36px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; }
 .display{ font-weight:600; }
-.filter-tabs { display:flex; gap:12px; margin-bottom:16px; background:var(--mint); padding:6px 12px; border-radius:12px; }
+.filter-tabs { display:flex;align-items: center; gap:12px;; background:var(--mint); padding:6px 12px; border-radius:12px; }
 .filter-tabs .tab { text-decoration:none; padding:8px 16px; border-radius:20px; font-size:14px; font-weight:500; color:var(--muted); background:transparent; transition:background 0.3s ease, color 0.3s ease; }
 .filter-tabs .tab:hover { background:var(--mint-deep); color:var(--ink); }
 .filter-tabs .tab.active { background:#fff; color:var(--ink); }

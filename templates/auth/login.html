@@ -13,8 +13,11 @@
       <h1>Login to you Account</h1>
       <h3>or <a href="{% url 'register' %}">Sign up</a></h3>
 
-      {% csrf_token %}
       <form method="POST">
+        {% csrf_token %} {% if errors.error %}
+        <div class="err">{{ errors.error.0 }}</div>
+        {% endif %}
+
         <div class="input-div">
           <label for="username">Username</label>
           <input

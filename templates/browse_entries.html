@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Browse Public Entries</h1>
+
+{% if entries %}
+    <ul class="entry-list">
+        {% for entry in entries %}
+            <li class="entry-item">
+                <h2>{{ entry.title }}</h2>
+                <div class="entry-content">
+                    {{ entry.rendered|safe }}
+                </div>
+                <p><strong>Author:</strong> {{ entry.author.username }}</p>
+                <p><strong>Published:</strong> {{ entry.created|date:"M d, Y, H:i" }}</p>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>No public entries available.</p>
+{% endif %}
+{% endblock %}

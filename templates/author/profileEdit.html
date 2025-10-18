@@ -1,0 +1,178 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %} Edit Profile {% endblock %}
+
+
+{% block content %}
+
+<style>
+    :root {
+        --mint: #d9f0e5;
+        --mint-deep: #bfe3d1;
+        --ink: #1e1e1e;
+        --muted: #6b7280;
+        --card: #ffffff;
+        --line: #e5e7eb;
+        --accent: #ffb26b;
+        --accent-ink: #7a4b1f;
+        --danger: #e15b64;
+        --bg: #f7faf9;
+        --radius: 16px;
+        --shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+        --shadow-soft: 0 1px 6px rgba(0, 0, 0, 0.05);
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji",
+        "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+    }
+
+    .edit-card {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        align-items: flex-start;
+        border: 1px solid var(--mint);
+        background: var(--card);
+        border-radius: 24px;
+        padding: 1.25rem 1.25rem;
+        box-shadow: var(--shadow-soft);
+        width: clamp(400px, 85vw, 560px);
+    }
+
+    .profile-avatar {
+        width: 72px;
+        height: 72px;
+        border-radius: 999px;
+        background: var(--accent);
+        flex: 0 0 72px;
+        box-shadow: inset 0 0 0 2px #fff;
+    }
+
+    .profile-avatar img {
+        width: 72px;
+        height: 72px;
+        border-radius: 999px;
+        object-fit: cover;
+        display: block;
+    }
+
+    form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        width: 100%;
+    }
+
+    .input-div {
+        display: flex;
+        flex-direction: column;
+        align-items: start;
+        gap: 0.2rem;
+        color: var(--muted);
+    }
+
+    form input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+    }
+
+    .buttons {
+        display: flex;
+        gap: 1rem;
+        width: 100%;
+        margin-top: 1rem;
+    }
+
+    /* shared button styles for both <button> and <a> */
+    .btn {
+        flex: 1;                   /* 50/50 split */
+        display: inline-flex;      /* so <a> can center text like a button */
+        align-items: center;
+        justify-content: center;
+        padding: 0.6rem;
+        border-radius: 10px;
+        font-weight: 600;
+        text-decoration: none;     /* remove link underline */
+        border: none;              /* ignored by <a>, ok for <button> */
+        color: var(--card);
+        transition: transform .1s;
+    }
+
+    .edit-btn {
+        background: linear-gradient(to right, var(--danger), var(--accent));
+    }
+
+    .back-btn {
+        background: linear-gradient(to right, var(--accent), var(--mint-deep));
+        color: var(--ink);
+    }
+
+    .btn:hover { 
+        transform: scale(1.02); 
+        cursor: pointer; 
+    }
+
+    .err {
+        color: red;
+    }
+
+    @media (min-width: 768px) {
+        .edit-card { width: clamp(360px, 60vw, 480px); }
+    }
+
+</style>
+
+<h2>Update Profile</h2>
+
+<article class="edit-card">
+    <div class="profile-avatar">
+        {% if user.profile_picture %}
+            <img src="{{ user.profile_picture }}" alt="{{ user.name }}" />
+        {% endif %}
+    </div>
+
+    <form method="POST" action="{% url 'profile_edit' author_id=user.id %}">
+        {% csrf_token %}
+        <div class="input-div">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" placeholder="Name" value="{{user.name}}">
+            {% if errors.name %}
+                <div class="err">{{ errors.name.0 }}</div>
+            {% endif %}
+        </div>
+
+        <div class="input-div">
+            <label for="profile_picture">Profile Picture</label>
+            <input type="text" id="profile_picture" name="profile_picture" placeholder="Profile Picture URL" value="{{user.profile_picture}}">
+            {% if errors.profile_picture %}
+                <div class="err">{{ errors.profile_picture.0 }}</div>
+            {% endif %}
+        </div>
+
+        <div class="input-div">
+            <label for="description">Description</label>
+            <input type="text" name="description" id="description" placeholder="Description..." value="{{user.description}}">
+            {% if errors.description %}
+                <div class="err">{{ errors.description.0 }}</div>
+            {% endif %}
+        </div>
+
+        <div class="input-div">
+            <label for="github">GitHub</label>
+            <input type="text" name="github" id="github" placeholder="GitHub" value="{{user.github}}">
+            {% if errors.github %}
+                <div class="err">{{ errors.github.0 }}</div>
+            {% endif %}
+        </div>
+
+        <div class="buttons">
+            <button type="submit" class="btn edit-btn">Update</button>
+            <a href="{% url 'profile' author_id=user.id %}" class="btn back-btn">Back</a>
+        </div>
+    </form>
+
+</article>
+
+
+{% endblock %}

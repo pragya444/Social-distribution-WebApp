@@ -19,7 +19,11 @@ class LoginView(APIView):
 
         if not serializer.is_valid():
             print("Not Valid")
-            return Response(template_name="auth/login.html")
+            return Response(
+                {"errors": serializer.errors, "data": request.data},
+                template_name="auth/login.html",
+                status=400,
+            )
         
         user = serializer.validated_data["user"]
         jwt_token = jwtUtils.make_access_token(user.id)
@@ -29,6 +33,7 @@ class LoginView(APIView):
         print("Redirecting")
         return response
 
+
 class RegisterView(APIView):
     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
 
@@ -36,10 +41,15 @@ class RegisterView(APIView):
         return Response(template_name="auth/register.html")
     
     def post(self, request):
+        print(request.data)
         serializer = RegisterSerializer(data=request.data)
         
         if not serializer.is_valid():
-            return Response(template_name="auth/register.html")
+            return Response(
+                {"errors": serializer.errors, "data": request.data},
+                template_name="auth/register.html",
+                status=400,
+            )
 
         user = serializer.save()
 
@@ -56,4 +66,5 @@ class LogoutView(APIView):
     def get(self, request):
         response = redirect('login')
         response.delete_cookie('jwt')
+        response.delete_cookie('csrftoken')
         return response

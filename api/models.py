@@ -44,13 +44,18 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
     username = models.CharField(max_length=255, unique=True, db_index=True)
-    github = models.URLField(max_length=255, default="")
-    profile_picture = models.URLField(max_length=255, default="")
+    name = models.CharField(max_length=255, default="Anonymous")
+    github = models.CharField(max_length=255, default="")
+    profile_picture = models.CharField(max_length=255, default="")
+    description = models.CharField(max_length=500, default="")
     url = models.CharField(max_length=255, default="", db_index=True, unique=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
+    following = models.ManyToManyField('self', symmetrical=False, related_name='followers')
+    follwers = models.ManyToManyField('self', symmetrical=False, related_name='following_set')
+    
 
     USERNAME_FIELD = 'username'
     objects = UserManager()
@@ -92,7 +97,7 @@ class Entry(models.Model):
     is_deleted = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
-
+    
     @property
     def is_image(self) -> bool:
         """NEW: True if entry is an image entry encoded as base64 (e.g., image/png;base64)."""

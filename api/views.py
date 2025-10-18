@@ -1,5 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import Entry, User
+from django.db.models import F, Q
+from .models import Entry
+from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
@@ -9,11 +11,17 @@ from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import linebreaksbr
 from django.urls import reverse
+from django.db.models import F
 from .utils.images import handle_uploaded_image
 import json
 import base64
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
+from rest_framework.response import Response
+from .serializers import UserSerializer
 
-
+User = get_user_model()
 
 try:
     import markdown as md 
@@ -32,26 +40,119 @@ except Exception:
     UnidentifiedImageError = Exception  # Fallback to a generic exception type
 
 
+class ProfileView(APIView):
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+    
+    def get(self, request, author_id):
+        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            if not request.user.is_authenticated:
+                return redirect('login')
+        else:
+            return Response({"Message": "Forbidden"}, status=403)
+
+
+        if (request.user.id != author_id):
+            user = get_object_or_404(User, id=author_id);
+            entries = Entry.objects.filter(author_id=author_id, visibility='PUBLIC', is_deleted=False).order_by('-updated')
+        else:
+            user = request.user
+            entries = Entry.objects.filter(author_id=author_id, is_deleted=False).order_by('-updated')
+
+        serializer = UserSerializer(user)
+
+        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            # attach pre-rendered html for template
+            for e in entries:
+                e.rendered = _render_entry(e)  # add a transient field for template use
+            return Response({ "user": user, "entries": entries }, template_name="author/profile.html")
+        
+        entries_data = (
+            entries.annotate(author_username=F("author__username"))
+            .values("id", "author_username", "title", "content_type", "visibility", "updated",)
+        )
+        return Response({"user": serializer.data, "entries": list(entries_data)}, status=200)
+
+
+
+class ProfileEditView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+
+    def get(self, request, author_id):
+        if getattr(request, "user", None) and request.user.is_authenticated and request.user.id == author_id:
+            return Response({"user": request.user }, template_name="author/profileEdit.html")
+        else:
+            return redirect('home')
+
+    def post(self, request, author_id):
+        if request.user.id != author_id:
+            return redirect('home')
+        
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+
+        if not serializer.is_valid():
+            if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+                return Response({"errors": serializer.errors, "user": request.user}, template_name="author/profileEdit.html", status=400)
+            return Response({"errors": serializer.errors}, status=400)
+
+        user = serializer.save()
+        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            return redirect('profile', author_id=user.id)
+        return Response({"user": serializer.data}, status=200)
+
+
+
+
+
+
+
+
+
+
 
 @login_required
 def author_stream(request, author_id):
-    # self stream
-    if str(request.user.id) == str(author_id):
-        entries = (
-            Entry.objects
-            .filter(author_id=author_id, is_deleted=False) # entries that hasnt been deleted
-            .order_by('-updated')
+    # determine the selected tab (default to all)
+    tab = request.GET.get('tab', 'all')
+
+    if tab == 'following':
+        # fetch entries from authors the user follows, excluding the user's own entries
+        entries = Entry.objects.filter(
+            author__in=request.user.following.all(),
+            is_deleted=False
+        ).exclude(author=request.user).order_by('-updated')
+    elif tab == 'friends':
+        # get friends = mutual following
+        user_following_ids = set(request.user.following.values_list('id', flat=True))
+        user_follower_ids  = set(request.user.followers.values_list('id', flat=True))
+        friend_ids = user_following_ids & user_follower_ids  # mutual
+
+        entries = Entry.objects.filter(
+            author__id__in=friend_ids,
+            visibility='FRIENDS',
+            is_deleted=False
+        ).exclude(author=request.user).order_by('-updated')
+    else:  
+        # fetch all public entries
+        public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False)
+
+        # fetch entries from authors the user follows
+        followed_entries = Entry.objects.filter(
+            Q(author__id=author_id) & Q(is_deleted=False)
         )
-        
-    # attach pre-rendered html for template
+
+        # combine followed entries and public entries
+        entries = public_entries.union(followed_entries).order_by('-updated')
+
+    # pre-rendered HTML for template
     for e in entries:
-        e.rendered = _render_entry(e)  # add a transient field for template use
+        e.rendered = _render_entry(e)
 
-
-    # render with author id and a markdown availability flag
+    # render with author ID and the selected tab
     return render(request, 'author_all_entries.html', {
         'author_id': author_id,
         'entries': entries,
+        'tab': tab,
     })
     
 def show_follow_entries(request, author_id):
@@ -340,6 +441,21 @@ def entry_edit_page(request, author_id, entry_id):
     return redirect('author-all-entries', author_id=author_id)
 
 
+@login_required
+def browse_public_entries(request):
+    # querying for all public entries (local and received)
+    all_public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False).order_by('-created')
+
+    # pre-rendered HTML for each entry
+    for entry in all_public_entries:
+        entry.rendered = _render_entry(entry)  # Add a transient field for template use
+
+    # render the entries in the existing browse_entries.html template
+    return render(request, 'browse_entries.html', {
+        'entries': all_public_entries,
+    })
+
+
 def _looks_like_markdown(t: str) -> bool:
     # normalize to empty string when none
     t = t or ""
@@ -416,17 +532,15 @@ def entry_image_binary(request, author_id, entry_id):
 @login_required
 @csrf_protect
 def entry_delete(request, author_id, entry_id):
-    # hard delete only， make sure the caller is the owner
+    # only the author can delete
     if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("only the author can delete this entry.")
+        return HttpResponseForbidden("Only the author can delete this entry.")
 
-    # fetch the entry (no soft-delete filter here since we're hard-deleting anyway
-    e = get_object_or_404(Entry, id=entry_id, author_id=author_id)
-
-    # remove it from the database for real
-    e.delete()
-
-    # bounce back to the author's stream
+    # soft delete the entry because it says to delete my own entries locally
+    e = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+    e.is_deleted = True
+    e.updated = now()
+    e.save(update_fields=['is_deleted', 'updated'])
     return redirect('author-all-entries', author_id=author_id)
 
 

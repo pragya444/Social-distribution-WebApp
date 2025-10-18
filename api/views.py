@@ -53,6 +53,19 @@ def author_stream(request, author_id):
         'author_id': author_id,
         'entries': entries,
     })
+    
+def show_follow_entries(request, author_id):
+    #TODO: NOT finished yet - show entries from followed authors
+    entries = get_object_or_404(Entry, author_id=author_id, is_deleted=False).order_by('-updated')
+    # attach pre-rendered html for template
+    for e in entries:
+        e.rendered = _render_entry(e)  # add a transient field for template use
+
+    # render with author id and a markdown availability flag
+    return render(request, 'follow.html', {
+        'author_id': author_id,
+        'entries': entries,
+    })
 
 
 def show_public_entries(request, author_id):

@@ -80,7 +80,7 @@ class ProfileEditView(APIView):
 
     def get(self, request, author_id):
         if getattr(request, "user", None) and request.user.is_authenticated and request.user.id == author_id:
-            return Response(template_name="author/profileEdit.html")
+            return Response({"user": request.user }, template_name="author/profileEdit.html")
         else:
             return redirect('home')
 
@@ -92,12 +92,12 @@ class ProfileEditView(APIView):
 
         if not serializer.is_valid():
             if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-                return Response({"errors": serializer.errors}, template_name="author/profileEdit.html", status=400)
+                return Response({"errors": serializer.errors, "user": request.user}, template_name="author/profileEdit.html", status=400)
             return Response({"errors": serializer.errors}, status=400)
 
         user = serializer.save()
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-            return Response({"user": user}, template_name="author/profile.html")
+            return redirect('profile', author_id=user.id)
         return Response({"user": serializer.data}, status=200)
 
 
@@ -155,17 +155,6 @@ def author_stream(request, author_id):
         'tab': tab,
     })
 
-
-@login_required 
-def author_profile(request):
-    # NOT IMPLEMENTED YET: view another author's profile page
-    author = request.user
-    entries = Entry.objects.filter(author=author).order_by('-updated')
-    context = {
-        'author': author,
-        'entries': entries
-    }
-    return render(request, 'author_profile.html', context) 
 
 @login_required     # require login
 @csrf_protect   # use csrf token in browser posts

@@ -45,10 +45,16 @@ def author_stream(request, author_id):
             is_deleted=False
         ).exclude(author=request.user).order_by('-updated')
     elif tab == 'friends':
-        # fetch entries visible to friends
+        # get friends = mutual following
+        user_following_ids = set(request.user.following.values_list('id', flat=True))
+        user_follower_ids  = set(request.user.followers.values_list('id', flat=True))
+        friend_ids = user_following_ids & user_follower_ids  # mutual
+
         entries = Entry.objects.filter(
-            visibility='FRIENDS', is_deleted=False
-        ).order_by('-updated')
+            author__id__in=friend_ids,
+            visibility='FRIENDS',
+            is_deleted=False
+        ).exclude(author=request.user).order_by('-updated')
     else:  
         # fetch all public entries
         public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False)

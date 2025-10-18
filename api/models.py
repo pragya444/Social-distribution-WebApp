@@ -52,6 +52,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
     following = models.ManyToManyField('self', symmetrical=False, related_name='followers')
+    follwers = models.ManyToManyField('self', symmetrical=False, related_name='following_set')
     
 
     USERNAME_FIELD = 'username'

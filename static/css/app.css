@@ -101,7 +101,7 @@ body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font);
 .text{ font-size:15px; line-height:1.6; margin-bottom:8px; white-space:pre-wrap; }
 .time{ font-size:12px; color:var(--muted); }
 
-.card-foot{ display:flex; gap:18px; color:#111; margin-top:6px; }
+.card-foot{ display:flex; gap:40px; color:#111; margin-top:6px; padding: 6px}
 .action{ cursor:pointer; }
 
 .page-form{ max-width:740px; }

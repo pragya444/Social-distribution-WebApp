@@ -663,6 +663,120 @@ def entry_delete(request, author_id, entry_id):
     return redirect('author-all-entries', author_id=author_id)
 
 
+##
+
+
+
+@login_required
+@require_POST
+def send_follow_request(request, author_id):
+    # author_id == the viewer (me) sending request
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    target_id = request.POST.get("target_id")
+    target = get_object_or_404(User, id=target_id)
+    if target == request.user:
+        return JsonResponse({"error":"cannot follow yourself"}, status=400)
+
+    fr, created = Follow.objects.get_or_create(
+        follower=request.user, followee=target,
+        defaults={"status": Follow.Status.PENDING}
+    )
+    if not created and fr.status == Follow.Status.REJECTED:
+        fr.status = Follow.Status.PENDING
+        fr.save(update_fields=["status"])
+    return redirect("profile", author_id=target.id)
+
+@login_required
+@require_POST
+def unfollow_post(request, author_id):
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    target_id = request.POST.get("target_id")
+    target = get_object_or_404(User, id=target_id)
+    Follow.objects.filter(follower=request.user, followee=target).delete()
+    return redirect("profile", author_id=target.id)
+
+@login_required
+def follow_requests_page(request, author_id):
+    # show incoming pending requests to ME
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    pendings = Follow.objects.filter(followee=request.user, status=Follow.Status.PENDING).select_related("follower").order_by("-created_at")
+    return render(request, "follow_requests.html", {"requests": pendings})
+
+@login_required
+@require_POST
+def approve_follow_request(request, author_id, follower_id):
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    fr = get_object_or_404(Follow, follower_id=follower_id, followee=request.user)
+    fr.status = Follow.Status.APPROVED
+    fr.save(update_fields=["status"])
+    return redirect("follow-requests-page", author_id=author_id)
+
+@login_required
+@require_POST
+def deny_follow_request(request, author_id, follower_id):
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
+    return redirect("follow-requests-page", author_id=author_id)
+
+
+##
+@login_required
+@require_POST
+def send_follow_request(request, author_id):
+    # author_id == the viewer (me) sending request
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    target_id = request.POST.get("target_id")
+    target = get_object_or_404(User, id=target_id)
+    if target == request.user:
+        return JsonResponse({"error":"cannot follow yourself"}, status=400)
+
+    fr, created = Follow.objects.get_or_create(
+        follower=request.user, followee=target,
+        defaults={"status": Follow.Status.PENDING}
+    )
+    if not created and fr.status == Follow.Status.REJECTED:
+        fr.status = Follow.Status.PENDING
+        fr.save(update_fields=["status"])
+    return redirect("profile", author_id=target.id)
+@login_required
+@require_POST
+def unfollow_post(request, author_id):
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    target_id = request.POST.get("target_id")
+    target = get_object_or_404(User, id=target_id)
+    Follow.objects.filter(follower=request.user, followee=target).delete()
+    return redirect("profile", author_id=target.id)
+@login_required
+def follow_requests_page(request, author_id):
+    # show incoming pending requests to ME
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    pendings = Follow.objects.filter(followee=request.user, status=Follow.Status.PENDING).select_related("follower").order_by("-created_at")
+    return render(request, "follow_requests.html", {"requests": pendings})
+@login_required
+@require_POST
+def approve_follow_request(request, author_id, follower_id):
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    fr = get_object_or_404(Follow, follower_id=follower_id, followee=request.user)
+    fr.status = Follow.Status.APPROVED
+    fr.save(update_fields=["status"])
+    return redirect("follow-requests-page", author_id=author_id)
+@login_required
+@require_POST
+def deny_follow_request(request, author_id, follower_id):
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
+    return redirect("follow-requests-page", author_id=author_id)
+
 
     # check friends function for comments
 def _is_friends(viewer: User, owner: User) -> bool:

@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% load static %}
+<script src="{% static 'js/comments_likes.js' %}"></script>
 {% block title %}your stream/feed{% endblock %}
 
 {% block content %}
@@ -254,5 +256,5 @@
     shareModal.style.display = 'none';
   });
 </script>
-<script src="{% static 'js/comments_likes.js' %}"></script>
+
 {% endblock %}

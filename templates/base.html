@@ -10,17 +10,15 @@
   <body>
     <div class="layout">
       <aside class="sidebar">
-        <div class="brand">Menu</div>
+        <div class="brand londrina-shadow-regular">TheConnection</div>
         <nav class="nav">
-        
-
-          <a class="nav-item" href="{% url 'author-all-entries' author_id=request.user.id %}"</a>
+          <a class="nav-item" href="{% url 'author-all-entries' author_id=request.user.id %}">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M9 22V12H15V22M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="#1E1E1E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Feed</a>
+            Feed
+          </a>
           <a class="nav-item" href="#">
-            
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <g clip-path="url(#clip0_5_124)">
               <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="#1E1E1E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -56,26 +54,37 @@
               </clipPath>
               </defs>
             </svg>
-            Posts</a>
+            Post</a>
         </nav>
-        <div class="logout">
-        <a href="{% url 'logout' %}" class="logout-btn">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 28H6.66667C5.95942 28 5.28115 27.719 4.78105 27.219C4.28095 26.7189 4 26.0406 4 25.3333V6.66667C4 5.95942 4.28095 5.28115 4.78105 4.78105C5.28115 4.28095 5.95942 4 6.66667 4H12M21.3333 22.6667L28 16M28 16L21.3333 9.33333M28 16H12" stroke="#FC8479" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Logout
-        </a>
-        </div>
+<div class="logout">
+  <form action="{% url 'logout' %}" method="post" style="display:inline;">
+    {% csrf_token %}
+    <button type="submit" class="logout-btn" style="background:none;border:0;padding:0;cursor:pointer;">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 28H6.66667C5.95942 28 5.28115 27.719 4.78105 27.219C4.28095 26.7189 4 26.0406 4 25.3333V6.66667C4 5.95942 4.28095 5.28115 4.78105 4.78105C5.28115 4.28095 5.95942 4 6.66667 4H12M21.3333 22.6667L28 16M28 16L21.3333 9.33333M28 16H12" stroke="#FC8479" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Logout
+    </button>
+  </form>
+</div>
+
       </aside>
 
       <main class="main">
         <header class="topbar">
           <input class="search" placeholder="Search" />
           <div class="icons">
-            <button class="icon-btn" aria-label="Notifications">
+            <button class="icon-btn" type="button" aria-label="Notifications" title="Follow requests"
+            onclick="window.location.href='{% url 'follow-requests-page' author_id=request.user.id %}'">
+            
               <svg width="35" height="35" viewBox="0 0 35 35" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M20.0229 30.625C19.7665 31.0669 19.3985 31.4338 18.9557 31.6889C18.513 31.9439 18.011 32.0781 17.5 32.0781C16.989 32.0781 16.487 31.9439 16.0443 31.6889C15.6015 31.4338 15.2335 31.0669 14.9771 30.625M26.25 11.6666C26.25 9.34598 25.3281 7.12038 23.6872 5.47944C22.0462 3.8385 19.8206 2.91663 17.5 2.91663C15.1794 2.91663 12.9538 3.8385 11.3128 5.47944C9.67187 7.12038 8.75 9.34598 8.75 11.6666C8.75 21.875 4.375 24.7916 4.375 24.7916H30.625C30.625 24.7916 26.25 21.875 26.25 11.6666Z" stroke="#F69673" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          
               </svg>
+              {% if pending_follow_count %}<span class="badge">{{ pending_follow_count }}</span>{% endif %}
+
+              
+              
             </button>
             <a href="{% url 'profile' author_id=request.user.id %}" class="avatar-btn" title="Your Profile">
               {% if request.user.profile_photo %}

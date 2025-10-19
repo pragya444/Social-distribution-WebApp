@@ -56,10 +56,14 @@
   <article class="card">
     <div class="card-head">
       <div class="author">
-        <div class="avatar">👤</div>
+        <a class="avatar" href="{% url 'profile' author_id=e.author_id %}" aria-label="View profile">👤</a>
         <div class="name">
           <div class="display">{{ e.author.name }}</div>
-          <div class="handle">@{{ e.author.username|lower }}</div>
+          <div class="handle">
+      <a href="{% url 'profile' author_id=e.author_id %}">
+        @{{ e.author.username|lower }}
+      </a>
+          </div>
         </div>
       </div>
 
@@ -88,16 +92,19 @@
               <button type="submit" class="link danger"
                       onclick="return confirm('Delete this entry?');">
                 Delete
-              </button> 
+              </button>               
             </form>
           </div>
         </div>
         {% endif %}
       </div>
     </div>
-
+    
     <div class="card-body">
      <div class="text">
+        <h2 class="title encode-sans-semi-expanded-medium">{{ e.title|default:"(untitled)" }}</h2>
+
+
         {# image entries: show via binary endpoint #}
         {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
           <img

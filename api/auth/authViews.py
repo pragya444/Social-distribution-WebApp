@@ -60,11 +60,27 @@ class RegisterView(APIView):
         return response
 
 
-class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
+# class LogoutView(APIView):
+#     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        response = redirect('login')
-        response.delete_cookie('jwt')
-        response.delete_cookie('csrftoken')
-        return response
+#     def get(self, request):
+#         response = redirect('login')
+#         response.delete_cookie('jwt')
+#         response.delete_cookie('csrftoken')
+#         return response
+
+from django.contrib.auth import logout as django_logout
+from rest_framework.views import APIView
+from django.shortcuts import redirect
+
+
+class LogoutView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        django_logout(request)
+        resp = redirect('login')
+        for name in ('jwt', 'sessionid', 'csrftoken'):
+            resp.delete_cookie(name, path='/')
+        return resp

@@ -28,7 +28,11 @@ urlpatterns = [
     
     path('authors/<author_id>/entries/<entry_id>/delete/', views.entry_delete, name='entry-delete'),
     path('share/<uuid:token>/', views.entry_shared_view, name='entry-shared-view'),
-    path('api/authors/<str:author_id>/entries/<str:entry_id>/comments', views.comments_list_create, name='comments-list-create'),
-    path('api/authors/<str:author_id>/entries/<str:entry_id>/likes', views.entry_likes, name='entry-likes'),
-    path('api/authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes',views.comment_likes, name='comment-likes'),
+
+
+    path("authors/<str:author_id>/follow", views.send_follow_request, name="follow-send"),
+    path("authors/<str:author_id>/unfollow", views.unfollow_post, name="follow-unfollow"),
+    path("authors/<str:author_id>/requests", views.follow_requests_page, name="follow-requests-page"),
+    path("authors/<str:author_id>/requests/<str:follower_id>/approve", views.approve_follow_request, name="follow-approve"),
+    path("authors/<str:author_id>/requests/<str:follower_id>/deny", views.deny_follow_request, name="follow-deny"),
 ]

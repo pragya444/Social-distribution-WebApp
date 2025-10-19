@@ -47,6 +47,7 @@
     <a href="?tab=all" class="tab {% if tab == 'all' %}active{% endif %}">All</a>
     <a href="?tab=following" class="tab {% if tab == 'following' %}active{% endif %}">Following</a>
     <a href="?tab=friends" class="tab {% if tab == 'friends' %}active{% endif %}">Friends</a>
+    <a href="?tab=private" class="tab {% if tab == 'private' %}active{% endif %}">My Entries</a>
   </div>
   <a class="btn" href="{% url 'entry-create-page' author_id=author_id %}">+ New Entry</a>
 </div>
@@ -55,10 +56,14 @@
   <article class="card">
     <div class="card-head">
       <div class="author">
-        <div class="avatar">👤</div>
+        <a class="avatar" href="{% url 'profile' author_id=e.author_id %}" aria-label="View profile">👤</a>
         <div class="name">
           <div class="display">{{ e.author.name }}</div>
-          <div class="handle">@{{ e.author.username|lower }}</div>
+          <div class="handle">
+      <a href="{% url 'profile' author_id=e.author_id %}">
+        @{{ e.author.username|lower }}
+      </a>
+          </div>
         </div>
       </div>
 
@@ -109,13 +114,42 @@
             {# MODAL FORM (hidden) #}
             <form id="deleteForm-{{ e.id }}" method="post" action="{% url 'entry-delete' author_id=author_id entry_id=e.id %}" style="display:none;">
               {% csrf_token %}
+              <button type="submit" class="link danger"
+                      onclick="return confirm('Delete this entry?');">
+                Delete
+              </button>               
             </form>
           </div>
         </div>
         {% endif %}
       </div>
     </div>
+    
+    <div class="card-body">
+     <div class="text">
+        <h2 class="title encode-sans-semi-expanded-medium">{{ e.title|default:"(untitled)" }}</h2>
 
+
+        {# image entries: show via binary endpoint #}
+        {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
+          <img
+            {% if e.url %}
+                src="{{ e.url }}"
+            {% elif e.content and e.content_type %}
+                src="data:{{ e.content_type }};base64,{{ e.content|safe }}"
+            {% else %}
+                src="{% url 'entry-image' author_id=e.author.id entry_id=e.id %}"
+            {% endif %}
+            alt="{{ e.title|default:'image' }}"
+            style="max-width:100%;height:auto;border-radius:8px;"
+          />
+        {% else %}
+          {# text/markdown or plain text: backend already pre-rendered to HTML #}
+          {{ e.rendered|safe }}
+        {% endif %}
+      </div>
+      <div class="time">{{ e.updated|timesince }} ago</div>
+    </div>
 
   <div class="card-foot">
   <div class="action">

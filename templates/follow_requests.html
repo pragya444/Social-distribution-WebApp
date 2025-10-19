@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Follow Requests{% endblock %}
+
+{% block content %}
+<h1>Follow Requests</h1>
+
+{% if requests %}
+  <ul class="card-list">
+    {% for r in requests %}
+      <li class="card" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem;">
+        <div>
+          <div><strong>@{{ r.follower.username }}</strong></div>
+          <div style="color:#6b7280;font-size:14px;">requested {{ r.created_at|timesince }} ago</div>
+        </div>
+
+        <div style="display:flex;gap:.5rem;">
+          <form method="post" action="{% url 'follow-approve' author_id=request.user.id follower_id=r.follower.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn">Approve</button>
+          </form>
+
+          <form method="post" action="{% url 'follow-deny' author_id=request.user.id follower_id=r.follower.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Deny</button>
+          </form>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No pending follow requests.</p>
+{% endif %}
+{% endblock %}

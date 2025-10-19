@@ -61,7 +61,7 @@ class ProfileView(APIView):
 
 
 
-        # -------- NEW: counts + relationship status -------------------------
+        # -------- counts + relationship status -------------------------
         # counts
         posts_count = Entry.objects.filter(author=user, is_deleted=False).count()
         from .models import Follow  # (safe if already imported above)
@@ -89,7 +89,7 @@ class ProfileView(APIView):
                 {
                     "user": user,
                     "entries": entries,
-                    # NEW context:
+                  
                     "posts_count": posts_count,
                     "followers_count": followers_count,
                     "following_count": following_count,

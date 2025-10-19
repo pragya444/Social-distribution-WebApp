@@ -193,6 +193,14 @@ def author_stream(request, author_id):
             .exclude(author=me)
             .order_by('-updated')
         )
+    elif tab == 'private':
+        # fetch only the user's own private entries
+        entries = Entry.objects.filter(
+            author=request.user,
+            is_deleted=False
+        ).order_by('-updated')
+       
+    
     elif tab == 'friends':
         friends = friends_of(me)
 

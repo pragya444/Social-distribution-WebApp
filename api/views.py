@@ -1,7 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import F, Q
-from .models import Entry, Follow  
-
+from .models import User, Entry, Comment, EntryLike, CommentLike, Follow 
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
 from django.views.decorators.http import require_POST, require_http_methods
@@ -20,6 +19,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
 from .serializers import UserSerializer
+
+
+
 
 
 User = get_user_model()
@@ -306,11 +308,14 @@ def _entry_to_json(e, content_type_hint='text/plain'):
             "github": e.author.github if e.author else "",
             "profileImage": e.author.profile_picture if e.author else "",
         },
-        "likes": {                                  # placeholder list
+        "likes": {
             "type": "likes",
             "id": f"/api/authors/{e.author_id}/entries/{e.id}/likes",
-            "page_number": 1, "size": 50, "count": 0, "src": [],
+            "page_number": 1, "size": 50,
+            "count": e.likes.count(),
+            "src": [],
         },
+
         "comments": {                               # placeholder list
             "type": "comments",
             "id": f"/api/authors/{e.author_id}/entries/{e.id}/comments",
@@ -725,9 +730,6 @@ def deny_follow_request(request, author_id, follower_id):
 
 
 ##
-
-
-
 @login_required
 @require_POST
 def send_follow_request(request, author_id):
@@ -747,7 +749,6 @@ def send_follow_request(request, author_id):
         fr.status = Follow.Status.PENDING
         fr.save(update_fields=["status"])
     return redirect("profile", author_id=target.id)
-
 @login_required
 @require_POST
 def unfollow_post(request, author_id):
@@ -757,7 +758,6 @@ def unfollow_post(request, author_id):
     target = get_object_or_404(User, id=target_id)
     Follow.objects.filter(follower=request.user, followee=target).delete()
     return redirect("profile", author_id=target.id)
-
 @login_required
 def follow_requests_page(request, author_id):
     # show incoming pending requests to ME
@@ -765,7 +765,6 @@ def follow_requests_page(request, author_id):
         return HttpResponseForbidden("Not your account")
     pendings = Follow.objects.filter(followee=request.user, status=Follow.Status.PENDING).select_related("follower").order_by("-created_at")
     return render(request, "follow_requests.html", {"requests": pendings})
-
 @login_required
 @require_POST
 def approve_follow_request(request, author_id, follower_id):
@@ -775,7 +774,6 @@ def approve_follow_request(request, author_id, follower_id):
     fr.status = Follow.Status.APPROVED
     fr.save(update_fields=["status"])
     return redirect("follow-requests-page", author_id=author_id)
-
 @login_required
 @require_POST
 def deny_follow_request(request, author_id, follower_id):
@@ -785,7 +783,173 @@ def deny_follow_request(request, author_id, follower_id):
     return redirect("follow-requests-page", author_id=author_id)
 
 
+    # check friends function for comments
+def _is_friends(viewer: User, owner: User) -> bool:
+    if not (viewer and owner):
+        return False
+    # Mutual follow counts as "friends"
+    try:
+        return owner.followers.filter(id=viewer.id).exists() and viewer.followers.filter(id=owner.id).exists()
+    except Exception:
+        return False
+    
+    # visibility to others
+def _can_view_entry(current_user, entry: Entry) -> bool:
+    # normalize whatever is in the DB/form
+    vis = (entry.visibility or "PUBLIC").upper()
 
-'''
-1. Entry delettion: Keep in database, but not show in streams or api results.
-'''
+    if vis in ("PUBLIC", "UNLISTED"):
+        return True
+
+    if not current_user or not getattr(current_user, "is_authenticated", False):
+        return False
+
+    # owner can always see
+    if str(current_user.id) == str(entry.author_id):
+        return True
+
+    if vis == "FRIENDS":
+        # replace with  actual friend check
+        return _is_friends(current_user, entry.author)
+
+    if vis == "PRIVATE":
+        return str(current_user.id) == str(entry.author_id)
+
+    return False
+
+
+def _comment_to_json(c):
+    a = c.author
+    e = c.entry
+    base = a.url.split('/authors/')[0] if a and a.url else ''
+    return {
+        "type": "comment",
+        "id": f"{base}/api/authors/{e.author_id}/entries/{e.id}/comments/{c.id}",
+        "entry": f"{base}/api/authors/{e.author_id}/entries/{e.id}",
+        "comment": c.comment,
+        "contentType": c.content_type or "text/plain",
+        "published": c.created.isoformat(),
+        "author": {
+            "type": "author",
+            "id": a.url if a else "",
+            "host": f"{base}api/" if base else "",
+            "displayName": a.username if a else "",
+            "web": f"/authors/{a.id}" if a else "",
+            "github": a.github if a else "",
+            "profileImage": a.profile_picture if a else "",
+        },
+    }
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def comments_list_create(request, author_id, entry_id):
+    """
+    GET  /api/authors/<author_id>/entries/<entry_id>/comments
+    POST /api/authors/<author_id>/entries/<entry_id>/comments
+    """
+    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+
+    # visibility guard (public/unlisted ok; friends/private need auth/relationship)
+    if not _can_view_entry(request.user, entry):
+        return HttpResponseForbidden("no access to this entry")
+
+    if request.method == "GET":
+        # simple paging
+        try:
+            page = int(request.GET.get("page", 1))
+            size = int(request.GET.get("size", 10))
+        except ValueError:
+            page, size = 1, 10
+        start, end = (page - 1) * size, (page - 1) * size + size
+
+        qs = entry.comments.all().order_by("-created")
+        items = [_comment_to_json(c) for c in qs[start:end]]
+
+        base = entry.author.url.split('/authors/')[0] if entry.author and entry.author.url else ''
+        return JsonResponse({
+            "type": "comments",
+            "id": f"{base}/api/authors/{author_id}/entries/{entry_id}/comments",
+            "page_number": page,
+            "size": size,
+            "count": qs.count(),
+            "src": items
+        }, status=200)
+
+    # POST: create a comment (must be logged in)
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden("login required")
+
+    data = _json_from_request(request)
+    text = (data.get("comment") or "").strip()
+    if not text:
+        return JsonResponse({"error": "comment text is required"}, status=400)
+    ctype = (data.get("contentType") or "text/plain").strip() or "text/plain"
+
+    c = Comment.objects.create(entry=entry, author=request.user, comment=text, content_type=ctype)
+    return JsonResponse(_comment_to_json(c), status=201)
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "DELETE"])
+def entry_likes(request, author_id, entry_id):
+    """
+    GET     /api/authors/<author_id>/entries/<entry_id>/likes
+    POST    /api/authors/<author_id>/entries/<entry_id>/likes   (like)
+    DELETE  /api/authors/<author_id>/entries/<entry_id>/likes   (unlike)
+    """
+    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+    if not _can_view_entry(request.user, entry):
+        return HttpResponseForbidden("no access")
+
+    if request.method == "GET":
+        data = [{
+            "type": "author",
+            "id": like.user.url,
+            "displayName": like.user.username,
+            "web": f"/authors/{like.user.id}",
+        } for like in entry.likes.select_related("user").all()]
+        return JsonResponse({"type": "likes", "count": len(data), "src": data}, status=200)
+
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden("login required")
+
+    if request.method == "POST":
+        EntryLike.objects.get_or_create(user=request.user, entry=entry)
+        return JsonResponse({"ok": True}, status=201)
+
+    # DELETE
+    EntryLike.objects.filter(user=request.user, entry=entry).delete()
+    return JsonResponse({"ok": True}, status=200)
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "DELETE"])
+def comment_likes(request, author_id, entry_id, comment_id):
+    """
+    GET     /api/authors/<author_id>/entries/<entry_id>/comments/<comment_id>/likes
+    POST    /api/authors/<author_id>/entries/<entry_id>/comments/<comment_id>/likes
+    DELETE  /api/authors/<author_id>/entries/<entry_id>/comments/<comment_id>/likes
+    """
+    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+    if not _can_view_entry(request.user, entry):
+        return HttpResponseForbidden("no access")
+
+    comment = get_object_or_404(Comment, id=comment_id, entry=entry)
+
+    if request.method == "GET":
+        data = [{
+            "type": "author",
+            "id": like.user.url,
+            "displayName": like.user.username,
+            "web": f"/authors/{like.user.id}",
+        } for like in comment.likes.select_related("user").all()]
+        return JsonResponse({"type": "likes", "count": len(data), "src": data}, status=200)
+
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden("login required")
+
+    if request.method == "POST":
+        CommentLike.objects.get_or_create(user=request.user, comment=comment)
+        return JsonResponse({"ok": True}, status=201)
+
+    # DELETE
+    CommentLike.objects.filter(user=request.user, comment=comment).delete()
+    return JsonResponse({"ok": True}, status=200)

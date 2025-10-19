@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% load static %}
+
 {% block title %}your stream/feed{% endblock %}
 
 {% block content %}
@@ -67,6 +69,31 @@
         </div>
       </div>
 
+
+  <div class="entry-card">
+    <h3>{{ e.title }}</h3>
+    <div class="entry-body">
+      {{ e.rendered|safe }}
+    </div>
+
+    <div class="likes-row"
+        data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes">
+      <button class="btn" data-like-btn> Like</button>
+      <button class="btn btn-ghost" data-unlike-btn> Unlike</button>
+      <span class="muted">Likes: <span data-like-count>0</span></span>
+    </div>
+
+    <div class="comments"
+        data-comments-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/comments">
+      <div class="comments-list" data-comments-list></div>
+      <form class="comment-form" data-comment-form>
+        <input name="comment" placeholder="Write a comment..." />
+        <button class="btn">Post</button>
+      </form>
+    </div>
+  </div>
+
+  
       <div class="meta">
         {% if e.visibility == "PUBLIC" %}
           <span class="badge badge-public">public</span>
@@ -229,4 +256,5 @@
     shareModal.style.display = 'none';
   });
 </script>
+<script src="{% static 'js/comments_likes.js' %}" defer></script>
 {% endblock %}

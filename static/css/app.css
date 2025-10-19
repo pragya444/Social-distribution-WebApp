@@ -18,6 +18,14 @@
 *{ box-sizing: border-box; }
 html,body{ height:100%; }
 body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font); }
+/* stop overscroll bounce / scroll chaining */
+html, body {
+  overscroll-behavior-y: none; /* prevents page bounce on top/bottom in modern browsers */
+  scroll-behavior: smooth;     /* enable smooth scrolling for anchor/link/JS scrolls */
+  -webkit-overflow-scrolling: touch; /* enable momentum scrolling on iOS */
+}
+
+
 
 .layout{ display:grid; grid-template-columns: 260px 1fr; min-height:100vh; }
 .brand{ text-align: left; font-weight:700; font-size:20px; padding-left: 20px; }
@@ -63,7 +71,7 @@ body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font);
   display:flex; align-items:center; gap:16px; margin-bottom:18px;
 }
 .feed-header h1{ margin:0; font-size:28px; }
-.filter-tabs{ background:#eef2f1; border-radius:12px; padding:6px; display:flex; gap:4px; }
+.filter-tabs{ background:#eef2f1; justify-content: space-around; border-radius:12px; padding:6px; display:flex; gap:4px; }
 .tab{ border:0; background:transparent; padding:8px 12px; border-radius:10px; cursor:pointer; }
 .tab.active{ background:#fff; box-shadow:var(--shadow-soft); }
 

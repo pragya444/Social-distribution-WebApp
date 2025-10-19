@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0003_entry_content_type_alter_entry_content'),
+        ('api', '0002_remove_user_share_token_entry_share_token'),
     ]
 
     operations = [

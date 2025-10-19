@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.conf import settings
+from django.utils import timezone
+
 import secrets
 import uuid
 
@@ -54,8 +56,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
-    following = models.ManyToManyField('self', symmetrical=False, related_name='followers')
-    follwers = models.ManyToManyField('self', symmetrical=False, related_name='following_set')
+    # following = models.ManyToManyField('self', symmetrical=False, related_name='followers')
+    # follwers = models.ManyToManyField('self', symmetrical=False, related_name='following_set')
     
     USERNAME_FIELD = 'username'
     objects = UserManager()
@@ -113,4 +115,31 @@ class Entry(models.Model):
 
     def __str__(self):
         return self.title
+
+
+
+class Follow(models.Model):
+    class Status(models.TextChoices):
+        PENDING  = "pending", "pending"
+        APPROVED = "approved", "approved"
+        REJECTED = "rejected", "rejected"
+
+    follower = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="following", on_delete=models.CASCADE)
+    followee = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="followers", on_delete=models.CASCADE)
+    status   = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["follower", "followee"], name="uniq_follow"),
+            models.CheckConstraint(check=~models.Q(follower=models.F("followee")), name="no_self_follow"),
+        ]
+
+    @staticmethod
+    def is_follower(x, y) -> bool:
+        return Follow.objects.filter(follower=x, followee=y, status="approved").exists()
+
+    @staticmethod
+    def are_friends(a, b) -> bool:
+        return Follow.is_follower(a, b) and Follow.is_follower(b, a)       
 

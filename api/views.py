@@ -1,6 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import F, Q
-from .models import Entry
+from .models import Entry, Follow  
+
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
 from django.views.decorators.http import require_POST, require_http_methods
@@ -11,7 +12,6 @@ from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import linebreaksbr
 from django.urls import reverse
-from django.db.models import F
 from .utils.images import handle_uploaded_image
 import json
 import base64
@@ -20,6 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
 from .serializers import UserSerializer
+
 
 User = get_user_model()
 
@@ -52,25 +53,88 @@ class ProfileView(APIView):
 
 
         if (request.user.id != author_id):
-            user = get_object_or_404(User, id=author_id);
+            user = get_object_or_404(User, id=author_id)
             entries = Entry.objects.filter(author_id=author_id, visibility='PUBLIC', is_deleted=False).order_by('-updated')
         else:
             user = request.user
             entries = Entry.objects.filter(author_id=author_id, is_deleted=False).order_by('-updated')
 
-        serializer = UserSerializer(user)
 
+
+        # -------- NEW: counts + relationship status -------------------------
+        # counts
+        posts_count = Entry.objects.filter(author=user, is_deleted=False).count()
+        from .models import Follow  # (safe if already imported above)
+        followers_count = Follow.objects.filter(followee=user, status=Follow.Status.APPROVED).count()
+        following_count = Follow.objects.filter(follower=user, status=Follow.Status.APPROVED).count()
+
+        # relationship (viewer -> viewed)
+        rel_status = "self"  # self / none / pending / approved / rejected
+        can_approve = False  # whether viewed user has requested to follow me
+        if request.user.is_authenticated and request.user.id != user.id:
+            rel = Follow.objects.filter(follower=request.user, followee=user).first()
+            rel_status = (rel.status if rel else "none")
+            # incoming pending (user -> me): lets me show approve/deny if you want it here
+            can_approve = Follow.objects.filter(
+                follower=user, followee=request.user, status=Follow.Status.PENDING
+            ).exists()
+        # --------------------------------------------------------------------
+
+        # Pre-render HTML for template
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-            # attach pre-rendered html for template
             for e in entries:
-                e.rendered = _render_entry(e)  # add a transient field for template use
-            return Response({ "user": user, "entries": entries }, template_name="author/profile.html")
-        
+                e.rendered = _render_entry(e)
+
+            return Response(
+                {
+                    "user": user,
+                    "entries": entries,
+                    # NEW context:
+                    "posts_count": posts_count,
+                    "followers_count": followers_count,
+                    "following_count": following_count,
+                    "rel_status": rel_status,
+                    "can_approve": can_approve,
+                },
+                template_name="author/profile.html",
+            )
+
+        #  JSON shape if you keep the API path
+        serializer = UserSerializer(user)
         entries_data = (
             entries.annotate(author_username=F("author__username"))
-            .values("id", "author_username", "title", "content_type", "visibility", "updated",)
+            .values("id", "author_username", "title", "content_type", "visibility", "updated")
         )
-        return Response({"user": serializer.data, "entries": list(entries_data)}, status=200)
+        return Response(
+            {
+                "user": serializer.data,
+                "entries": list(entries_data),
+                # counts/rel also available in JSON if you want:
+                "posts_count": posts_count,
+                "followers_count": followers_count,
+                "following_count": following_count,
+                "rel_status": rel_status,
+                "can_approve": can_approve,
+            },
+            status=200,
+        )
+
+
+
+
+        # serializer = UserSerializer(user)
+
+        # if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+        #     # attach pre-rendered html for template
+        #     for e in entries:
+        #         e.rendered = _render_entry(e)  # add a transient field for template use
+        #     return Response({ "user": user, "entries": entries }, template_name="author/profile.html")
+        
+        # entries_data = (
+        #     entries.annotate(author_username=F("author__username"))
+        #     .values("id", "author_username", "title", "content_type", "visibility", "updated",)
+        # )
+        # return Response({"user": serializer.data, "entries": list(entries_data)}, status=200)
 
 
 
@@ -114,35 +178,66 @@ class ProfileEditView(APIView):
 def author_stream(request, author_id):
     # determine the selected tab (default to all)
     tab = request.GET.get('tab', 'all')
+    me = request.user
+
+    # If someone opens another author's stream URL, show their own stream
+    if str(me.id) != str(author_id):
+        author_id = me.id
 
     if tab == 'following':
         # fetch entries from authors the user follows, excluding the user's own entries
-        entries = Entry.objects.filter(
-            author__in=request.user.following.all(),
-            is_deleted=False
-        ).exclude(author=request.user).order_by('-updated')
-    elif tab == 'friends':
-        # get friends = mutual following
-        user_following_ids = set(request.user.following.values_list('id', flat=True))
-        user_follower_ids  = set(request.user.followers.values_list('id', flat=True))
-        friend_ids = user_following_ids & user_follower_ids  # mutual
-
-        entries = Entry.objects.filter(
-            author__id__in=friend_ids,
-            visibility='FRIENDS',
-            is_deleted=False
-        ).exclude(author=request.user).order_by('-updated')
-    else:  
-        # fetch all public entries
-        public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False)
-
-        # fetch entries from authors the user follows
-        followed_entries = Entry.objects.filter(
-            Q(author__id=author_id) & Q(is_deleted=False)
+        followed_users = users_i_follow(me)
+        entries = (
+            Entry.objects
+            .filter(author__in=followed_users, is_deleted=False)
+            .exclude(author=me)
+            .order_by('-updated')
         )
+    elif tab == 'friends':
+        friends = friends_of(me)
 
-        # combine followed entries and public entries
-        entries = public_entries.union(followed_entries).order_by('-updated')
+        entries = (
+            Entry.objects
+            .filter(author__in=friends, visibility='FRIENDS', is_deleted=False)
+            .exclude(author=me)
+            .order_by('-updated')
+        )
+    else: #all tab
+        
+        followed_users = users_i_follow(me)
+        friend_users   = friends_of(me)
+           
+        public_entries = Entry.objects.filter(
+          visibility='PUBLIC', is_deleted=False)
+
+        my_entries = Entry.objects.filter(
+          author=me, is_deleted=False)
+        
+        unlisted_from_followed = Entry.objects.filter(
+        author__in=followed_users, visibility='UNLISTED', is_deleted=False
+    )
+        friends_only_from_friends = Entry.objects.filter(
+            author__in=friend_users, visibility='FRIENDS', is_deleted=False
+        )
+        entries = (
+            public_entries
+            | my_entries
+            | unlisted_from_followed
+            | friends_only_from_friends
+        ).order_by('-updated')
+    
+
+    # else:  
+    #     # fetch all public entries
+    #     public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False)
+
+    #     # fetch entries from authors the user follows
+    #     followed_entries = Entry.objects.filter(
+    #         Q(author__id=author_id) & Q(is_deleted=False)
+    #     )
+
+    #     # combine followed entries and public entries
+    #     entries = public_entries.union(followed_entries).order_by('-updated')
 
     # pre-rendered HTML for template
     for e in entries:
@@ -216,6 +311,31 @@ def _entry_to_json(e, content_type_hint='text/plain'):
         "published": e.created.isoformat() if e.created else "",  # iso 8601 timestamp
         "visibility": e.visibility,                # enum string
     }
+
+def users_i_follow(me):
+    """
+    Users that 'me' follows with APPROVED status.
+    """
+    return User.objects.filter(
+        followers__follower=me,
+        followers__status=Follow.Status.APPROVED
+    )
+
+def followers_of(me):
+    """
+    Users that follow 'me' with APPROVED status.
+    """
+    return User.objects.filter(
+        following__followee=me,
+        following__status=Follow.Status.APPROVED
+    )
+
+def friends_of(me):
+    """
+    Mutual follow: both directions APPROVED.
+    """
+    from .models import Follow
+    return [u for u in users_i_follow(me) if Follow.are_friends(me, u)]    
 
 
 # -------- api: list + create --------------------------------------------------
@@ -532,3 +652,64 @@ def entry_delete(request, author_id, entry_id):
     e.updated = now()
     e.save(update_fields=['is_deleted', 'updated'])
     return redirect('author-all-entries', author_id=author_id)
+
+
+##
+
+
+
+@login_required
+@require_POST
+def send_follow_request(request, author_id):
+    # author_id == the viewer (me) sending request
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    target_id = request.POST.get("target_id")
+    target = get_object_or_404(User, id=target_id)
+    if target == request.user:
+        return JsonResponse({"error":"cannot follow yourself"}, status=400)
+
+    fr, created = Follow.objects.get_or_create(
+        follower=request.user, followee=target,
+        defaults={"status": Follow.Status.PENDING}
+    )
+    if not created and fr.status == Follow.Status.REJECTED:
+        fr.status = Follow.Status.PENDING
+        fr.save(update_fields=["status"])
+    return redirect("profile", author_id=target.id)
+
+@login_required
+@require_POST
+def unfollow_post(request, author_id):
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    target_id = request.POST.get("target_id")
+    target = get_object_or_404(User, id=target_id)
+    Follow.objects.filter(follower=request.user, followee=target).delete()
+    return redirect("profile", author_id=target.id)
+
+@login_required
+def follow_requests_page(request, author_id):
+    # show incoming pending requests to ME
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    pendings = Follow.objects.filter(followee=request.user, status=Follow.Status.PENDING).select_related("follower").order_by("-created_at")
+    return render(request, "follow_requests.html", {"requests": pendings})
+
+@login_required
+@require_POST
+def approve_follow_request(request, author_id, follower_id):
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    fr = get_object_or_404(Follow, follower_id=follower_id, followee=request.user)
+    fr.status = Follow.Status.APPROVED
+    fr.save(update_fields=["status"])
+    return redirect("follow-requests-page", author_id=author_id)
+
+@login_required
+@require_POST
+def deny_follow_request(request, author_id, follower_id):
+    if str(request.user.id) != str(author_id):
+        return HttpResponseForbidden("Not your account")
+    Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
+    return redirect("follow-requests-page", author_id=author_id)

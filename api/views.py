@@ -20,7 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
 from .serializers import UserSerializer
-
+from .models import User, Entry, Comment, EntryLike, CommentLike
 
 
 User = get_user_model()
@@ -563,3 +563,138 @@ def _can_view_entry(current_user, entry: Entry) -> bool:
     return False
 
 
+def _comment_to_json(c):
+    a = c.author
+    e = c.entry
+    base = a.url.split('/authors/')[0] if a and a.url else ''
+    return {
+        "type": "comment",
+        "id": f"{base}/api/authors/{e.author_id}/entries/{e.id}/comments/{c.id}",
+        "entry": f"{base}/api/authors/{e.author_id}/entries/{e.id}",
+        "comment": c.comment,
+        "contentType": c.content_type or "text/plain",
+        "published": c.created.isoformat(),
+        "author": {
+            "type": "author",
+            "id": a.url if a else "",
+            "host": f"{base}api/" if base else "",
+            "displayName": a.username if a else "",
+            "web": f"/authors/{a.id}" if a else "",
+            "github": a.github if a else "",
+            "profileImage": a.profile_picture if a else "",
+        },
+    }
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def comments_list_create(request, author_id, entry_id):
+    """
+    GET  /api/authors/<author_id>/entries/<entry_id>/comments
+    POST /api/authors/<author_id>/entries/<entry_id>/comments
+    """
+    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+
+    # visibility guard (public/unlisted ok; friends/private need auth/relationship)
+    if not _can_view_entry(request.user, entry):
+        return HttpResponseForbidden("no access to this entry")
+
+    if request.method == "GET":
+        # simple paging
+        try:
+            page = int(request.GET.get("page", 1))
+            size = int(request.GET.get("size", 10))
+        except ValueError:
+            page, size = 1, 10
+        start, end = (page - 1) * size, (page - 1) * size + size
+
+        qs = entry.comments.all().order_by("-created")
+        items = [_comment_to_json(c) for c in qs[start:end]]
+
+        base = entry.author.url.split('/authors/')[0] if entry.author and entry.author.url else ''
+        return JsonResponse({
+            "type": "comments",
+            "id": f"{base}/api/authors/{author_id}/entries/{entry_id}/comments",
+            "page_number": page,
+            "size": size,
+            "count": qs.count(),
+            "src": items
+        }, status=200)
+
+    # POST: create a comment (must be logged in)
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden("login required")
+
+    data = _json_from_request(request)
+    text = (data.get("comment") or "").strip()
+    if not text:
+        return JsonResponse({"error": "comment text is required"}, status=400)
+    ctype = (data.get("contentType") or "text/plain").strip() or "text/plain"
+
+    c = Comment.objects.create(entry=entry, author=request.user, comment=text, content_type=ctype)
+    return JsonResponse(_comment_to_json(c), status=201)
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "DELETE"])
+def entry_likes(request, author_id, entry_id):
+    """
+    GET     /api/authors/<author_id>/entries/<entry_id>/likes
+    POST    /api/authors/<author_id>/entries/<entry_id>/likes   (like)
+    DELETE  /api/authors/<author_id>/entries/<entry_id>/likes   (unlike)
+    """
+    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+    if not _can_view_entry(request.user, entry):
+        return HttpResponseForbidden("no access")
+
+    if request.method == "GET":
+        data = [{
+            "type": "author",
+            "id": like.user.url,
+            "displayName": like.user.username,
+            "web": f"/authors/{like.user.id}",
+        } for like in entry.likes.select_related("user").all()]
+        return JsonResponse({"type": "likes", "count": len(data), "src": data}, status=200)
+
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden("login required")
+
+    if request.method == "POST":
+        EntryLike.objects.get_or_create(user=request.user, entry=entry)
+        return JsonResponse({"ok": True}, status=201)
+
+    # DELETE
+    EntryLike.objects.filter(user=request.user, entry=entry).delete()
+    return JsonResponse({"ok": True}, status=200)
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "DELETE"])
+def comment_likes(request, author_id, entry_id, comment_id):
+    """
+    GET     /api/authors/<author_id>/entries/<entry_id>/comments/<comment_id>/likes
+    POST    /api/authors/<author_id>/entries/<entry_id>/comments/<comment_id>/likes
+    DELETE  /api/authors/<author_id>/entries/<entry_id>/comments/<comment_id>/likes
+    """
+    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+    if not _can_view_entry(request.user, entry):
+        return HttpResponseForbidden("no access")
+
+    comment = get_object_or_404(Comment, id=comment_id, entry=entry)
+
+    if request.method == "GET":
+        data = [{
+            "type": "author",
+            "id": like.user.url,
+            "displayName": like.user.username,
+            "web": f"/authors/{like.user.id}",
+        } for like in comment.likes.select_related("user").all()]
+        return JsonResponse({"type": "likes", "count": len(data), "src": data}, status=200)
+
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden("login required")
+
+    if request.method == "POST":
+        CommentLike.objects.get_or_create(user=request.user, comment=comment)
+        return JsonResponse({"ok": True}, status=201)
+
+    # DELETE
+    CommentLike.objects.filter(user=request.user, comment=comment).delete()
+    return JsonResponse({"ok": True}, status=200)

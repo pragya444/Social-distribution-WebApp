@@ -19,7 +19,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
 from .serializers import UserSerializer
-from .models import User, Entry, Comment, EntryLike, CommentLike
+
+
+
 
 
 User = get_user_model()
@@ -306,11 +308,14 @@ def _entry_to_json(e, content_type_hint='text/plain'):
             "github": e.author.github if e.author else "",
             "profileImage": e.author.profile_picture if e.author else "",
         },
-        "likes": {                                  # placeholder list
+        "likes": {
             "type": "likes",
             "id": f"/api/authors/{e.author_id}/entries/{e.id}/likes",
-            "page_number": 1, "size": 50, "count": 0, "src": [],
+            "page_number": 1, "size": 50,
+            "count": e.likes.count(),
+            "src": [],
         },
+
         "comments": {                               # placeholder list
             "type": "comments",
             "id": f"/api/authors/{e.author_id}/entries/{e.id}/comments",
@@ -790,17 +795,26 @@ def _is_friends(viewer: User, owner: User) -> bool:
     
     # visibility to others
 def _can_view_entry(current_user, entry: Entry) -> bool:
+    # normalize whatever is in the DB/form
     vis = (entry.visibility or "PUBLIC").upper()
-    if vis == "PUBLIC" or vis == "UNLISTED":
+
+    if vis in ("PUBLIC", "UNLISTED"):
         return True
-    if not current_user or not current_user.is_authenticated:
+
+    if not current_user or not getattr(current_user, "is_authenticated", False):
         return False
+
+    # owner can always see
     if str(current_user.id) == str(entry.author_id):
         return True
+
     if vis == "FRIENDS":
+        # replace with  actual friend check
         return _is_friends(current_user, entry.author)
+
     if vis == "PRIVATE":
         return str(current_user.id) == str(entry.author_id)
+
     return False
 
 

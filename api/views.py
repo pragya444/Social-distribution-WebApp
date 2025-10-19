@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import F, Q
-from .models import Entry
+from .models import User, Entry, Comment, EntryLike, CommentLike
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
 from django.views.decorators.http import require_POST, require_http_methods
@@ -20,6 +20,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
 from .serializers import UserSerializer
+
+
 
 User = get_user_model()
 
@@ -532,3 +534,32 @@ def entry_delete(request, author_id, entry_id):
     e.updated = now()
     e.save(update_fields=['is_deleted', 'updated'])
     return redirect('author-all-entries', author_id=author_id)
+
+
+
+    # check friends function for comments
+def _is_friends(viewer: User, owner: User) -> bool:
+    if not (viewer and owner):
+        return False
+    # Mutual follow counts as "friends"
+    try:
+        return owner.followers.filter(id=viewer.id).exists() and viewer.followers.filter(id=owner.id).exists()
+    except Exception:
+        return False
+    
+    # visibility to others
+def _can_view_entry(current_user, entry: Entry) -> bool:
+    vis = (entry.visibility or "PUBLIC").upper()
+    if vis == "PUBLIC" or vis == "UNLISTED":
+        return True
+    if not current_user or not current_user.is_authenticated:
+        return False
+    if str(current_user.id) == str(entry.author_id):
+        return True
+    if vis == "FRIENDS":
+        return _is_friends(current_user, entry.author)
+    if vis == "PRIVATE":
+        return str(current_user.id) == str(entry.author_id)
+    return False
+
+

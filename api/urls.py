@@ -28,4 +28,7 @@ urlpatterns = [
     
     path('authors/<author_id>/entries/<entry_id>/delete/', views.entry_delete, name='entry-delete'),
     path('share/<uuid:token>/', views.entry_shared_view, name='entry-shared-view'),
+    path('api/authors/<str:author_id>/entries/<str:entry_id>/comments', views.comments_list_create, name='comments-list-create'),
+    path('api/authors/<str:author_id>/entries/<str:entry_id>/likes', views.entry_likes, name='entry-likes'),
+    path('api/authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes',views.comment_likes, name='comment-likes'),
 ]

@@ -132,6 +132,12 @@ def author_stream(request, author_id):
             visibility='FRIENDS',
             is_deleted=False
         ).exclude(author=request.user).order_by('-updated')
+    elif tab == 'private':
+        # fetch only the user's own private entries
+        entries = Entry.objects.filter(
+            author=request.user,
+            is_deleted=False
+        ).order_by('-updated')
     else:  
         # fetch all public entries
         public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False)
@@ -154,23 +160,8 @@ def author_stream(request, author_id):
         'entries': entries,
         'tab': tab,
     })
+    
 
-
-@login_required     # require login
-@csrf_protect   # use csrf token in browser posts
-@require_http_methods(['POST'])   # only allow post
-def make_entries_public(request, entry_id):
-    # only the owner can change visibility
-    entry = get_object_or_404(Entry, id=entry_id, is_deleted=False)
-    if entry.author_id != request.user.id:
-        return HttpResponseForbidden("only the author can change visibility for this entry.")
-
-    # set to public and save
-    entry.visibility = 'PUBLIC'
-    entry.updated = now()
-    entry.save()
-
-    return JsonResponse({'status': 'ok', 'entry_id': str(entry_id), 'visibility': entry.visibility}, status=200)
 
 # -------- helpers -------------------------------------------------------------
 def _json_from_request(request):
@@ -300,6 +291,7 @@ def entry_retrieve_update(request, author_id, entry_id):
 @login_required
 @csrf_protect
 def entry_create_page(request, author_id):
+    # TODO: Handle image being too large error
     # only the owner can open and submit this form
     if str(request.user.id) != str(author_id):
         return HttpResponseForbidden("only the author can create entries here.")
@@ -532,3 +524,9 @@ def entry_delete(request, author_id, entry_id):
     e.updated = now()
     e.save(update_fields=['is_deleted', 'updated'])
     return redirect('author-all-entries', author_id=author_id)
+
+
+
+'''
+1. Entry delettion: Keep in database, but not show in streams or api results.
+'''

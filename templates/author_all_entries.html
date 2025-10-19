@@ -102,6 +102,9 @@
     
     <div class="card-body">
      <div class="text">
+        <h2 class="title encode-sans-semi-expanded-medium">{{ e.title|default:"(untitled)" }}</h2>
+
+
         {# image entries: show via binary endpoint #}
         {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
           <img

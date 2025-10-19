@@ -1,3 +1,24 @@
+
+
+@import url('https://fonts.googleapis.com/css2?family=Encode+Sans+Semi+Expanded:wght@500;600;700;800;900&display=swap');
+
+@import url('https://fonts.googleapis.com/css2?family=Londrina+Shadow&display=swap');
+
+
+.londrina-shadow-regular {
+  font-family: "Londrina Shadow", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+
+
+.encode-sans-semi-expanded-medium {
+  font-family: "Encode Sans Semi Expanded", sans-serif;
+  font-weight: 500;
+  font-style: normal;
+}
+
 :root{
   --mint: #d9f0e5;        /* sidebar bg */
   --mint-deep: #bfe3d1;
@@ -174,3 +195,5 @@ html, body {
   font: 700 11px/18px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   text-align: center;
 }
+
+

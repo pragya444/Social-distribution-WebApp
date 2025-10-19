@@ -295,7 +295,8 @@
 
         <div class="card-body">
         <div class="text">
-            {# image entries: show via binary endpoint #}
+        <h2 class="title encode-sans-semi-expanded-medium">{{ e.title|default:"(untitled)" }}</h2>
+
             {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
             <img
                 src="{% url 'entry-image' author_id=user.id entry_id=e.id %}"

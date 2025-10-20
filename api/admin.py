@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Entry, User, Follow
+from .models import Entry, User, Follow, Comment, EntryLike
 from django.contrib.admin.sites import NotRegistered, AlreadyRegistered
 
 
@@ -17,3 +17,6 @@ class FollowAdmin(admin.ModelAdmin):
     list_display = ("follower", "followee", "status", "created_at")
     list_filter  = ("status",)
     search_fields = ("follower__username", "followee__username")
+
+admin.site.register(Comment)
+admin.site.register(EntryLike)

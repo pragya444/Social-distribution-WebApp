@@ -618,7 +618,7 @@ def comments_list_create(request, author_id, entry_id):
             "id": f"{base}/api/authors/{author_id}/entries/{entry_id}/comments",
             "page_number": page,
             "size": size,
-            "count": qs.count(),
+            "count": entry.comment_count,
             "src": items
         }, status=200)
 
@@ -633,6 +633,8 @@ def comments_list_create(request, author_id, entry_id):
     ctype = (data.get("contentType") or "text/plain").strip() or "text/plain"
 
     c = Comment.objects.create(entry=entry, author=request.user, comment=text, content_type=ctype)
+    Entry.objects.filter(id=entry.id).update(comment_count=F('comment_count') + 1)
+    entry.refresh_from_db(fields=['comment_count'])
     return JsonResponse(helpers.comment_to_json(c), status=201)
 
 
@@ -653,7 +655,7 @@ def entry_likes(request, author_id, entry_id):
         return HttpResponseForbidden("no access")
 
     # compute count fast and whether THIS user liked it
-    count = EntryLike.objects.filter(entry=entry).count()
+    # count = EntryLike.objects.filter(entry=entry).count()
     user_liked = False
     if request.user.is_authenticated:
         user_liked = EntryLike.objects.filter(entry=entry, user=request.user).exists()
@@ -666,7 +668,7 @@ def entry_likes(request, author_id, entry_id):
             "web": f"/authors/{like.user.id}",
         } for like in EntryLike.objects.select_related("user").filter(entry=entry)]
         return JsonResponse(
-            {"type": "likes", "count": count, "liked": user_liked, "src": data},
+            {"type": "likes", "count": entry.like_count, "liked": user_liked, "src": data},
             status=200
         )
 
@@ -674,15 +676,18 @@ def entry_likes(request, author_id, entry_id):
         return HttpResponseForbidden("login required")
 
     if request.method == "POST":
-        # idempotent like
-        EntryLike.objects.get_or_create(user=request.user, entry=entry)
-        new_count = EntryLike.objects.filter(entry=entry).count()
-        return JsonResponse({"ok": True, "liked": True, "count": new_count}, status=201)
+        like, created = EntryLike.objects.get_or_create(user=request.user, entry=entry)
+        if created:
+            Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
+        entry.refresh_from_db(fields=['like_count'])
+        return JsonResponse({"ok": True, "liked": True, "count": entry.like_count}, status=201)
 
     # DELETE (unlike)
-    EntryLike.objects.filter(user=request.user, entry=entry).delete()
-    new_count = EntryLike.objects.filter(entry=entry).count()
-    return JsonResponse({"ok": True, "liked": False, "count": new_count}, status=200)
+    deleted, _ = EntryLike.objects.filter(user=request.user, entry=entry).delete()
+    if deleted:
+        Entry.objects.filter(id=entry.id).update(like_count=F('like_count') - 1)
+    entry.refresh_from_db(fields=['like_count'])
+    return JsonResponse({"ok": True, "liked": False, "count": entry.like_count}, status=200)
 
 
 @csrf_exempt

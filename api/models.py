@@ -105,6 +105,8 @@ class Entry(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
     share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    comment_count = models.IntegerField(default=0)
+    like_count = models.IntegerField(default=0)
 
     
     @property

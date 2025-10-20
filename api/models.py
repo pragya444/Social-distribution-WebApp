@@ -5,6 +5,9 @@ from django.utils import timezone
 
 import secrets
 import uuid
+from django.utils import timezone
+
+
 
 def generate_id():
     return secrets.token_urlsafe(16)
@@ -71,7 +74,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     
 
 
-
+'''
+This model Entry was written with the assistance of OpenAI, ChatGPT-5. 2025-10-19.
+'''
 
 class Entry(models.Model):
     """
@@ -100,6 +105,8 @@ class Entry(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
     share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    comment_count = models.IntegerField(default=0)
+    like_count = models.IntegerField(default=0)
 
     
     @property
@@ -143,3 +150,36 @@ class Follow(models.Model):
     def are_friends(a, b) -> bool:
         return Follow.is_follower(a, b) and Follow.is_follower(b, a)       
 
+
+class Comment(models.Model):
+    id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
+    entry = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="comments")
+    comment = models.TextField()
+    content_type = models.CharField(max_length=60, default="text/plain")
+    created = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-created"]
+
+    def api_id(self) -> str:
+        base = get_url().rstrip("/")
+        # http://host/api/authors/<author>/entries/<entry>/comments/<comment>
+        return f"{base}/api/authors/{self.entry.author_id}/entries/{self.entry.id}/comments/{self.id}"
+    
+
+class EntryLike(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="entry_likes")
+    entry = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name="likes")
+    created = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ("user", "entry")
+
+class CommentLike(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="comment_likes")
+    comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name="likes")
+    created = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ("user", "comment")

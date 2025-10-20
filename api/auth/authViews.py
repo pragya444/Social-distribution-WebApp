@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.contrib.auth import logout as django_logout
 from .serializers import LoginSerializer, RegisterSerializer
 from ..utils import jwtUtils
 
@@ -12,6 +13,8 @@ class LoginView(APIView):
     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
 
     def get(self, request):
+        if getattr(request, "user", None) and request.user.is_authenticated:
+            return redirect('home')
         return Response(template_name="auth/login.html")
     
     def post(self, request):
@@ -68,11 +71,6 @@ class RegisterView(APIView):
 #         response.delete_cookie('jwt')
 #         response.delete_cookie('csrftoken')
 #         return response
-
-from django.contrib.auth import logout as django_logout
-from rest_framework.views import APIView
-from django.shortcuts import redirect
-
 
 class LogoutView(APIView):
     authentication_classes = []

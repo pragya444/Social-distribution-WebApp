@@ -119,3 +119,21 @@ class AuthorEntriesViewTests(TestCase):
         self.assertContains(resp, "Visible Entry")
         self.assertNotContains(resp, "Deleted Entry")
 
+    def test_author_all_entries_page_requires_login(self):
+        '''
+        Test that the author all entries page requires login
+        '''
+        self.client.logout()
+        url = reverse("author-all-entries", kwargs={"author_id": str(self.user.id)})
+        resp = self.client.get(url)
+        # should redirect to login page
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/auth/login/", resp.url)
+    
+    def test_author_following_page_renders(self):
+        '''
+        Test that the author following page renders successfully
+        '''
+        url = reverse("follow-requests-page", kwargs={"author_id": str(self.user.id)})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)

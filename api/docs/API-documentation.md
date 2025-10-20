@@ -19,7 +19,7 @@ http://127.0.0.1:8000/
 ### POST `/auth/register/`
 
 **When:** When creating a new user account.
-**How:** Send a JSON payload with username and password. 
+**How:** POST form or JSON; on success, server sets jwt cookie and redirects to feed.
 **Why:** To onboard new users.
 **Why Not:** Username must be unique.
 
@@ -88,7 +88,7 @@ Content-Type: application/json
 ### POST `/auth/login/`
 
 **When:** Before accessing protected resources.
-**How:** Send JSON credentials.
+**How:** HTML redirects + set jwt cookie
 **Why:** Establish a JWT session.
 **Why Not:** Should only be used for authentication.
 

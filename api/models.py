@@ -74,7 +74,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     
 
 
-
+'''
+This model Entry was written with the assistance of OpenAI, ChatGPT-5. 2025-10-19.
+'''
 
 class Entry(models.Model):
     """

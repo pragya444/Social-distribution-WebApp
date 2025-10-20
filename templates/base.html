@@ -102,5 +102,229 @@
         <section class="content">{% block content %}{% endblock %}</section>
       </main>
     </div>
-  </body>
+    
+<style>
+  .modal-overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
+    z-index:100; justify-content:center; align-items:center;
+  }
+  .modal {
+    width: min(640px, 92vw); max-height: 80vh; overflow:auto;
+    background:#fff; border-radius:12px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.2);
+  }
+  .modal header { display:flex; justify-content:space-between; align-items:center; }
+  .modal .close { background:none; border:0; font-size:20px; cursor:pointer; }
+  .comments-list p { margin: 10px 10; }
+  .comments-list { text-align: left; }
+  .comment-form { display:flex; gap:8px; margin-top:12px; }
+  .comment-form input { flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px; }
+  .comment-form button { padding:8px 12px; border:0; border-radius:8px; background:#FFA500; color:#fff; cursor:pointer; }
+</style>
+
+<div id="commentModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Comments">
+  <div class="modal">
+    <header>
+      <h3>Comments</h3>
+      <button type="button" class="close" id="commentModalClose">×</button>
+    </header>
+
+    <div id="commentModalList" class="comments-list" aria-live="polite"></div>
+
+    <form id="commentModalForm" class="comment-form">
+      {% csrf_token %}
+      <input name="comment" placeholder="Write a comment..." autocomplete="off" />
+      <button type="submit">Post</button>
+    </form>
+  </div>
+</div>
+
+    <script src="{% static 'js/comments_likes.js' %}"></script>
+<script>
+window.__getCookie = function(name) {
+  const m = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
+  return m ? decodeURIComponent(m[2]) : null;
+};
+
+window.__j = async function(url, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers||{}) };
+  const csrftoken = window.__getCookie('csrftoken');
+  if (csrftoken) headers['X-CSRFToken'] = csrftoken;
+  const r = await fetch(url, { credentials: 'same-origin', headers, ...opts });
+  let data = {};
+  try { data = await r.json(); } catch(e){}
+  return { ok: r.ok, status: r.status, data };
+};
+</script>
+    
+<script>
+// ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+
+(function () {
+  const modal    = document.getElementById('commentModal');
+  const list     = document.getElementById('commentModalList');
+  const form     = document.getElementById('commentModalForm');
+  const closeBtn = document.getElementById('commentModalClose');
+
+  let activeUrl = null;
+  let activeCountEl = null;
+
+  function showModal(){ modal.style.display = 'flex'; }
+  function hideModal(){ modal.style.display = 'none'; list.innerHTML=''; form.reset(); }
+
+  const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+  async function loadComments(url){
+    list.innerHTML = '<p class="muted">Loading…</p>';
+    const r = await window.__j(url);
+    if (!r.ok) {
+      console.error('Comments GET failed', r.status, r.data);
+      list.innerHTML = '<p class="muted">Failed to load comments.</p>';
+      return;
+    }
+    const items = r.data.src || [];
+    list.innerHTML = items.length
+      ? items.map(c => `<p><b>${esc(c.author?.displayName||'')}</b>: ${esc(c.comment||'')}</p>`).join('')
+      : '<p class="muted">No comments yet.</p>';
+  }
+
+  async function refreshCount(url, el){
+    const r = await window.__j(url);
+    if (r.ok && el) {
+      el.textContent = (typeof r.data.count === 'number')
+        ? r.data.count
+        : (r.data.src?.length ?? 0);
+    }
+  }
+
+  // Open modal
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.comment-trigger');
+    if (!btn) return;
+    activeUrl = btn.getAttribute('data-comments-url');
+    activeCountEl = btn.querySelector('[data-comment-count]');
+    showModal();
+    await loadComments(activeUrl);
+    await refreshCount(activeUrl, activeCountEl);
+  });
+
+  // Post a comment
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = form.comment.value.trim();
+    if (!text || !activeUrl) return;
+    const r = await window.__j(activeUrl, {
+      method:'POST',
+      body: JSON.stringify({ type:'comment', comment:text, contentType:'text/plain' })
+    });
+    if (r.ok) {
+      form.reset();
+      await loadComments(activeUrl);
+      await refreshCount(activeUrl, activeCountEl); // instant count update
+      // optional optimistic bump if you want immediate feedback:
+      // window.__bumpCommentCountForUrl && window.__bumpCommentCountForUrl(activeUrl);
+    } else if (r.status === 403) {
+      alert('Please log in to comment.');
+      console.warn('403 on comment POST — likely auth/CSRF', r.data);
+    } else {
+      alert('Failed to post comment.');
+      console.error('Comment POST failed', r.status, r.data);
+    }
+  });
+
+  // Close modal
+  closeBtn.addEventListener('click', hideModal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) hideModal(); });
+})();
+</script>
+
+
+<script>
+ // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+
+(function () {
+  // ---- helpers ----
+  function getCookie(name) {
+    const m = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[2]) : null;
+  }
+  async function j(url, opts={}) {
+    const headers = { 'Content-Type': 'application/json' };
+    // If your likes/comments views are CSRF-protected, send the token:
+    const csrftoken = getCookie('csrftoken');
+    if (csrftoken) headers['X-CSRFToken'] = csrftoken;
+
+    const r = await fetch(url, { credentials:'same-origin', headers, ...opts });
+    let data = {};
+    try { data = await r.json(); } catch (e) {}
+    return { ok:r.ok, status:r.status, data };
+  }
+
+  // ---- Likes: init + toggle ----
+  async function initLike(btn) {
+    const url  = btn.dataset.likesUrl;
+    const cnt  = btn.querySelector('[data-like-count]');
+
+    // initial GET populates liked + count
+    const g = await j(url);
+    if (g.ok) {
+      btn.classList.toggle('liked', !!g.data.liked);
+      btn.setAttribute('aria-pressed', g.data.liked ? 'true' : 'false');
+      if (cnt) cnt.textContent = g.data.count ?? 0;
+    }
+
+    btn.addEventListener('click', async () => {
+      const liked = btn.classList.contains('liked');
+      const method = liked ? 'DELETE' : 'POST';
+      const r = await j(url, { method });
+      if (r.ok) {
+        btn.classList.toggle('liked', r.data.liked === true);
+        btn.setAttribute('aria-pressed', r.data.liked ? 'true' : 'false');
+        if (cnt && typeof r.data.count === 'number') cnt.textContent = r.data.count;
+      } else if (r.status === 403) {
+        alert('Please log in to like.');
+      }
+    });
+  }
+
+  // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+  // ---- Comments: init count + poll periodically ----
+
+  async function initCommentCount(btn) {
+    const url = btn.dataset.commentsUrl;
+    const el  = btn.querySelector('[data-comment-count]');
+    if (!el) return;
+
+    async function refresh() {
+      const r = await j(url);
+      if (r.ok) {
+        const c = (typeof r.data.count === 'number') ? r.data.count : (r.data.src?.length ?? 0);
+        el.textContent = c;
+      }
+    }
+    await refresh();                  // initial
+    setInterval(refresh, 2000);       // auto-update every 2s 
+  }
+  // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+  // ---- Wire up everything on DOM ready ----
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.like-toggle[data-likes-url]').forEach(initLike);
+    document.querySelectorAll('.comment-trigger[data-comments-url]').forEach(initCommentCount);
+  });
+
+  // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+
+  // When your comment modal POSTs successfully, call this:
+  window.__bumpCommentCountForUrl = function (commentsUrl) {
+    const btn = document.querySelector(`.comment-trigger[data-comments-url="${CSS.escape(commentsUrl)}"]`);
+    const el = btn?.querySelector('[data-comment-count]');
+    if (!el) return;
+    const n = parseInt(el.textContent || '0', 10);
+    el.textContent = isNaN(n) ? 1 : (n + 1);
+  };
+})();
+</script>
+
+
+
+</body>
 </html>

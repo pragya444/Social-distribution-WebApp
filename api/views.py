@@ -61,6 +61,9 @@ class ProfileView(APIView):
             user = request.user
             entries = Entry.objects.filter(author_id=author_id, is_deleted=False).order_by('-updated')
 
+# ======================================================================
+# Developed with assistance from ChatGPT (GPT-5), October 2025
+# ======================================================================
 
 
         # -------- counts + relationship status -------------------------
@@ -889,6 +892,10 @@ def comments_list_create(request, author_id, entry_id):
     return JsonResponse(_comment_to_json(c), status=201)
 
 from django.db.models import Exists, OuterRef
+
+# ======================================================================
+# Developed with assistance from ChatGPT (GPT-5), October 2025
+# ======================================================================
 
 @csrf_exempt
 @require_http_methods(["GET", "POST", "DELETE"])

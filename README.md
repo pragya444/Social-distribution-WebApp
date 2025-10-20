@@ -33,3 +33,9 @@ The authors claiming copyright for this project:
 - Kevin Ho He  
 - Kehan Chen  
 
+
+## Collaboration (AI)
+
+- The following test cases (EntryModelTests, AuthorEntriesViewTests) were written with the asistance of OpenAI, ChatGPT-5. 2025-10-19.
+
+- The model Entry was written with the assistance of OpenAI, ChatGPT-5. 2025-10-19.

@@ -168,14 +168,6 @@ class ProfileEditView(APIView):
 
 
 
-
-
-
-
-
-
-
-
 @login_required
 def author_stream(request, author_id):
     # determine the selected tab (default to all)

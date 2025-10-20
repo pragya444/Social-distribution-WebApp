@@ -685,7 +685,8 @@ def entry_likes(request, author_id, entry_id):
     # DELETE (unlike)
     deleted, _ = EntryLike.objects.filter(user=request.user, entry=entry).delete()
     if deleted:
-        Entry.objects.filter(id=entry.id).update(like_count=F('like_count') - 1)
+        entry.like_count = max(entry.like_count - 1, 0)
+        entry.save(update_fields=['like_count'])
     entry.refresh_from_db(fields=['like_count'])
     return JsonResponse({"ok": True, "liked": False, "count": entry.like_count}, status=200)
 

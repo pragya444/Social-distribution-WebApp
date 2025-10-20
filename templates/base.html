@@ -157,6 +157,8 @@ window.__j = async function(url, opts = {}) {
 </script>
     
 <script>
+// ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+
 (function () {
   const modal    = document.getElementById('commentModal');
   const list     = document.getElementById('commentModalList');
@@ -237,6 +239,8 @@ window.__j = async function(url, opts = {}) {
 
 
 <script>
+ // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+
 (function () {
   // ---- helpers ----
   function getCookie(name) {
@@ -282,7 +286,9 @@ window.__j = async function(url, opts = {}) {
     });
   }
 
+  // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
   // ---- Comments: init count + poll periodically ----
+
   async function initCommentCount(btn) {
     const url = btn.dataset.commentsUrl;
     const el  = btn.querySelector('[data-comment-count]');
@@ -298,12 +304,14 @@ window.__j = async function(url, opts = {}) {
     await refresh();                  // initial
     setInterval(refresh, 2000);       // auto-update every 2s 
   }
-
+  // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
   // ---- Wire up everything on DOM ready ----
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.like-toggle[data-likes-url]').forEach(initLike);
     document.querySelectorAll('.comment-trigger[data-comments-url]').forEach(initCommentCount);
   });
+
+  // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
 
   // When your comment modal POSTs successfully, call this:
   window.__bumpCommentCountForUrl = function (commentsUrl) {

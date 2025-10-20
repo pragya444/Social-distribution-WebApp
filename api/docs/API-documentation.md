@@ -461,6 +461,7 @@ visibility=PUBLIC
 **How to Use**: Same pattern as entry likes  
 **Why Use**: For comment-level engagement  
 **Why Not Use**: For entry-level likes  
+**Note**: This API Endpoint is still not done. Under construction
 
 **URL Parameters**:
 

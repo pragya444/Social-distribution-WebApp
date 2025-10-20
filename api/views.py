@@ -7,18 +7,14 @@ from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.contrib.auth.decorators import login_required
 from django.utils.timezone import now
-from django.utils.html import escape
-from django.utils.safestring import mark_safe
-from django.template.defaultfilters import linebreaksbr
-from django.urls import reverse
 from .utils.images import handle_uploaded_image
-import json
 import base64
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
 from .serializers import UserSerializer
+from .utils import helpers
 
 
 
@@ -41,6 +37,9 @@ except Exception:
     PIL_AVAILABLE = False
     Image = None
     UnidentifiedImageError = Exception  # Fallback to a generic exception type
+
+
+
 
 
 class ProfileView(APIView):
@@ -88,7 +87,7 @@ class ProfileView(APIView):
         # Pre-render HTML for template
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
             for e in entries:
-                e.rendered = _render_entry(e)
+                e.rendered = helpers.render_entry(e)
 
             return Response(
                 {
@@ -125,24 +124,6 @@ class ProfileView(APIView):
         )
 
 
-
-
-        # serializer = UserSerializer(user)
-
-        # if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-        #     # attach pre-rendered html for template
-        #     for e in entries:
-        #         e.rendered = _render_entry(e)  # add a transient field for template use
-        #     return Response({ "user": user, "entries": entries }, template_name="author/profile.html")
-        
-        # entries_data = (
-        #     entries.annotate(author_username=F("author__username"))
-        #     .values("id", "author_username", "title", "content_type", "visibility", "updated",)
-        # )
-        # return Response({"user": serializer.data, "entries": list(entries_data)}, status=200)
-
-
-
 class ProfileEditView(APIView):
     permission_classes = [IsAuthenticated]
     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
@@ -170,7 +151,6 @@ class ProfileEditView(APIView):
         return Response({"user": serializer.data}, status=200)
 
 
-
 @login_required
 def author_stream(request, author_id):
     # determine the selected tab (default to all)
@@ -183,7 +163,7 @@ def author_stream(request, author_id):
 
     if tab == 'following':
         # fetch entries from authors the user follows, excluding the user's own entries
-        followed_users = users_i_follow(me)
+        followed_users = helpers.users_i_follow(me)
         entries = (
             Entry.objects
             .filter(author__in=followed_users, is_deleted=False)
@@ -199,7 +179,7 @@ def author_stream(request, author_id):
        
     
     elif tab == 'friends':
-        friends = friends_of(me)
+        friends = helpers.friends_of(me)
 
         entries = (
             Entry.objects
@@ -209,8 +189,8 @@ def author_stream(request, author_id):
         )
     else: #all tab
         
-        followed_users = users_i_follow(me)
-        friend_users   = friends_of(me)
+        followed_users = helpers.users_i_follow(me)
+        friend_users   = helpers.friends_of(me)
            
         public_entries = Entry.objects.filter(
           visibility='PUBLIC', is_deleted=False)
@@ -239,14 +219,11 @@ def author_stream(request, author_id):
             .values_list('entry_id', flat=True)
         )
 
-
-
-
     # pre-rendered HTML for template
     for e in entries:
         e.user_liked = e.id in liked_ids
         
-        e.rendered = _render_entry(e)
+        e.rendered = helpers.render_entry(e)
 
     # render with author ID and the selected tab
     return render(request, 'author_all_entries.html', {
@@ -272,79 +249,6 @@ def make_entries_public(request, entry_id):
 
     return JsonResponse({'status': 'ok', 'entry_id': str(entry_id), 'visibility': entry.visibility}, status=200)
 
-# -------- helpers -------------------------------------------------------------
-def _json_from_request(request):
-    # parse json body safely, return empty dict on failure
-    try:
-        raw = request.body.decode('utf-8') or "{}"  # handle empty body
-        return json.loads(raw)                      # convert to dict
-    except Exception:
-        return {}                                   # tolerate bad json
-
-
-def _entry_to_json(e, content_type_hint='text/plain'):
-    # produce a spec-like shape without touching database schema
-    author_host = e.author.url.split('/authors/')[0] if e.author and e.author.url else ''
-    # build a minimal, stable payload for clients and tests
-    return {
-        "type": "entry",                           
-        "title": e.title,                        
-        "id": f"{e.author.url}/entries/{e.id}" if e.author and e.author.url else str(e.id),  # fqid if available
-        "web": f"/authors/{e.author_id}/entries/{e.id}",  # local web path
-        "description": e.title or "",              
-        "contentType": content_type_hint,           # passthrough hint
-        "content": e.content or "",                
-        "author": {                                 # embedded author
-            "type": "author",
-            "id": e.author.url if e.author else "",
-            "host": f"{author_host}api/" if author_host else "",
-            "displayName": e.author.username if e.author else "",
-            "web": f"/authors/{e.author_id}",
-            "github": e.author.github if e.author else "",
-            "profileImage": e.author.profile_picture if e.author else "",
-        },
-        "likes": {
-            "type": "likes",
-            "id": f"/api/authors/{e.author_id}/entries/{e.id}/likes",
-            "page_number": 1, "size": 50,
-            "count": e.likes.count(),
-            "src": [],
-        },
-
-        "comments": {                               # placeholder list
-            "type": "comments",
-            "id": f"/api/authors/{e.author_id}/entries/{e.id}/comments",
-            "page_number": 1, "size": 5, "count": 0, "src": [],
-        },
-        "published": e.created.isoformat() if e.created else "",  # iso 8601 timestamp
-        "visibility": e.visibility,                # enum string
-    }
-
-def users_i_follow(me):
-    """
-    Users that 'me' follows with APPROVED status.
-    """
-    return User.objects.filter(
-        followers__follower=me,
-        followers__status=Follow.Status.APPROVED
-    )
-
-def followers_of(me):
-    """
-    Users that follow 'me' with APPROVED status.
-    """
-    return User.objects.filter(
-        following__followee=me,
-        following__status=Follow.Status.APPROVED
-    )
-
-def friends_of(me):
-    """
-    Mutual follow: both directions APPROVED.
-    """
-    from .models import Follow
-    return [u for u in users_i_follow(me) if Follow.are_friends(me, u)]    
-
 
 # -------- api: list + create --------------------------------------------------
 @csrf_exempt  # kept for simple curl testing; ui paths use csrf_protect
@@ -355,7 +259,7 @@ def entries_list_create(request, author_id):
             author_id=author_id,     
             is_deleted=False            # exclude deleted
         ).order_by('-updated')       
-        data = [_entry_to_json(e, content_type_hint='text/markdown') for e in qs]
+        data = [helpers.entry_to_json(e, content_type_hint='text/markdown') for e in qs]
         return JsonResponse({"type": "entries", "count": len(data), "src": data}, status=200)
 
     # create a new entry locally for the same author
@@ -363,7 +267,7 @@ def entries_list_create(request, author_id):
         # only the logged-in owner can create entries here
         if not request.user.is_authenticated or str(request.user.id) != str(author_id):
             return HttpResponseForbidden("only the author can create entries here.")
-        payload = _json_from_request(request)       # parse json body
+        payload = helpers.json_from_request(request)       # parse json body
         title       = (payload.get('title') or '').strip() or '(no title)'  # default title
         content     = payload.get('content') or ''  # allow empty body
         contentType = payload.get('contentType') or 'text/plain'            # markdown or plain
@@ -378,7 +282,7 @@ def entries_list_create(request, author_id):
             visibility=visibility,        # enum value
             is_deleted=False,             # ensure visible
         )
-        return JsonResponse(_entry_to_json(e, content_type_hint=contentType), status=201)
+        return JsonResponse(helpers.entry_to_json(e, content_type_hint=contentType), status=201)
 
     # method not allowed guard
     return HttpResponseNotAllowed(['GET', 'POST'])
@@ -392,14 +296,14 @@ def entry_retrieve_update(request, author_id, entry_id):
 
     # return a single entry in json format
     if request.method == 'GET':
-        return JsonResponse(_entry_to_json(e, content_type_hint='text/markdown'), status=200)
+        return JsonResponse(helpers.entry_to_json(e, content_type_hint='text/markdown'), status=200)
 
     # update fields without delete-recreate
     if request.method in ['PUT', 'PATCH']:
         # only the owner can perform updates
         if not request.user.is_authenticated or str(request.user.id) != str(author_id):
             return HttpResponseForbidden("only the author can edit this entry.")
-        payload = _json_from_request(request)  # parse body
+        payload = helpers.json_from_request(request)  # parse body
 
         # update only provided fields to support patch semantics
         if 'title' in payload:
@@ -415,7 +319,7 @@ def entry_retrieve_update(request, author_id, entry_id):
 
         # echo content type hint back to client
         contentType = payload.get('contentType') or 'text/plain'
-        return JsonResponse(_entry_to_json(e, content_type_hint=contentType), status=200)
+        return JsonResponse(helpers.entry_to_json(e, content_type_hint=contentType), status=200)
 
     # method not allowed guard
     return HttpResponseNotAllowed(['GET', 'PUT', 'PATCH'])
@@ -556,7 +460,7 @@ def browse_public_entries(request):
 
     # pre-rendered HTML for each entry
     for entry in all_public_entries:
-        entry.rendered = _render_entry(entry)  # Add a transient field for template use
+        entry.rendered = helpers.render_entry(entry)  # Add a transient field for template use
 
     # render the entries in the existing browse_entries.html template
     return render(request, 'browse_entries.html', {
@@ -564,49 +468,7 @@ def browse_public_entries(request):
     })
 
 
-def _looks_like_markdown(t: str) -> bool:
-    # normalize to empty string when none
-    t = t or ""
-    # quick heuristics for common markdown tokens
-    tokens = ("# ", "**", "* ", "- ", "\n- ", "`", "[", "](", "> ", "\n> ", "___", "---")
-    # return true if any token appears in the text
-    return any(tok in t for tok in tokens)
-
-
-def _render_entry(entry):
-    # read content type and text from the model
-    ct = (getattr(entry, "content_type", "") or "").lower()
-    text = getattr(entry, "content", "") or ""
-
-    if ct in ("image/png;base64", "image/jpeg;base64", "image/jpg;base64"):
-        img_url = reverse("entry-image", args=[entry.author_id, entry.id])
-        html = f'<img src="{img_url}" alt="{escape(entry.title or "")}" style="max-width:100%;height:auto;" />'
-        return mark_safe(html)
     
-    # auto-detect markdown when content type is missing
-    if not ct:
-        ct = "text/markdown" if _looks_like_markdown(text) else "text/plain"
-
-    # markdown rendering branch
-    if ct in ("text/markdown", "text/commonmark", "text/md"):
-        try:
-            from commonmark import commonmark 
-            html = commonmark(text)   
-            return mark_safe(html)  
-        except Exception:
-            # fallback: show raw text in a <pre> block on any error
-            return mark_safe(f"<pre>{escape(text)}</pre>")
-
-    # plain text branch: escape html and keep line breaks
-    safe = escape(text)         # prevent html injection
-    html = linebreaksbr(safe)     
-    return mark_safe(html)       
-
-
-
-
-
-
 @login_required
 @require_http_methods(['GET'])
 def entry_image_binary(request, author_id, entry_id):
@@ -634,6 +496,7 @@ def entry_image_binary(request, author_id, entry_id):
     # send bytes back with an actual image/* mime type (strip the ;base64 suffix)
     return HttpResponse(raw, content_type=ct.replace(';base64', ''))
 
+
 def entry_shared_view(request, token):
     entry = get_object_or_404(Entry, share_token=token, is_deleted=False)
     
@@ -641,7 +504,7 @@ def entry_shared_view(request, token):
         return HttpResponseForbidden("This entry is not shareable.")
 
     # render the entry content
-    entry.rendered = _render_entry(entry)
+    entry.rendered = helpers.render_entry(entry)
 
     return render(request, "entry_shared.html", {"entry": entry})
 
@@ -663,10 +526,6 @@ def entry_delete(request, author_id, entry_id):
     return redirect('author-all-entries', author_id=author_id)
 
 
-##
-
-
-
 @login_required
 @require_POST
 def send_follow_request(request, author_id):
@@ -687,6 +546,7 @@ def send_follow_request(request, author_id):
         fr.save(update_fields=["status"])
     return redirect("profile", author_id=target.id)
 
+
 @login_required
 @require_POST
 def unfollow_post(request, author_id):
@@ -697,6 +557,7 @@ def unfollow_post(request, author_id):
     Follow.objects.filter(follower=request.user, followee=target).delete()
     return redirect("profile", author_id=target.id)
 
+
 @login_required
 def follow_requests_page(request, author_id):
     # show incoming pending requests to ME
@@ -704,6 +565,7 @@ def follow_requests_page(request, author_id):
         return HttpResponseForbidden("Not your account")
     pendings = Follow.objects.filter(followee=request.user, status=Follow.Status.PENDING).select_related("follower").order_by("-created_at")
     return render(request, "follow_requests.html", {"requests": pendings})
+
 
 @login_required
 @require_POST
@@ -715,6 +577,7 @@ def approve_follow_request(request, author_id, follower_id):
     fr.save(update_fields=["status"])
     return redirect("follow-requests-page", author_id=author_id)
 
+
 @login_required
 @require_POST
 def deny_follow_request(request, author_id, follower_id):
@@ -723,117 +586,6 @@ def deny_follow_request(request, author_id, follower_id):
     Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
     return redirect("follow-requests-page", author_id=author_id)
 
-
-##
-@login_required
-@require_POST
-def send_follow_request(request, author_id):
-    # author_id == the viewer (me) sending request
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Not your account")
-    target_id = request.POST.get("target_id")
-    target = get_object_or_404(User, id=target_id)
-    if target == request.user:
-        return JsonResponse({"error":"cannot follow yourself"}, status=400)
-
-    fr, created = Follow.objects.get_or_create(
-        follower=request.user, followee=target,
-        defaults={"status": Follow.Status.PENDING}
-    )
-    if not created and fr.status == Follow.Status.REJECTED:
-        fr.status = Follow.Status.PENDING
-        fr.save(update_fields=["status"])
-    return redirect("profile", author_id=target.id)
-@login_required
-@require_POST
-def unfollow_post(request, author_id):
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Not your account")
-    target_id = request.POST.get("target_id")
-    target = get_object_or_404(User, id=target_id)
-    Follow.objects.filter(follower=request.user, followee=target).delete()
-    return redirect("profile", author_id=target.id)
-@login_required
-def follow_requests_page(request, author_id):
-    # show incoming pending requests to ME
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Not your account")
-    pendings = Follow.objects.filter(followee=request.user, status=Follow.Status.PENDING).select_related("follower").order_by("-created_at")
-    return render(request, "follow_requests.html", {"requests": pendings})
-@login_required
-@require_POST
-def approve_follow_request(request, author_id, follower_id):
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Not your account")
-    fr = get_object_or_404(Follow, follower_id=follower_id, followee=request.user)
-    fr.status = Follow.Status.APPROVED
-    fr.save(update_fields=["status"])
-    return redirect("follow-requests-page", author_id=author_id)
-@login_required
-@require_POST
-def deny_follow_request(request, author_id, follower_id):
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Not your account")
-    Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
-    return redirect("follow-requests-page", author_id=author_id)
-
-
-    # check friends function for comments
-def _is_friends(viewer: User, owner: User) -> bool:
-    if not (viewer and owner):
-        return False
-    # Mutual follow counts as "friends"
-    try:
-        return owner.followers.filter(id=viewer.id).exists() and viewer.followers.filter(id=owner.id).exists()
-    except Exception:
-        return False
-    
-    # visibility to others
-def _can_view_entry(current_user, entry: Entry) -> bool:
-    # normalize whatever is in the DB/form
-    vis = (entry.visibility or "PUBLIC").upper()
-
-    if vis in ("PUBLIC", "UNLISTED"):
-        return True
-
-    if not current_user or not getattr(current_user, "is_authenticated", False):
-        return False
-
-    # owner can always see
-    if str(current_user.id) == str(entry.author_id):
-        return True
-
-    if vis == "FRIENDS":
-        # replace with  actual friend check
-        return _is_friends(current_user, entry.author)
-
-    if vis == "PRIVATE":
-        return str(current_user.id) == str(entry.author_id)
-
-    return False
-
-
-def _comment_to_json(c):
-    a = c.author
-    e = c.entry
-    base = a.url.split('/authors/')[0] if a and a.url else ''
-    return {
-        "type": "comment",
-        "id": f"{base}/api/authors/{e.author_id}/entries/{e.id}/comments/{c.id}",
-        "entry": f"{base}/api/authors/{e.author_id}/entries/{e.id}",
-        "comment": c.comment,
-        "contentType": c.content_type or "text/plain",
-        "published": c.created.isoformat(),
-        "author": {
-            "type": "author",
-            "id": a.url if a else "",
-            "host": f"{base}api/" if base else "",
-            "displayName": a.username if a else "",
-            "web": f"/authors/{a.id}" if a else "",
-            "github": a.github if a else "",
-            "profileImage": a.profile_picture if a else "",
-        },
-    }
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
@@ -845,7 +597,7 @@ def comments_list_create(request, author_id, entry_id):
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
 
     # visibility guard (public/unlisted ok; friends/private need auth/relationship)
-    if not _can_view_entry(request.user, entry):
+    if not helpers.can_view_entry(request.user, entry):
         return HttpResponseForbidden("no access to this entry")
 
     if request.method == "GET":
@@ -858,7 +610,7 @@ def comments_list_create(request, author_id, entry_id):
         start, end = (page - 1) * size, (page - 1) * size + size
 
         qs = entry.comments.all().order_by("-created")
-        items = [_comment_to_json(c) for c in qs[start:end]]
+        items = [helpers.comment_to_json(c) for c in qs[start:end]]
 
         base = entry.author.url.split('/authors/')[0] if entry.author and entry.author.url else ''
         return JsonResponse({
@@ -874,21 +626,19 @@ def comments_list_create(request, author_id, entry_id):
     if not request.user.is_authenticated:
         return HttpResponseForbidden("login required")
 
-    data = _json_from_request(request)
+    data = helpers.json_from_request(request)
     text = (data.get("comment") or "").strip()
     if not text:
         return JsonResponse({"error": "comment text is required"}, status=400)
     ctype = (data.get("contentType") or "text/plain").strip() or "text/plain"
 
     c = Comment.objects.create(entry=entry, author=request.user, comment=text, content_type=ctype)
-    return JsonResponse(_comment_to_json(c), status=201)
+    return JsonResponse(helpers.comment_to_json(c), status=201)
 
-from django.db.models import Exists, OuterRef
 
 # ======================================================================
 # Developed with assistance from ChatGPT (GPT-5), October 2025
 # ======================================================================
-
 @csrf_exempt
 @require_http_methods(["GET", "POST", "DELETE"])
 def entry_likes(request, author_id, entry_id):
@@ -899,7 +649,7 @@ def entry_likes(request, author_id, entry_id):
     DELETE  unlike            -> { ok:true, liked:false, count:<int> }
     """
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-    if not _can_view_entry(request.user, entry):
+    if not helpers.can_view_entry(request.user, entry):
         return HttpResponseForbidden("no access")
 
     # compute count fast and whether THIS user liked it
@@ -944,7 +694,7 @@ def comment_likes(request, author_id, entry_id, comment_id):
     DELETE  /api/authors/<author_id>/entries/<entry_id>/comments/<comment_id>/likes
     """
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-    if not _can_view_entry(request.user, entry):
+    if not helpers.can_view_entry(request.user, entry):
         return HttpResponseForbidden("no access")
 
     comment = get_object_or_404(Comment, id=comment_id, entry=entry)

@@ -61,6 +61,9 @@ class ProfileView(APIView):
             user = request.user
             entries = Entry.objects.filter(author_id=author_id, is_deleted=False).order_by('-updated')
 
+# ======================================================================
+# Developed with assistance from ChatGPT (GPT-5), October 2025
+# ======================================================================
 
 
         # -------- counts + relationship status -------------------------
@@ -228,21 +231,21 @@ def author_stream(request, author_id):
             | friends_only_from_friends
         ).order_by('-updated')
     
+    liked_ids = set()
+    if request.user.is_authenticated and entries:
+        liked_ids = set(
+            EntryLike.objects
+            .filter(user=request.user, entry__in=entries)
+            .values_list('entry_id', flat=True)
+        )
 
-    # else:  
-    #     # fetch all public entries
-    #     public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False)
 
-    #     # fetch entries from authors the user follows
-    #     followed_entries = Entry.objects.filter(
-    #         Q(author__id=author_id) & Q(is_deleted=False)
-    #     )
 
-    #     # combine followed entries and public entries
-    #     entries = public_entries.union(followed_entries).order_by('-updated')
 
     # pre-rendered HTML for template
     for e in entries:
+        e.user_liked = e.id in liked_ids
+        
         e.rendered = _render_entry(e)
 
     # render with author ID and the selected tab
@@ -880,17 +883,30 @@ def comments_list_create(request, author_id, entry_id):
     c = Comment.objects.create(entry=entry, author=request.user, comment=text, content_type=ctype)
     return JsonResponse(_comment_to_json(c), status=201)
 
+from django.db.models import Exists, OuterRef
+
+# ======================================================================
+# Developed with assistance from ChatGPT (GPT-5), October 2025
+# ======================================================================
+
 @csrf_exempt
 @require_http_methods(["GET", "POST", "DELETE"])
 def entry_likes(request, author_id, entry_id):
     """
     GET     /api/authors/<author_id>/entries/<entry_id>/likes
-    POST    /api/authors/<author_id>/entries/<entry_id>/likes   (like)
-    DELETE  /api/authors/<author_id>/entries/<entry_id>/likes   (unlike)
+            -> { type:"likes", count:<int>, liked:<bool>, src:[...] }
+    POST    like (idempotent) -> { ok:true, liked:true, count:<int> }
+    DELETE  unlike            -> { ok:true, liked:false, count:<int> }
     """
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
     if not _can_view_entry(request.user, entry):
         return HttpResponseForbidden("no access")
+
+    # compute count fast and whether THIS user liked it
+    count = EntryLike.objects.filter(entry=entry).count()
+    user_liked = False
+    if request.user.is_authenticated:
+        user_liked = EntryLike.objects.filter(entry=entry, user=request.user).exists()
 
     if request.method == "GET":
         data = [{
@@ -898,19 +914,26 @@ def entry_likes(request, author_id, entry_id):
             "id": like.user.url,
             "displayName": like.user.username,
             "web": f"/authors/{like.user.id}",
-        } for like in entry.likes.select_related("user").all()]
-        return JsonResponse({"type": "likes", "count": len(data), "src": data}, status=200)
+        } for like in EntryLike.objects.select_related("user").filter(entry=entry)]
+        return JsonResponse(
+            {"type": "likes", "count": count, "liked": user_liked, "src": data},
+            status=200
+        )
 
     if not request.user.is_authenticated:
         return HttpResponseForbidden("login required")
 
     if request.method == "POST":
+        # idempotent like
         EntryLike.objects.get_or_create(user=request.user, entry=entry)
-        return JsonResponse({"ok": True}, status=201)
+        new_count = EntryLike.objects.filter(entry=entry).count()
+        return JsonResponse({"ok": True, "liked": True, "count": new_count}, status=201)
 
-    # DELETE
+    # DELETE (unlike)
     EntryLike.objects.filter(user=request.user, entry=entry).delete()
-    return JsonResponse({"ok": True}, status=200)
+    new_count = EntryLike.objects.filter(entry=entry).count()
+    return JsonResponse({"ok": True, "liked": False, "count": new_count}, status=200)
+
 
 @csrf_exempt
 @require_http_methods(["GET", "POST", "DELETE"])

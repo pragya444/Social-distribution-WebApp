@@ -168,6 +168,55 @@ html, body {
 .card-foot{ display:flex; gap:40px; color:#111; margin-top:6px; padding: 6px}
 .action{ cursor:pointer; }
 
+
+  .card-foot .action {
+    display: flex; align-items: center; gap: 6px; color: #6b7280;
+    font-size: 14px; line-height: 1; user-select: none;
+  }
+  .card-foot .action .icon, 
+  .card-foot .action svg {
+    width: 20px; height: 20px; display: inline-block;
+  }
+
+  /* Make the button look like a simple text chip */
+  .card-foot .action button {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: none; padding: 6px 8px;
+    border-radius: 8px; cursor: pointer; color: inherit;
+  }
+  .card-foot .action button:hover {
+    background: #f3f4f6; color: #374151;
+  }
+
+  /* Hide the old heart character (we’ll use SVG) */
+  .card-foot .action .heart { display: none; }
+
+  /* Count style */
+  .card-foot [data-like-count],
+  .card-foot [data-comment-count] {
+    min-width: 1ch; text-align: left;
+  }
+
+  /* Active (liked) state */
+  .like-toggle.liked {
+    color: #ef4444;  /* tailwind-ish red-500 */
+  }
+  .like-toggle.liked svg {
+    fill: currentColor;  /* filled heart when liked */
+  }
+
+  /* Keyboard focus */
+  .card-foot .action button:focus-visible {
+    outline: 2px solid #93c5fd; outline-offset: 2px;
+  }
+
+
+
+
+
+
+
+
 .page-form{ max-width:740px; }
 .form{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
 .form-row{ display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
@@ -224,5 +273,8 @@ html, body {
   font: 700 11px/18px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   text-align: center;
 }
+
+
+
 
 

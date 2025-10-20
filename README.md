@@ -18,6 +18,7 @@ Make a distributed social network!
 | Ling Zhuo | lzhuo2 | lz22222     |
 | Kevin Ho He | hohe | kevinhh12     |
 | Kehan Chen | kehan | KarlFranzman     |
+| Amitoj Singh | amitoj2 | amitojxsingh |
 
 ## License
 

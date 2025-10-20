@@ -201,10 +201,39 @@
       </div>
 
       <div class="stats">
-        <div><b>89</b> Posts</div>
-        <div><b>342</b> Followers</div>
-        <div><b>128</b> Following</div>
+        <div><b>{{ posts_count }}</b> Posts</div>
+        <div><b>{{ followers_count }}</b> Followers</div>
+        <div><b>{{ following_count }}</b> Following</div>
       </div>
+
+      {% if request.user.is_authenticated and request.user.id != user.id %}
+        {% if rel_status == "approved" %}
+          <form method="post" action="{% url 'follow-unfollow' author_id=request.user.id %}">
+            {% csrf_token %}
+            <input type="hidden" name="target_id" value="{{ user.id }}">
+            <button class="edit-btn" type="submit">Unfollow</button>
+          </form>
+        {% elif rel_status == "pending" %}
+          <form method="post" action="{% url 'follow-unfollow' author_id=request.user.id %}">
+            {% csrf_token %}
+            <input type="hidden" name="target_id" value="{{ user.id }}">
+            <button class="edit-btn" type="submit">Cancel request</button>
+          </form>
+        {% else %}
+          <form method="post" action="{% url 'follow-send' author_id=request.user.id %}">
+           {% csrf_token %}
+           <input type="hidden" name="target_id" value="{{ user.id }}">
+           <button class="edit-btn" type="submit">Follow</button>
+          </form>
+        {% endif %}
+      {% endif %}
+      
+      
+
+
+
+
+
     </div>
   </div>
 
@@ -266,7 +295,8 @@
 
         <div class="card-body">
         <div class="text">
-            {# image entries: show via binary endpoint #}
+        <h2 class="title encode-sans-semi-expanded-medium">{{ e.title|default:"(untitled)" }}</h2>
+
             {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
             <img
                 src="{% url 'entry-image' author_id=user.id entry_id=e.id %}"

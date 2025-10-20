@@ -28,4 +28,11 @@ urlpatterns = [
     
     path('authors/<author_id>/entries/<entry_id>/delete/', views.entry_delete, name='entry-delete'),
     path('share/<uuid:token>/', views.entry_shared_view, name='entry-shared-view'),
+
+
+    path("authors/<str:author_id>/follow", views.send_follow_request, name="follow-send"),
+    path("authors/<str:author_id>/unfollow", views.unfollow_post, name="follow-unfollow"),
+    path("authors/<str:author_id>/requests", views.follow_requests_page, name="follow-requests-page"),
+    path("authors/<str:author_id>/requests/<str:follower_id>/approve", views.approve_follow_request, name="follow-approve"),
+    path("authors/<str:author_id>/requests/<str:follower_id>/deny", views.deny_follow_request, name="follow-deny"),
 ]

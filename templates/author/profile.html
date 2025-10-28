@@ -204,6 +204,8 @@
         <div><b>{{ posts_count }}</b> Posts</div>
         <div><b>{{ followers_count }}</b> Followers</div>
         <div><b>{{ following_count }}</b> Following</div>
+        <div><b>{{ friends_count }}</b> Friends</div>
+        
       </div>
 
       {% if request.user.is_authenticated and request.user.id != user.id %}

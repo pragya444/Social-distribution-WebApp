@@ -71,7 +71,7 @@ class ProfileView(APIView):
         from .models import Follow  # (safe if already imported above)
         followers_count = Follow.objects.filter(followee=user, status=Follow.Status.APPROVED).count()
         following_count = Follow.objects.filter(follower=user, status=Follow.Status.APPROVED).count()
-
+        friends_count = len(helpers.friends_of(user))
         # relationship (viewer -> viewed)
         rel_status = "self"  # self / none / pending / approved / rejected
         can_approve = False  # whether viewed user has requested to follow me
@@ -97,6 +97,7 @@ class ProfileView(APIView):
                     "posts_count": posts_count,
                     "followers_count": followers_count,
                     "following_count": following_count,
+                    "friends_count": friends_count,
                     "rel_status": rel_status,
                     "can_approve": can_approve,
                 },
@@ -117,6 +118,7 @@ class ProfileView(APIView):
                 "posts_count": posts_count,
                 "followers_count": followers_count,
                 "following_count": following_count,
+                "friends_count": friends_count,
                 "rel_status": rel_status,
                 "can_approve": can_approve,
             },
@@ -164,12 +166,24 @@ def author_stream(request, author_id):
     if tab == 'following':
         # fetch entries from authors the user follows, excluding the user's own entries
         followed_users = helpers.users_i_follow(me)
+        friends = helpers.friends_of(me)
+
+        # authors I follow who are NOT friends
+        following_nonfriends = followed_users.exclude(pk__in=friends.values("pk"))
+
         entries = (
-            Entry.objects
-            .filter(author__in=followed_users, is_deleted=False)
-            .exclude(author=me)
-            .order_by('-updated')
+        Entry.objects.filter(is_deleted=False)
+        .exclude(author=me)
+        .filter(
+            # friends: can see FRIENDS + PUBLIC + UNLISTED
+            Q(author__in=friends, visibility__in=["FRIENDS", "PUBLIC", "UNLISTED"])
+            |
+            # followed but not friends: PUBLIC + UNLISTED only
+            Q(author__in=following_nonfriends, visibility__in=["PUBLIC", "UNLISTED"])
         )
+        .order_by("-updated")
+    )
+        
     elif tab == 'private':
         # fetch only the user's own private entries
         entries = Entry.objects.filter(
@@ -180,10 +194,11 @@ def author_stream(request, author_id):
     
     elif tab == 'friends':
         friends = helpers.friends_of(me)
+        allowed_visibility = ['FRIENDS', 'PUBLIC', 'UNLISTED']
 
         entries = (
             Entry.objects
-            .filter(author__in=friends, visibility='FRIENDS', is_deleted=False)
+            .filter(author__in=friends, visibility__in=allowed_visibility, is_deleted=False)
             .exclude(author=me)
             .order_by('-updated')
         )
@@ -685,7 +700,8 @@ def entry_likes(request, author_id, entry_id):
     # DELETE (unlike)
     deleted, _ = EntryLike.objects.filter(user=request.user, entry=entry).delete()
     if deleted:
-        Entry.objects.filter(id=entry.id).update(like_count=F('like_count') - 1)
+        entry.like_count = max(entry.like_count - 1, 0)
+        entry.save(update_fields=['like_count'])
     entry.refresh_from_db(fields=['like_count'])
     return JsonResponse({"ok": True, "liked": False, "count": entry.like_count}, status=200)
 

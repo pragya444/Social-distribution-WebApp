@@ -75,7 +75,10 @@ def friends_of(me):
     """
     Mutual follow: both directions APPROVED.
     """
-    return [u for u in users_i_follow(me) if Follow.are_friends(me, u)]   
+    return users_i_follow(me).filter(
+        pk__in=followers_of(me).values_list("pk", flat=True)
+    )
+    # return [u for u in users_i_follow(me) if Follow.are_friends(me, u)]   
 
 
 

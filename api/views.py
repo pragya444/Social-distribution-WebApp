@@ -401,56 +401,107 @@ def entry_create_page(request, author_id):
 
 
 # -------- pages: edit (server-rendered form) ----------------------------------
-@login_required   # require session auth for ui usage
-@csrf_protect     # protect post with csrf token
+@login_required   # must be logged in
+@csrf_protect     # protect post with csrf
 def entry_edit_page(request, author_id, entry_id):
-    # only the owner can edit
+    # only the owner can edit:
+    # compare the logged-in user id to the author_id in the url.
     if str(request.user.id) != str(author_id):
         return HttpResponseForbidden("only the author can edit this entry.")
 
-    # load target entry
+    # get the entry being edited.
+    # must match author_id, not be deleted.
     e = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
 
-    # pre-fill form
+    # if this is a get request, just render the edit form
+    # with current data pre-filled.
     if request.method == 'GET':
-        # keep your original default; template can still show text controls
         ctx = {
             'author_id': author_id,
             'entry': e,
+            # used by template to pre-select content type dropdown for text posts.
             'contentType': getattr(e, 'content_type', '') or 'text/markdown',
         }
         return render(request, 'entry_edit.html', ctx)
 
-    # POST: two paths
-    # 1) "replace with image" path (checkbox + file)
-    as_image = request.POST.get('as_image') == 'on'     # flag from form
-    img_file = request.FILES.get('image')               # uploaded file
+    # -------- post: actually update the entry --------
+    #
+    # step 1: update common fields (title, visibility)
+    new_title = request.POST.get('title')
+    if new_title:
+        e.title = new_title
 
-    # always allow updating common fields
-    e.title = request.POST.get('title') or e.title
-    e.visibility = request.POST.get('visibility') or e.visibility
+    new_vis = request.POST.get('visibility')
+    if new_vis:
+        e.visibility = new_vis
 
-    if as_image and img_file:
-        #validate/transcode -> base64，  set content & content_type accordingly
-        try:
-            content_type, b64_str = handle_uploaded_image(img_file)
-            e.content = b64_str
-            e.content_type = content_type            # e.g. image/png;base64 or image/jpeg;base64
-        except ValueError:
-            #if the image is invalid, silently fall back to text update (keeps behavior simple)
+    # step 2: figure out how the user is editing content.
+    # "as_image" checkbox means "treat this as an image post".
+    # request.FILES["image"] is the new uploaded image file (or none).
+    wants_image_mode = (request.POST.get('as_image') == 'on')
+    img_file = request.FILES.get('image')  # can be none
+
+    # step 3: branch based on what this entry currently is.
+    # if e.is_image == true: this entry is currently an image post
+    # (e.content is base64 data, e.content_type is image/...;base64).
+    # else: it's a text/markdown/plaintext post.
+    if e.is_image:
+        # editing an existing image post.
+
+        if wants_image_mode and img_file:
+            # user uploaded a replacement image, so replace the stored base64.
+            try:
+                img_ct, b64_str = handle_uploaded_image(img_file)
+                e.content = b64_str
+                e.content_type = img_ct
+            except ValueError:
+                # bad/invalid image upload -> ignore, keep old image.
+                pass
+        else:
+            # no new image uploaded:
+            # do not touch e.content or e.content_type.
+            # (important: this prevents wiping the old base64 by accident)
             pass
-    else:
-        # 2) original text-edit path
-        e.content = request.POST.get('content') or e.content
-        ct_hint = request.POST.get('contentType') or ''
-        if ct_hint:
-            e.content_type = ct_hint
 
+    else:
+        # editing an existing text post.
+
+        if wants_image_mode and img_file:
+            # user is converting a text post into an image post.
+            try:
+                img_ct, b64_str = handle_uploaded_image(img_file)
+                e.content = b64_str
+                e.content_type = img_ct
+            except ValueError:
+                # upload failed; fall back to normal text update instead.
+                text_body = request.POST.get('content')
+                if text_body is not None:
+                    e.content = text_body
+
+                ct_hint = request.POST.get('contentType')
+                if ct_hint:
+                    e.content_type = ct_hint or e.content_type
+        else:
+            # normal text edit (no image switch).
+            text_body = request.POST.get('content')
+            if text_body is not None:
+                e.content = text_body
+
+            ct_hint = request.POST.get('contentType')
+            if ct_hint:
+                e.content_type = ct_hint or e.content_type
+
+    # step 4: mark it updated and save.
     e.updated = now()
     e.save()
 
-    # back to stream
+    # after saving, send user back to their entries list.
     return redirect('author-all-entries', author_id=author_id)
+
+
+
+
+
 
 
 @login_required

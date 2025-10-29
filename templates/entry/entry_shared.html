@@ -66,7 +66,7 @@
       {% for comment in entry.comments.all %}
         <div class="comment" style="margin-bottom:8px;">
           <strong>{{ comment.author.username }}</strong>: {{ comment.comment }}
-          <div class="comment-time" style="font-size:0.8em; color:#555;">{{ comment.created|timesince }} ago</div>
+          <div class="comment-time" style="font-size:0.8em; color:#555;">{{ comment.created|date:"M d, Y, h:i A"}}</div>
         </div>
       {% empty %}
         <p>No comments yet.</p>

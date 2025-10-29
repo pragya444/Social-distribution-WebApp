@@ -660,7 +660,8 @@ def entry_shared_view(request, token):
     entry = get_object_or_404(Entry, share_token=token, is_deleted=False)
     
     if entry.visibility not in ['PUBLIC', 'UNLISTED']:
-        return HttpResponseForbidden("This entry is not shareable.")
+         if not helpers.can_view_entry(request.user, entry):
+            return HttpResponseForbidden("This entry is not shareable.")
 
     # render the entry content
     entry.rendered = helpers.render_entry(entry)

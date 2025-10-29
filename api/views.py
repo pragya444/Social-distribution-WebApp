@@ -354,7 +354,7 @@ def entry_create_page(request, author_id):
 
     # GET -> render empty form
     if request.method == 'GET':
-        return render(request, 'entry_create.html', {'author_id': author_id})
+        return render(request, 'entry/entry_create.html', {'author_id': author_id})
 
     # POST -> create an entry
     title       = (request.POST.get('title') or '').strip() or '(no title)'
@@ -465,7 +465,7 @@ def entry_edit_page(request, author_id, entry_id):
             # used by template to highlight the correct tab initially
             'contentType': getattr(e, 'content_type', '') or 'text/markdown',
         }
-        return render(request, 'entry_edit.html', ctx)
+        return render(request, 'entry/entry_edit.html', ctx)
 
     # --- POST: actually apply the edits ---
 
@@ -593,7 +593,7 @@ def browse_public_entries(request):
         entry.rendered = helpers.render_entry(entry)  # Add a transient field for template use
 
     # render the entries in the existing browse_entries.html template
-    return render(request, 'browse_entries.html', {
+    return render(request, 'entry/browse_entries.html', {
         'entries': all_public_entries,
     })
 
@@ -664,8 +664,8 @@ def entry_shared_view(request, token):
 
     # render the entry content
     entry.rendered = helpers.render_entry(entry)
-
-    return render(request, "entry_shared.html", {"entry": entry})
+    #return render(request, "does_not_exist.html", {"entry": entry})
+    return render(request, "entry/entry_shared.html", {"entry": entry})
 
 
 

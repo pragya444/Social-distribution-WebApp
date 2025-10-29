@@ -31,14 +31,30 @@
 
   <div class="card-body">
     <div class="text">
+      {% if entry.title %}
+        {% if entry.content_type and entry.content_type|lower|slice:"0:6" == "image/" %}
+          <h2 class="entry-title"
+              style="font-weight: normal; font-size: 1.1rem; margin-top: 10px; margin-bottom: 10px;">
+            {{ entry.title }}
+          </h2>
+        {% else %}
+          <h2 class="entry-title"
+              style="font-weight: normal; font-size: 1.1rem; margin-top: 10px; margin-bottom: 4px;">
+            {{ entry.title }}
+          </h2>
+        {% endif %}
+      {% endif %}
+      
       {% if entry.content_type and entry.content_type|lower|slice:"0:6" == "image/" %}
         <img
           src="{% url 'entry-image' author_id=entry.author.id entry_id=entry.id %}"
           alt="{{ entry.title|default:'image' }}"
-          style="max-width:100%;height:auto;border-radius:8px;"
-        />
-      {% else %}
-        {{ entry.rendered|safe }}
+          style="max-width:240px; height:auto; border-radius:8px; border:1px solid #ccc;
+                display:block; margin: 0 auto 1rem auto;">
+      {% endif %}
+
+      {% if entry.rendered %}
+        <div class="entry-text" style="margin-top: 0.5rem;">{{ entry.rendered|safe }} </div>
       {% endif %}
     </div>
     <div class="time"><p>{{ entry.updated|date:"M d, Y, h:i A" }}</p></div>

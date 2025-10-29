@@ -1,10 +1,11 @@
+# Developed with assistance from ChatGPT (GPT-5), October 2025
 {% extends "base.html" %}
 {% block title %}New Entry{% endblock %}
 {% block content %}
 <div class="page-form">
   <h1>New Entry</h1>
 
-  <form method="post" class="form" enctype="multipart/form-data">
+  <form method="post" class="form" enctype="multipart/form-data" id="createForm">
     {% csrf_token %}
 
     <label class="form-row">
@@ -23,36 +24,28 @@
 
     <div class="form-row">
       <span>Content Type</span>
-      <!-- Added content type tab bar -->
       <div class="filter-tabs" id="contentTypeTabs">
         <button type="button" class="tab active" data-value="text/markdown">Markdown</button>
         <button type="button" class="tab" data-value="text/plain">Plain</button>
         <button type="button" class="tab" data-value="image/png;base64">PNG Image</button>
         <button type="button" class="tab" data-value="image/jpeg;base64">JPEG Image</button>
       </div>
-      <input type="hidden" name="contentType" id="contentType" value="text/markdown"> <!-- Hidden field -->
+
+      <input type="hidden" name="contentType" id="contentType" value="text/markdown">
     </div>
 
-    <!-- Toggle: when on, this entry is created from an image file -->
-    <label class="form-row" style="align-items:center; gap:.5rem;">
-      <input type="checkbox" id="asImage">
-      <span>Upload as image entry</span>
-    </label>
+    <input type="checkbox" id="asImageHidden" name="as_image" style="display:none;">
 
-    <!-- Appears only when "asImage" is checked -->
     <div class="form-row" id="imagePicker" style="display:none;">
       <span>Image</span>
-      <input type="file" id="imageFile" accept="image/png, image/jpeg">
+      <input type="file" id="imageFile" name="image" accept="image/png, image/jpeg">
     </div>
 
-    <!-- Text content area for Markdown or plain text.
-         When in image mode, this stays hidden but still carries base64 data. -->
     <label class="form-row" id="contentRow">
       <span>Content</span>
       <textarea name="content" id="content" rows="10" placeholder="Write Markdown or plain text here..."></textarea>
     </label>
 
-    <!-- Image preview (shown only after selecting a file) -->
     <div id="preview" style="display:none; margin: .5rem 0;">
       <img id="previewImg" alt="preview" style="max-width:100%; height:auto; border:1px solid #ddd; border-radius:.5rem;">
       <div id="imgMeta" style="font-size:.875rem; color:#666; margin-top:.25rem;"></div>
@@ -66,42 +59,61 @@
 
   <script>
     (function () {
-      const asImage = document.getElementById('asImage');
-      const imagePicker = document.getElementById('imagePicker');
-      const imageFile = document.getElementById('imageFile');
-      const contentRow = document.getElementById('contentRow');
-      const content = document.getElementById('content');
-      const contentTypeSel = document.getElementById('contentType');
-      const preview = document.getElementById('preview');
-      const previewImg = document.getElementById('previewImg');
-      const imgMeta = document.getElementById('imgMeta');
+      const tabsWrap      = document.getElementById('contentTypeTabs');
+      const tabs          = tabsWrap.querySelectorAll('.tab');
+      const hiddenType    = document.getElementById('contentType');
 
-      // Switch between "text entry" and "image entry" modes
-      asImage.addEventListener('change', () => {
-        const on = asImage.checked;
-        imagePicker.style.display = on ? '' : 'none';
-        preview.style.display = 'none';
-        previewImg.removeAttribute('src');
-        imgMeta.textContent = '';
+      const asImageBox    = document.getElementById('asImageHidden');
+      const imagePicker   = document.getElementById('imagePicker');
+      const imageFile     = document.getElementById('imageFile');
 
-        // Hide text area in image mode， show it in text mode
-        contentRow.style.display = on ? 'none' : '';
+      const contentRow    = document.getElementById('contentRow');
+      const contentTA     = document.getElementById('content');
 
-        if (!on) {
-          // Back to text mode: if an image content type was selected, reset to Markdown
-          if (contentTypeSel.value.startsWith('image/')) {
-            contentTypeSel.value = 'text/markdown';
-          }
+      const previewBox    = document.getElementById('preview');
+      const previewImg    = document.getElementById('previewImg');
+      const imgMeta       = document.getElementById('imgMeta');
+
+      function syncUIForType(mime) {
+        tabs.forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.value === mime);
+        });
+
+        hiddenType.value = mime;
+
+        const isImage = mime.startsWith('image/');
+
+        if (isImage) {
+          imagePicker.style.display = '';
+          contentRow.style.display  = 'none';
+          asImageBox.checked        = true;
         } else {
-          // Entering image mode: clear any existing text， wait for file selection
-          content.value = '';
+          imagePicker.style.display = 'none';
+          contentRow.style.display  = '';
+          asImageBox.checked        = false;
+
+          previewBox.style.display  = 'none';
+          previewImg.removeAttribute('src');
+          imgMeta.textContent = '';
         }
+      }
+
+      syncUIForType(hiddenType.value);
+
+      tabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+          syncUIForType(btn.dataset.value);
+        });
       });
 
-      // When a file is chosen, convert it to base64 and inject into content
       imageFile.addEventListener('change', () => {
         const file = imageFile.files && imageFile.files[0];
-        if (!file) return;
+        if (!file) {
+          previewBox.style.display = 'none';
+          previewImg.removeAttribute('src');
+          imgMeta.textContent = '';
+          return;
+        }
 
         const okTypes = ['image/png', 'image/jpeg'];
         if (!okTypes.includes(file.type)) {
@@ -112,53 +124,20 @@
 
         const reader = new FileReader();
         reader.onload = () => {
-          const dataUrl = reader.result; // e.g. data:image/png;base64,AAAA...
-          //  store only the base64 payload (after the comma) in content
+          const dataUrl = reader.result;
           const comma = dataUrl.indexOf(',');
           const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 
-          // Put base64 into the hidden textarea so it posts with the form
-          content.value = base64;
+          contentTA.value = base64;
 
-          // Select the appropriate contentType based on the chosen file
-          if (file.type === 'image/png') {
-            contentTypeSel.value = 'image/png;base64';
-          } else if (file.type === 'image/jpeg') {
-            contentTypeSel.value = 'image/jpeg;base64';
-          }
-
-          // Show a preview
           previewImg.src = dataUrl;
           imgMeta.textContent = `${file.type} · ${(file.size/1024).toFixed(1)} KB`;
-          preview.style.display = '';
+          previewBox.style.display = '';
         };
-        reader.onerror = () => {
-          alert('Failed to read image file.');
-        };
+        reader.onerror = () => { alert('Failed to read image file.'); };
         reader.readAsDataURL(file);
       });
     })();
-
-    const contentTypeTabs = document.getElementById('contentTypeTabs');
-    contentTypeTabs.querySelectorAll('.tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        // Remove active from all tabs
-        contentTypeTabs.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        // Set active for clicked tab
-        tab.classList.add('active');
-        // Update hidden input value
-        contentType.value = tab.dataset.value;
-
-        // If switching to an image tab, check the "Upload as image" checkbox
-        if (tab.dataset.value.startsWith('image/')) {
-          asImage.checked = true;
-          asImage.dispatchEvent(new Event('change'));
-        } else {
-          asImage.checked = false;
-          asImage.dispatchEvent(new Event('change'));
-        }
-      });
-    });
   </script>
 </div>
 {% endblock %}

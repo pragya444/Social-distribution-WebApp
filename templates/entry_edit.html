@@ -1,12 +1,11 @@
+# Developed with assistance from ChatGPT (GPT-5), October 2025
 {% extends "base.html" %}
 {% block title %}Edit Entry{% endblock %}
-
 {% block content %}
 <div class="page-form">
   <h1>Edit Entry</h1>
 
-  <!-- one form for both text posts and image posts -->
-  <form method="post" enctype="multipart/form-data" class="form">
+  <form method="post" enctype="multipart/form-data" class="form" id="editForm">
     {% csrf_token %}
 
     <label class="form-row">
@@ -23,49 +22,70 @@
       </select>
     </label>
 
-    {% if entry.is_image %}
-      <!-- image mode:      show preview, allow optional replace, do NOT show base64 -->
-      <div class="form-row">
-        <span>Current Image</span>
-        <div style="display:flex; flex-direction:column; gap:0.5rem;">
-          <img
-            src="{% url 'entry-image' author_id=author_id entry_id=entry.id %}"
-            alt="{{ entry.title|default:'image' }}"
-            style="max-width:240px; height:auto; border-radius:8px; border:1px solid #ccc;"
-          >
-          <small style="color:#666;">This post is currently an image.</small>
-        </div>
+    <div class="form-row">
+      <span>Content Type</span>
+      <div class="filter-tabs" id="contentTypeTabs">
+        <button
+          type="button"
+          class="tab {% if entry.content_type == 'text/markdown' %}active{% endif %}"
+          data-value="text/markdown">Markdown</button>
+
+        <button
+          type="button"
+          class="tab {% if entry.content_type == 'text/plain' %}active{% endif %}"
+          data-value="text/plain">Plain</button>
+
+        <button
+          type="button"
+          class="tab {% if entry.content_type == 'image/png;base64' %}active{% endif %}"
+          data-value="image/png;base64">PNG Image</button>
+
+        <button
+          type="button"
+          class="tab {% if entry.content_type == 'image/jpeg;base64' %}active{% endif %}"
+          data-value="image/jpeg;base64">JPEG Image</button>
       </div>
 
-      <label class="form-row">
-        <span>Replace Image</span>
-        <input type="file" name="image" accept="image/*">
-      </label>
+      <input type="hidden"
+             name="contentType"
+             id="contentType"
+             value="{{ entry.content_type|default:'text/markdown' }}">
+    </div>
 
-      <!-- tell backend to keep treating this as an image post -->
-      <input type="checkbox" name="as_image" checked style="display:none;">
+    <input type="checkbox"
+           id="asImageHidden"
+           name="as_image"
+           style="display:none;"
+           {% if entry.is_image %}checked{% endif %}>
 
-    {% else %}
-      <!-- text mode:   edit body + choose contentType -->
-      <label class="form-row">
-        <span>Content Type</span>
-        <select name="contentType">
-          <option value="text/plain"
-            {% if contentType == "text/plain" or entry.content_type == "text/plain" %}selected{% endif %}>
-            text/plain
-          </option>
-          <option value="text/markdown"
-            {% if contentType == "text/markdown" or entry.content_type == "text/markdown" %}selected{% endif %}>
-            text/markdown
-          </option>
-        </select>
-      </label>
+    <label class="form-row" id="textRow">
+      <span>Content</span>
+      <textarea name="content" id="content" rows="10">{% if not entry.is_image %}{{ entry.content }}{% endif %}</textarea>
+    </label>
 
-      <label class="form-row">
-        <span>Content</span>
-        <textarea name="content" rows="10">{{ entry.content }}</textarea>
-      </label>
-    {% endif %}
+    <div class="form-row" id="imagePicker" style="display:none;">
+      <span>Image</span>
+
+      {% if entry.is_image %}
+      <div style="margin-bottom:0.5rem;">
+        <img
+          src="{% url 'entry-image' author_id=author_id entry_id=entry.id %}"
+          alt="{{ entry.title|default:'image' }}"
+          style="max-width:240px; height:auto; border-radius:8px; border:1px solid #ccc;">
+        <div style="color:#666;font-size:0.9rem; margin-top:0.25rem;">
+          current image preview
+        </div>
+      </div>
+      {% endif %}
+
+      <input type="file" id="imageFile" name="image" accept="image/png, image/jpeg">
+
+      <div id="preview" style="display:none; margin: .5rem 0;">
+        <img id="previewImg" alt="preview"
+             style="max-width:100%; height:auto; border:1px solid #ddd; border-radius:.5rem;">
+        <div id="imgMeta" style="font-size:.875rem; color:#666; margin-top:.25rem;"></div>
+      </div>
+    </div>
 
     <div class="form-actions">
       <button type="submit" class="btn">Save</button>
@@ -73,4 +93,87 @@
     </div>
   </form>
 </div>
+
+<script>
+  (function () {
+    const tabsWrap      = document.getElementById('contentTypeTabs');
+    const tabs          = tabsWrap.querySelectorAll('.tab');
+    const hiddenType    = document.getElementById('contentType');
+
+    const asImageBox    = document.getElementById('asImageHidden');
+    const imagePicker   = document.getElementById('imagePicker');
+    const imageFile     = document.getElementById('imageFile');
+
+    const textRow       = document.getElementById('textRow');
+    const contentTA     = document.getElementById('content');
+
+    const previewBox    = document.getElementById('preview');
+    const previewImg    = document.getElementById('previewImg');
+    const imgMeta       = document.getElementById('imgMeta');
+
+    function syncUIForType(mime) {
+      tabs.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.value === mime);
+      });
+
+      hiddenType.value = mime;
+
+      const isImage = mime.startsWith('image/');
+
+      if (isImage) {
+        imagePicker.style.display = '';
+        textRow.style.display     = 'none';
+        asImageBox.checked        = true;
+      } else {
+        imagePicker.style.display = 'none';
+        textRow.style.display     = '';
+        asImageBox.checked        = false;
+
+        previewBox.style.display  = 'none';
+        previewImg.removeAttribute('src');
+        imgMeta.textContent = '';
+      }
+    }
+
+    syncUIForType(hiddenType.value || 'text/markdown');
+
+    tabs.forEach(btn => {
+      btn.addEventListener('click', () => {
+        syncUIForType(btn.dataset.value);
+      });
+    });
+
+    imageFile.addEventListener('change', () => {
+      const file = imageFile.files && imageFile.files[0];
+      if (!file) {
+        previewBox.style.display = 'none';
+        previewImg.removeAttribute('src');
+        imgMeta.textContent = '';
+        return;
+      }
+
+      const okTypes = ['image/png', 'image/jpeg'];
+      if (!okTypes.includes(file.type)) {
+        alert('Only PNG or JPEG is supported.');
+        imageFile.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result;
+        const comma = dataUrl.indexOf(',');
+        const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+
+        contentTA.value = base64;
+
+        previewImg.src = dataUrl;
+        imgMeta.textContent = `${file.type} · ${(file.size/1024).toFixed(1)} KB`;
+        previewBox.style.display = '';
+      };
+      reader.onerror = () => { alert('Failed to read image file.'); };
+      reader.readAsDataURL(file);
+    });
+  })();
+</script>
 {% endblock %}

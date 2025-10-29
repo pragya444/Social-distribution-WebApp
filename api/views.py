@@ -664,7 +664,7 @@ def entry_shared_view(request, token):
 
     # render the entry content
     entry.rendered = helpers.render_entry(entry)
-    return render(request, "does_not_exist.html", {"entry": entry})
+    #return render(request, "does_not_exist.html", {"entry": entry})
     return render(request, "entry_shared.html", {"entry": entry})
 
 

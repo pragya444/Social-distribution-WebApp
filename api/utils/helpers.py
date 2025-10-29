@@ -87,8 +87,9 @@ def is_friends(viewer: User, owner: User) -> bool:
         return False
     # Mutual follow counts as "friends"
     try:
-        return owner.followers.filter(id=viewer.id).exists() and viewer.followers.filter(id=owner.id).exists()
-    except Exception:
+        return owner.followers.filter(follower_id=viewer.id).exists() and viewer.followers.filter(follower_id=owner.id).exists()
+    except Exception as e:
+        print(e)
         return False
 
 

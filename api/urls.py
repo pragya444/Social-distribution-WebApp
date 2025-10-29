@@ -21,6 +21,8 @@ urlpatterns = [
     # api: list author entries and create a new entry
     path('authors/<str:author_id>/entries/', views.entries_list_create, name='entries-list-create'),
   
+    path('authors/<str:author_id>/entries/<str:entry_id>/image',views.entry_image_binary,name='entry-image-binary'),
+
     # api: get and update a single entry by id
     path('authors/<str:author_id>/entries/<str:entry_id>/', views.entry_retrieve_update, name='entry-retrieve-update'),
 

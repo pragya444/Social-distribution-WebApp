@@ -415,57 +415,172 @@ def entry_create_page(request, author_id):
 
 
 
+
+
+#part2 update
 # -------- pages: edit (server-rendered form) ----------------------------------
-@login_required   # require session auth for ui usage
-@csrf_protect     # protect post with csrf token
+@login_required   # must be logged in
+@csrf_protect     # protect post with csrf
 def entry_edit_page(request, author_id, entry_id):
-    # only the owner can edit
+    """
+    Renders + updates a single Entry for the logged-in owner.
+
+    IMPORTANT BEHAVIOUR:
+    - An Entry can be either:
+        (A) text-based   (content_type like "text/markdown" or "text/plain")
+        (B) image-based  (content_type like "image/png;base64" or "image/jpeg;base64",
+                          content holds base64 data of the image)
+
+    - On GET: render the edit form (entry_edit.html). That template shows:
+          * Title / Visibility
+          * 4 "content type" tabs (markdown/plain/png/jpeg)
+          * If currently an image entry, it shows a preview + a file picker
+          * If currently text, it shows the textarea with the text content
+
+    - On POST:
+        The user may:
+          * keep it text
+          * keep it image
+          * convert text -> image   (pick PNG/JPEG tab and upload a file)
+          * convert image -> text   (pick Markdown/Plain tab)
+    """
+
+    # --- auth guard: only the owner can edit ---
     if str(request.user.id) != str(author_id):
         return HttpResponseForbidden("only the author can edit this entry.")
 
-    # load target entry
-    e = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+    # --- load entry (must exist, must belong to this author, must not be deleted) ---
+    e = get_object_or_404(
+        Entry,
+        id=entry_id,
+        author_id=author_id,
+        is_deleted=False
+    )
 
-    # pre-fill form
+    # --- GET: render form pre-filled ---
     if request.method == 'GET':
-        # keep your original default; template can still show text controls
         ctx = {
             'author_id': author_id,
             'entry': e,
+            # used by template to highlight the correct tab initially
             'contentType': getattr(e, 'content_type', '') or 'text/markdown',
         }
         return render(request, 'entry_edit.html', ctx)
 
-    # POST: two paths
-    # 1) "replace with image" path (checkbox + file)
-    as_image = request.POST.get('as_image') == 'on'     # flag from form
-    img_file = request.FILES.get('image')               # uploaded file
+    # --- POST: actually apply the edits ---
 
-    # always allow updating common fields
-    e.title = request.POST.get('title') or e.title
-    e.visibility = request.POST.get('visibility') or e.visibility
+    # 1. Basic editable metadata fields (title, visibility)
+    new_title = request.POST.get('title')
+    if new_title:
+        e.title = new_title
 
-    if as_image and img_file:
-        #validate/transcode -> base64，  set content & content_type accordingly
-        try:
-            content_type, b64_str = handle_uploaded_image(img_file)
-            e.content = b64_str
-            e.content_type = content_type            # e.g. image/png;base64 or image/jpeg;base64
-        except ValueError:
-            #if the image is invalid, silently fall back to text update (keeps behavior simple)
-            pass
+    new_vis = request.POST.get('visibility')
+    if new_vis:
+        e.visibility = new_vis
+
+    # 2. Figure out what the *user now wants this entry to be*.
+
+    #    The tab selection is posted as hidden <input name="contentType">
+    #    Examples:
+    #      "text/markdown"
+    #      "text/plain"
+    #      "image/png;base64"
+    #      "image/jpeg;base64"
+    posted_ct = (
+        request.POST.get('contentType')
+        or getattr(e, 'content_type', '')
+        or 'text/markdown'
+    ).strip()
+
+    #    The hidden checkbox <input name="as_image"> is only "checked"
+    #    (=> appears in POST with value "on") when the user chose an image tab.
+    #    If user chose text tab, that checkbox is unchecked and may be absent.
+    wants_image_mode = (
+        request.POST.get('as_image') == 'on'  # typical browser "checked" value
+        or request.POST.get('as_image') == 'true'  # just in case
+    )
+
+    #    If user uploaded a new file, it'll be here. May be None if unchanged.
+    img_file = request.FILES.get('image')
+
+    # ignore the old "e.is_image" / old mode. 
+    # Instead  use the user's newly chosen intent:
+    #   - If they picked an image/* tab OR wants_image_mode == True,
+    #     final post should be an image post.
+    #   - Otherwise final post should be a text post.
+    # Decide final mode
+    final_is_image = wants_image_mode or posted_ct.startswith('image/')
+
+    if final_is_image:
+        # --- Treat as IMAGE ENTRY now ---
+
+        # Case 1: user uploaded a new replacement file
+        if img_file:
+            try:
+                # handle_uploaded_image should:
+                # - validate file is actually an image
+                # - maybe transcode/resize
+                # - return (content_type_str, base64_string)
+                #   e.g. ("image/png;base64", "iVBORw0KGgoAAA...")
+                img_ct, b64_str = handle_uploaded_image(img_file)
+
+                # persist it to this Entry
+                e.content = b64_str            # raw base64 body
+                e.content_type = img_ct        # "image/png;base64", etc.
+            except ValueError:
+                # If validation failed (bad file, too large, not an img, etc):
+                # We do NOT wipe out the old image. We just keep whatever was there.
+                # So: pass
+                pass
+        else:
+            # Case 2: no new file uploaded.
+            # Two scenarios:
+            #   1. It was already an image entry -> keep existing base64.
+            #   2. User switched text->image, but forgot to upload a file:
+            #      then we basically have no new binary to store, so we won't
+            #      overwrite content with garbage. We just trust "content"
+            #      if they manually pasted base64 (unlikely but okay).
+            #
+            # If they manually pasted base64 into the textarea (front-end does that
+            # preview trick), we can choose to accept it as new content.
+            maybe_base64 = request.POST.get('content')
+            if maybe_base64:
+                # If user pasted base64, store it and honor posted_ct as MIME
+                # posted_ct *should* be "image/...;base64" if they clicked PNG/JPEG tab
+                e.content = maybe_base64
+                e.content_type = posted_ct or e.content_type
+            else:
+                # No file, no pasted base64:
+                # still update the MIME to whatever tab says so UI stays consistent.
+                # (For an already-image entry this just keeps the same content body.)
+                if posted_ct.startswith('image/'):
+                    e.content_type = posted_ct or e.content_type
     else:
-        # 2) original text-edit path
-        e.content = request.POST.get('content') or e.content
-        ct_hint = request.POST.get('contentType') or ''
-        if ct_hint:
-            e.content_type = ct_hint
+        # --- Treat as TEXT ENTRY now ---
 
+        # pull the textarea body
+        text_body = request.POST.get('content')
+        if text_body is not None:
+            # overwrite whatever was there before (including old base64 if it used to be an image)
+            e.content = text_body
+
+        # update MIME to "text/markdown" or "text/plain", etc.
+        if posted_ct:
+            e.content_type = posted_ct
+        # at this point we've effectively "downgraded" an image entry
+        # into a text entry, which was impossible in the old logic.
+
+    # 3. update timestamp and save the Entry
     e.updated = now()
     e.save()
 
-    # back to stream
+    # 4. Redirect back to the user's stream page
     return redirect('author-all-entries', author_id=author_id)
+
+
+
+
+
 
 
 @login_required
@@ -484,32 +599,61 @@ def browse_public_entries(request):
 
 
     
-@login_required
+#part2 update
 @require_http_methods(['GET'])
 def entry_image_binary(request, author_id, entry_id):
     """
-    Return the binary of an image entry (spec-compliant /image endpoint):
-    - content_type must be image/*;base64
-    - content stores the pure base64 body (without the "data:" prefix)
-    """
-    # grab the entry or 404 if it doesn't exist / isn't yours
-    e = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+    serve raw binary bytes for an image entry.
+    this lets markdown posts embed images like:
+        ![](/api/authors/<author_id>/entries/<entry_id>/image)
+   
+    only return the image if the viewer is allowed to see this entry,
+      using helpers.can_view_entry(request.user, entry)
+      so visibility rules (PUBLIC / UNLISTED / FRIENDS / DELETED) are respected.
 
-    # normalize and check the stored content_type, we only serve real image entries
+    if the entry is not an image entry (e.g. it's text/markdown),
+        return 404 as required by the spec.
+    """
+
+    #find the entry. it must exist, belong to author_id, and not be hard-deleted.
+    e = get_object_or_404(
+        Entry,
+        id=entry_id,
+        author_id=author_id,
+        is_deleted=False,
+    )
+
+    #check visibility access first.
+    #    this reuses the same logic the rest of the project already uses
+    #    for comments/likes/etc. so text posts and image posts follow
+    #    the exact same visibility rules.
+    if not helpers.can_view_entry(request.user, e):
+        return HttpResponseForbidden("no access to this image")
+
+    #confirm it is actually an image post.
+    #    by convention: e.content_type like "image/png;base64" or "image/jpeg;base64"
     ct = (getattr(e, 'content_type', '') or '').lower()
     if not (ct.startswith('image/') and ct.endswith(';base64')):
-        # not an image-type entry per our contract
+        # not an image entry, so spec says this endpoint should 404
         raise Http404('not an image entry')
 
+    #decode the stored base64 string into raw bytes
     try:
-        # decode the raw base64 string to bytes
-        raw = base64.b64decode(e.content or '')
+        raw_bytes = base64.b64decode(e.content or '')
     except Exception:
-        # data is corrupt or not base64 — treat as missing
-        raise Http404('bad image data')
+        # data is corrupted / not valid base64
+        raise Http404('invalid image data')
 
-    # send bytes back with an actual image/* mime type (strip the ;base64 suffix)
-    return HttpResponse(raw, content_type=ct.replace(';base64', ''))
+    #build the real mime type for the response:
+    #    turn "image/png;base64" -> "image/png"
+    mime_type = ct.replace(';base64', '')
+
+    #return the binary data so <img src="..."> works in browsers
+    return HttpResponse(raw_bytes, content_type=mime_type)
+
+
+
+
 
 
 def entry_shared_view(request, token):

@@ -3,6 +3,19 @@
 {% block content %}
 <h1>Browse Public Entries</h1>
 
+
+<style>
+.card-body img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 8px;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+</style>
+
+
 {% if entries %}
     <ul class="entry-list">
         {% for entry in entries %}

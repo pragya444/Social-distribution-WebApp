@@ -49,7 +49,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
     username = models.CharField(max_length=255, unique=True, db_index=True)
     name = models.CharField(max_length=255, default="Anonymous")
-    github = models.CharField(max_length=255, default="")
+    github = models.CharField(max_length=255, blank=True, default="")
     profile_picture = models.CharField(max_length=255, blank=True, default="")
     description = models.CharField(max_length=500, blank=True, default="")
     url = models.CharField(max_length=255, default="", db_index=True, unique=True)

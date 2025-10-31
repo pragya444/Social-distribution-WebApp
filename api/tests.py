@@ -12,7 +12,7 @@ from .models import Entry, Follow, Comment, EntryLike, CommentLike
 User = get_user_model()
 
 '''
-The following test cases (EntryModelTests, AuthorEntriesViewTests) were written with the assistance of OpenAI, ChatGPT-5. 2025-10-19.
+The following test cases (EntryModelTests, AuthorEntriesViewTests, EntrySharingTests) were written with the assistance of OpenAI, ChatGPT-5. 2025-10-19.
 '''
 
 class EntryModelTests(TestCase):

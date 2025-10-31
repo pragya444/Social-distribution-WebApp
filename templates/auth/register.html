@@ -8,6 +8,12 @@
     <title>Register</title>
     <link rel="stylesheet" href="{% static 'css/auth.css' %}" />
   </head>
+  <style>
+    .non-field-err{
+      background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;
+      padding:10px 12px; border-radius:10px; margin-bottom:14px;
+    }
+  </style>
   <body>
     <article class="card">
       <h1>Sign Up</h1>
@@ -15,6 +21,12 @@
 
       <form method="POST">
         {% csrf_token %}
+
+        {% if msg %}
+          <div class="non-field-err err">
+            {{ msg }}
+          </div>
+        {% endif %}
 
         <div class="input-div">
           <label for="username">Username</label>

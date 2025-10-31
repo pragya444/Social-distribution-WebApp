@@ -49,7 +49,7 @@ class RegisterView(APIView):
         return Response(template_name="auth/register.html")
     
     def post(self, request):
-        print(request.data)
+        # print(request.data)
         serializer = RegisterSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -61,21 +61,12 @@ class RegisterView(APIView):
 
         user = serializer.save()
 
-        jwt_token = jwtUtils.make_access_token(user.id)
-        response = redirect(reverse("author-all-entries", args=[user.id]))
+        return Response(
+            {"msg": "Please wait for an admin to approve your account."},
+            template_name="auth/register.html",
+            status=201
+        )
 
-        response.set_cookie('jwt', jwt_token, httponly=True, max_age=60*60*24*7)
-        return response
-
-
-# class LogoutView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request):
-#         response = redirect('login')
-#         response.delete_cookie('jwt')
-#         response.delete_cookie('csrftoken')
-#         return response
 
 class LogoutView(APIView):
     authentication_classes = []

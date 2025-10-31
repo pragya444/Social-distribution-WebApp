@@ -29,7 +29,7 @@ class UserManager(BaseUserManager):
         if not password:
             raise ValueError("User must have a password")
         
-        user = self.model(username=username,is_active=False, **kwargs)
+        user = self.model(username=username, **kwargs)
         user.set_password(password)
         user.save(using=self._db)
         return user
@@ -40,7 +40,10 @@ class UserManager(BaseUserManager):
         if not password:
             raise ValueError("Superuser must have a password")
         
-        user = self.create_user(username=username, password=password, is_active=True, is_staff=True, is_superuser=True)
+        user = self.create_user(username, password)
+        user.is_superuser = True
+        user.is_active = True
+        user.is_staff = True
         user.save(using=self._db)
         return user
     
@@ -59,8 +62,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     updated = models.DateTimeField(auto_now=True)
     github_etag = models.CharField(blank=True, default="")
     latest_github_event_id = models.CharField(blank=True, default="")
-    # following = models.ManyToManyField('self', symmetrical=False, related_name='followers')
-    # follwers = models.ManyToManyField('self', symmetrical=False, related_name='following_set')
     
     USERNAME_FIELD = 'username'
     objects = UserManager()
@@ -69,7 +70,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.username
     
     def save(self, *args, **kwargs):
-        self.url = get_url() + "authors/" + self.id  # Creates a fixed URL for each user
+        self.url = get_url() + "api/authors/" + self.id  # Creates a fixed URL for each user
+        if len(self.name.split()) > 1:
+            self.profile_picture = f"https://avatar.iran.liara.run/username?username={'+'.join(self.name.split())}"
+        else:
+            self.profile_picture = f"https://avatar.iran.liara.run/username?username={self.name}"
         return super(User, self).save(*args, **kwargs)
     
 

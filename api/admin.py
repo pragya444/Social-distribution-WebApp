@@ -5,12 +5,22 @@ from django.contrib.admin.sites import NotRegistered, AlreadyRegistered
 
 # Register your models here.
 admin.site.register(Entry)
-admin.site.register(User)
+
 
 try:
     admin.site.unregister(Follow)
 except NotRegistered:
     pass
+
+@admin.register(User)
+class UserAdmin(admin.ModelAdmin):
+    list_display = ("username", "name", "is_active", "is_staff")
+    list_filter = ("is_active", "is_staff")
+    actions = ["approve_users"]
+
+    def approve_users(self, request, queryset):
+        queryset.update(is_active=True)
+    approve_users.short_description = "Approve selected users"
 
 @admin.register(Follow)
 class FollowAdmin(admin.ModelAdmin):

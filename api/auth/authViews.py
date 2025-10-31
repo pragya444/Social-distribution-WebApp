@@ -29,6 +29,11 @@ class LoginView(APIView):
             )
         
         user = serializer.validated_data["user"]
+        if not user.is_active:
+            return Response(
+                {"errors": {"non_field_errors": ["Your account is pending admin approval."]}},
+                template_name="templates/login.html", status=403,)
+
         jwt_token = jwtUtils.make_access_token(user.id)
         print(jwt_token)
         response = redirect(reverse("author-all-entries", args=[user.id]))

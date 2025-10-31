@@ -17,6 +17,11 @@
         {% csrf_token %} {% if errors.error %}
         <div class="err">{{ errors.error.0 }}</div>
         {% endif %}
+        {% if errors.non_field_errors %}
+          <div class="error">
+            {{ errors.non_field_errors|join:", " }}
+          </div>
+        {% endif %}
 
         <div class="input-div">
           <label for="username">Username</label>

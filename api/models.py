@@ -29,7 +29,7 @@ class UserManager(BaseUserManager):
         if not password:
             raise ValueError("User must have a password")
         
-        user = self.model(username=username, **kwargs)
+        user = self.model(username=username,is_active=False, **kwargs)
         user.set_password(password)
         user.save(using=self._db)
         return user
@@ -40,9 +40,7 @@ class UserManager(BaseUserManager):
         if not password:
             raise ValueError("Superuser must have a password")
         
-        user = self.create_user(username, password)
-        user.is_superuser = True
-        user.is_staff = True
+        user = self.create_user(username=username, password=password, is_active=True, is_staff=True, is_superuser=True)
         user.save(using=self._db)
         return user
     
@@ -56,7 +54,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     description = models.CharField(max_length=500, default="")
     url = models.CharField(max_length=255, default="", db_index=True, unique=True)
     is_staff = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
     # following = models.ManyToManyField('self', symmetrical=False, related_name='followers')

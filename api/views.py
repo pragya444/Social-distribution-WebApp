@@ -746,7 +746,7 @@ def deny_follow_request(request, author_id, follower_id):
     Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
     return redirect("follow-requests-page", author_id=author_id)
 
-
+@login_required
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
 def comments_list_create(request, author_id, entry_id):
@@ -801,6 +801,7 @@ def comments_list_create(request, author_id, entry_id):
 # ======================================================================
 # Developed with assistance from ChatGPT (GPT-5), October 2025
 # ======================================================================
+@login_required
 @csrf_exempt
 @require_http_methods(["GET", "POST", "DELETE"])
 def entry_likes(request, author_id, entry_id):

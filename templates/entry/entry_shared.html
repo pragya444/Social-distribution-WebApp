@@ -1,6 +1,7 @@
 {% extends "base.html" %}
-
+{% load static %} 
 {% block title %}Shared Entry{% endblock %}
+ <link rel="stylesheet" href="{% static 'css/app.css' %}">
 
 {% block content %}
 
@@ -44,7 +45,7 @@
           </h2>
         {% endif %}
       {% endif %}
-      
+
       {% if entry.content_type and entry.content_type|lower|slice:"0:6" == "image/" %}
         <img
           src="{% url 'entry-image' author_id=entry.author.id entry_id=entry.id %}"
@@ -61,12 +62,14 @@
   </div>
 
   <div class="card-foot">
-    <div class="action">
-      <!-- heart icon -->
-      <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12.001 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54l-1.45 1.31z"/>
-      </svg>
-      {{ entry.like_count }}
+   <div class="action">
+      <button id="like-btn" class="like-toggle" aria-pressed="{{ entry.user_has_liked|yesno:'true,false' }}">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M21 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35l-.45-.41C6.4 15.36 3 12.28 3 8.5A4.5 4.5 0 0 1 7.5 4c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 4 4.5 4.5 0 0 1 21 8.5z"/>
+        </svg><span>Like </span><span id="like-count">{{ entry.like_count }}</span>
+      </button>
     </div>
     <div class="action" id="toggle-comments" style="cursor:pointer;">
       <!-- chat icon -->
@@ -78,30 +81,151 @@
   </div>
 
   <!-- Hidden comments section -->
-  <div id="comments-container" style="display:none; margin-top:10px; padding-left:10px; border-left: 2px solid #ddd;">
-      {% for comment in entry.comments.all %}
-        <div class="comment" style="margin-bottom:8px;">
-          <strong>{{ comment.author.username }}</strong>: {{ comment.comment }}
-          <div class="comment-time" style="font-size:0.8em; color:#555;">{{ comment.created|date:"M d, Y, h:i A"}}</div>
-        </div>
-      {% empty %}
-        <p>No comments yet.</p>
-      {% endfor %}
-  </div>
+    <div id="comments-container" style="display:none; margin-top:10px; padding-left:10px; border-left: 2px solid #ddd;">
+      <div id="comment-list">
+        {% for comment in entry.comments.all %}
+          <div class="comment" style="margin-bottom:8px;">
+            <strong>{{ comment.author.username }}</strong>: {{ comment.comment }}
+            <div class="comment-time" style="font-size:0.8em; color:#555;">
+              {{ comment.created|date:"M d, Y, h:i A" }}
+            </div>
+          </div>
+        {% endfor %}
+        {% if entry.comments.count == 0 %}
+          <p id="no-comments-msg">No comments yet.</p>
+        {% endif %}
+      </div>
+
+      {% if user.is_authenticated %}
+        <form id="comment-form" style="margin-top:10px; display:flex; gap:8px;">
+          {% csrf_token %}
+          <input id="comment-input" type="text" name="comment" placeholder="Write a comment..."
+                autocomplete="off" required
+                style="flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px;" />
+          <button type="submit"
+                  style="padding:8px 12px; border:0; border-radius:8px; background:#ffa500; color:#fff; cursor:pointer;">
+            Post
+          </button>
+        </form>
+      {% else %}
+        <p><em>You must be logged in to comment.</em></p>
+      {% endif %}
+    </div>
 </article>
 
 <script>
+  // The following code was written with assistance from ChatGPT (GPT-5), October 2025
   document.addEventListener("DOMContentLoaded", function() {
-    const toggleBtn = document.getElementById("toggle-comments");
-    const comments = document.getElementById("comments-container");
-
-    toggleBtn.addEventListener("click", function() {
-      if (comments.style.display === "none") {
-        comments.style.display = "block";
-      } else {
-        comments.style.display = "none";
-      }
-    });
+  const toggleBtn = document.getElementById("toggle-comments");
+  const commentsContainer = document.getElementById("comments-container");
+  
+  // Toggle comments visibility
+  toggleBtn.addEventListener("click", function() {
+    commentsContainer.style.display = (commentsContainer.style.display === "none") ? "block" : "none";
   });
+
+  // Like button 
+  const likeBtn = document.getElementById("like-btn");
+  const likeCount = document.getElementById("like-count");
+  const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
+    if (likeBtn) {
+      likeBtn.addEventListener("click", async function(e) {
+        e.preventDefault(); // prevent default
+        // If user is not authenticated, show prompt and exit
+        if (!isAuthenticated) {
+          alert("Please log in to like this post.");
+          return;
+        }
+
+        const liked = likeBtn.classList.contains("liked");
+        const method = liked ? "DELETE" : "POST";
+
+        try {
+          const response = await fetch("{% url 'entry-likes' entry.author.id entry.id %}", {
+            method,
+            headers: {
+              "X-CSRFToken": "{{ csrf_token }}",
+              "Accept": "application/json"
+            },
+            credentials: "same-origin"
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to toggle like");
+          }
+
+          const data = await response.json();
+
+          // Toggle liked class
+          likeBtn.classList.toggle("liked", data.liked === true);
+
+          // Update aria-pressed
+          likeBtn.setAttribute("aria-pressed", data.liked ? "true" : "false");
+
+          // Update count
+          if (likeCount && typeof data.count === "number") {
+            likeCount.textContent = data.count;
+          }
+
+        } catch (err) {
+          console.error(err);
+          alert("Error toggling like");
+        }
+      });
+    }
+  // Comment form submission
+  const commentForm = document.getElementById("comment-form");
+  const commentList = document.getElementById("comment-list"); // where comments live
+  if (commentForm) {
+    commentForm.addEventListener("submit", function(e) {
+      e.preventDefault();
+      const commentInput = document.getElementById("comment-input");
+      const commentText = commentInput.value.trim();
+      if (!commentText) return;
+
+      fetch("{% url 'comments-list-create' entry.author.id entry.id %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({ comment: commentText })
+      })
+      .then(response => {
+        if (!response.ok) throw new Error("Failed to post comment");
+        return response.json();
+      })
+      .then(data => {
+        if (data.id) {
+          // Remove "No comments yet" message if it exists
+          const noCommentsMsg = document.getElementById("no-comments-msg");
+          if (noCommentsMsg) noCommentsMsg.remove();
+
+          // Create new comment element
+          const newComment = document.createElement("div");
+          newComment.className = "comment";
+          newComment.style.marginBottom = "8px";
+          newComment.innerHTML = `
+            <strong>{{ user.username }}</strong>: ${commentText}
+            <div class="comment-time" style="font-size:0.8em; color:#555;">just now</div>
+          `;
+
+          // Append new comment inside the comment list
+          commentList.appendChild(newComment);
+
+          // Clear input
+          commentInput.value = "";
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Error posting comment");
+      });
+    });
+  }
+});
+
 </script>
 {% endblock %}

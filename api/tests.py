@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.test import Client
 from zoneinfo import ZoneInfo
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase, APIClient
@@ -21,7 +22,10 @@ class EntryModelTests(TestCase):
     '''
     def setUp(self):
         # create a minimal user for FK relations
-        self.user = User.objects.create_user(username="testuser", password="pass")
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(username='testuser', password='pass')
+        self.client.force_authenticate(user=self.user)
+        # self.user = User.objects.create_user(username="testuser", password="pass")
 
     def test_create_entry_defaults_and_timestamps(self):
         '''
@@ -470,3 +474,57 @@ class ImageAPITests(TestCase):
         response = self.client.get(url)
         self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
         self.assertTrue(entry.is_image)
+
+class EntrySharingTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.author = User.objects.create_user(username="author", password="test123", is_active=True)
+        self.reader = User.objects.create_user(username="reader", password="reader123", is_active=True)
+
+        self.public_entry = Entry.objects.create(
+            author=self.author,
+            title="Public Entry",
+            content="This is visible to everyone.",
+            visibility="PUBLIC",
+        )
+
+        self.unlisted_entry = Entry.objects.create(
+            author=self.author,
+            title="Unlisted Entry",
+            content="This is visible to everyone via link.",
+            visibility="UNLISTED",
+        )
+
+        self.private_entry = Entry.objects.create(
+            author=self.author,
+            title="Private Entry",
+            content="Should not be visible.",
+            visibility="FRIENDS",  
+        )
+
+    def test_public_entry_accessible_by_anonymous(self):
+        """Anyone can access a PUBLIC entry via its share link."""
+        url = reverse("entry-shared-view", kwargs={"token": self.public_entry.share_token})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Public Entry")
+
+    def test_unlisted_entry_accessible_by_anonymous(self):
+        """Anyone with the link can access an UNLISTED entry."""
+        url = reverse("entry-shared-view", kwargs={"token": self.unlisted_entry.share_token})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Unlisted Entry")
+
+    def test_non_public_entry_not_accessible_by_anonymous(self):
+        """Non-public entries (e.g., FRIENDS) should not be visible to anonymous users."""
+        url = reverse("entry-shared-view", kwargs={"token": self.private_entry.share_token})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_reader_can_get_shareable_link(self):
+        """A reader should be able to get a valid share link for a public or unlisted entry."""
+        public_url = reverse("entry-shared-view", kwargs={"token": self.public_entry.share_token})
+        unlisted_url = reverse("entry-shared-view", kwargs={"token": self.unlisted_entry.share_token})
+        self.assertIn("/share/", public_url)
+        self.assertIn("/share/", unlisted_url)

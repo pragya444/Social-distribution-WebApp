@@ -28,8 +28,8 @@ class UserManager(BaseUserManager):
             raise ValueError("User must have a username")
         if not password:
             raise ValueError("User must have a password")
-        
-        user = self.model(username=username,is_active=False, **kwargs)
+        is_active = kwargs.pop('is_active', False) 
+        user = self.model(username=username,is_active=is_active, **kwargs)
         user.set_password(password)
         user.save(using=self._db)
         return user

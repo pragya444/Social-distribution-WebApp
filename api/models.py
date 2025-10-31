@@ -71,10 +71,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def save(self, *args, **kwargs):
         self.url = get_url() + "api/authors/" + self.id  # Creates a fixed URL for each user
-        if len(self.name.split()) > 1:
-            self.profile_picture = f"https://avatar.iran.liara.run/username?username={'+'.join(self.name.split())}"
-        else:
-            self.profile_picture = f"https://avatar.iran.liara.run/username?username={self.name}"
         return super(User, self).save(*args, **kwargs)
     
 

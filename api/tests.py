@@ -21,7 +21,7 @@ class EntryModelTests(TestCase):
     '''
     def setUp(self):
         # create a minimal user for FK relations
-        self.user = User.objects.create_user(username="testuser", password="pass")
+        self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
 
     def test_create_entry_defaults_and_timestamps(self):
         '''
@@ -82,7 +82,7 @@ class AuthorEntriesViewTests(TestCase):
     and that it takes an author_id parameter.
     '''
     def setUp(self):
-        self.user = User.objects.create_user(username="viewuser", password="pass")
+        self.user = User.objects.create_user(username="viewuser", password="pass", is_active=True)
         # log the test client in so @login_required views return 200
         self.client.force_login(self.user)
 
@@ -143,8 +143,8 @@ class AuthorEntriesViewTests(TestCase):
 class ProfileAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(username="testuser", password="pass")
-        self.other_user = User.objects.create_user(username="otheruser", password="pass")
+        self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
+        self.other_user = User.objects.create_user(username="otheruser", password="pass", is_active=True)
         self.client.force_login(self.user)
 
     def test_retrieve_profile(self):
@@ -153,7 +153,7 @@ class ProfileAPITests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertContains(response, self.user.username)
-        self.assertEqual(self.user.url, f"http://127.0.0.1:8000/authors/{self.user.id}")  # Test model URL directly
+        self.assertEqual(self.user.url, f"http://127.0.0.1:8000/api/authors/{self.user.id}")  # Test model URL directly
 
     def test_edit_profile(self):
         """Test user story: Edit profile (name, description, picture, GitHub), manage profile via browser"""
@@ -178,8 +178,8 @@ class ProfileAPITests(TestCase):
 class EntryAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()       # API client for REST framework
-        self.user = User.objects.create_user(username="testuser", password="pass")
-        self.other_user = User.objects.create_user(username="otheruser", password="pass")
+        self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
+        self.other_user = User.objects.create_user(username="otheruser", password="pass", is_active=True)
         self.client.force_login(self.user)      # Ensure session auth
 
     def test_create_entry(self):
@@ -317,7 +317,7 @@ class EntryAPITests(TestCase):
 class ShareAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(username="testuser", password="pass")
+        self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
         self.client.force_login(self.user)
 
     def test_share_entry(self):
@@ -337,8 +337,8 @@ class ShareAPITests(TestCase):
 class FollowAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(username="testuser", password="pass")
-        self.other_user = User.objects.create_user(username="otheruser", password="pass")
+        self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
+        self.other_user = User.objects.create_user(username="otheruser", password="pass", is_active=True)
         self.client.force_login(self.user)
 
     def test_send_follow_request(self):
@@ -399,8 +399,8 @@ class FollowAPITests(TestCase):
 class CommentAndLikeAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(username="testuser", password="pass")
-        self.other_user = User.objects.create_user(username="otheruser", password="pass")
+        self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
+        self.other_user = User.objects.create_user(username="otheruser", password="pass", is_active=True)
         self.entry = Entry.objects.create(
             author=self.other_user,
             title="Test Entry",
@@ -454,7 +454,7 @@ class CommentAndLikeAPITests(TestCase):
 class ImageAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(username="testuser", password="pass")
+        self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
         self.client.force_login(self.user)
 
     def test_retrieve_image_entry(self):

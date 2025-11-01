@@ -228,7 +228,7 @@ class EntryAPITests(TestCase):
             content_type="text/plain",
             visibility="PUBLIC"
         )
-        url = reverse("entry-edit-page", kwargs={"author_id": self.user.id, "entry_id": entry.id})
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.user.id, "entry_id": entry.id})
         csrf_response = self.client.get(url)
         csrf_token = csrf_response.cookies.get('csrftoken', '')
         data = {
@@ -293,11 +293,11 @@ class EntryAPITests(TestCase):
             content_type="text/plain",
             visibility="PUBLIC"
         )
-        url = reverse("entry-delete", kwargs={"author_id": self.user.id, "entry_id": entry.id})
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.user.id, "entry_id": entry.id})
         csrf_response = self.client.get(url)
         csrf_token = csrf_response.cookies.get('csrftoken', '')
-        response = self.client.post(url, follow=True, HTTP_X_CSRFTOKEN=csrf_token)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.client.delete(url, follow=True, HTTP_X_CSRFTOKEN=csrf_token)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         entry.refresh_from_db()
         self.assertTrue(entry.is_deleted)
 
@@ -330,7 +330,7 @@ class ShareAPITests(TestCase):
             content_type="text/plain",
             visibility="UNLISTED"
         )
-        url = reverse("entry-shared-view", kwargs={"token": str(entry.share_token)})
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.user.id, "entry_id": entry.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertContains(response, "Shared Entry")

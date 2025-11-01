@@ -52,14 +52,6 @@
         {% endif %}
       {% endif %}
 
-      {% if entry.content_type and entry.content_type|lower|slice:"0:6" == "image/" %}
-        <img
-          src="{% url 'entry-image' author_id=entry.author.id entry_id=entry.id %}"
-          alt="{{ entry.title|default:'image' }}"
-          style="max-width:240px; height:auto; border-radius:8px; border:1px solid #ccc;
-                display:block; margin: 0 auto 1rem auto;">
-      {% endif %}
-
       {% if entry.rendered %}
         <div class="entry-text" style="margin-top: 0.5rem;">{{ entry.rendered|safe }} </div>
       {% endif %}

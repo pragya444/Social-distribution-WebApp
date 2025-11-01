@@ -61,11 +61,17 @@ class SingleEntryView(APIView):
         serializer = EntrySerializer(entry)
         
         # if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-        if entry.visibility not in ['PUBLIC', 'UNLISTED']:
+        if entry.visibility == 'FRIENDS':
             if not helpers.can_view_entry(request.user, entry):
                 if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
                     return HttpResponseForbidden("You do not have permission to view this entry.")
                 return Response({"error": "This entry is not shareable."}, status=403)
+
+        elif entry.visibility == 'UNLISTED': # Updated because unlisted has to be author or follower
+            if not (request.user.is_authenticated and (request.user == entry.author or helpers.is_follower(request.user, entry.author))):
+                if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+                    return HttpResponseForbidden("You must be a follower to view this unlisted entry.")
+                return Response({"error": "You must be a follower to view this unlisted entry."}, status=403)
 
         if isinstance(request.accepted_renderer, JSONRenderer):
             return Response(serializer.data, status=200)

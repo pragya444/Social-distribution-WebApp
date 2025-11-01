@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.test import Client
 from zoneinfo import ZoneInfo
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase, APIClient
@@ -11,7 +12,7 @@ from .models import Entry, Follow, Comment, EntryLike, CommentLike
 User = get_user_model()
 
 '''
-The following test cases (EntryModelTests, AuthorEntriesViewTests) were written with the assistance of OpenAI, ChatGPT-5. 2025-10-19.
+The following test cases (EntryModelTests, AuthorEntriesViewTests, EntrySharingTests) were written with the assistance of OpenAI, ChatGPT-5. 2025-10-19.
 '''
 
 class EntryModelTests(TestCase):
@@ -470,3 +471,79 @@ class ImageAPITests(TestCase):
         response = self.client.get(url)
         self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
         self.assertTrue(entry.is_image)
+
+class EntrySharingTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.author = User.objects.create_user(username="author", password="test123", is_active=True)
+        self.reader = User.objects.create_user(username="reader", password="reader123", is_active=True)
+
+        self.public_entry = Entry.objects.create(
+            author=self.author,
+            title="Public Entry",
+            content="This is visible to everyone.",
+            visibility="PUBLIC",
+        )
+
+        self.unlisted_entry = Entry.objects.create(
+            author=self.author,
+            title="Unlisted Entry",
+            content="This is visible to everyone via link.",
+            visibility="UNLISTED",
+        )
+
+        self.private_entry = Entry.objects.create(
+            author=self.author,
+            title="Private Entry",
+            content="Should not be visible.",
+            visibility="FRIENDS",  
+        )
+
+    def test_public_entry_accessible_by_anonymous(self):
+        """Anyone can access a PUBLIC entry via its author/entry ID link."""
+        url = reverse(
+            "entry-retrieve-update",
+            kwargs={"author_id": self.author.id, "entry_id": self.public_entry.id},
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Public Entry")
+
+    def test_unlisted_entry_accessible_by_anonymous(self):
+        """Anonymous users should NOT be able to access UNLISTED entries (follower-only)."""
+        url = reverse(
+            "entry-retrieve-update",
+            kwargs={"author_id": self.author.id, "entry_id": self.unlisted_entry.id},
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_non_public_entry_not_accessible_by_anonymous(self):
+        """Non-public entries (FRIENDS) should not be visible to anonymous users."""
+        url = reverse(
+            "entry-retrieve-update",
+            kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id},
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_author_can_access_their_own_private_entry(self):
+        """Author should be able to view their own private entry."""
+        self.client.login(username="author", password="test123")
+        url = reverse(
+            "entry-retrieve-update",
+            kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id},
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Private Entry")
+
+    def test_reader_cannot_access_private_entry(self):
+        """A logged-in non-friend reader cannot access another user's private entry."""
+        self.client.login(username="reader", password="reader123")
+        url = reverse(
+            "entry-retrieve-update",
+            kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id},
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)

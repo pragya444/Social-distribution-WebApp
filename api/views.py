@@ -6,14 +6,12 @@ from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbid
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.contrib.auth.decorators import login_required
-from django.utils.timezone import now
-from .utils.images import handle_uploaded_image
 import base64
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
-from .serializers import UserSerializer
+from .serializers import UserSerializer, EntrySerializer
 from .utils import helpers
 
 
@@ -50,7 +48,8 @@ class ProfileView(APIView):
             if not request.user.is_authenticated:
                 return redirect('login')
         else:
-            return Response({"Message": "Forbidden"}, status=403)
+            if not request.user.is_authenticated:
+                return Response({"Message": "Forbidden"}, status=403)
 
 
         if (request.user.id != author_id):
@@ -106,15 +105,12 @@ class ProfileView(APIView):
 
         #  JSON shape if you keep the API path
         serializer = UserSerializer(user)
-        entries_data = (
-            entries.annotate(author_username=F("author__username"))
-            .values("id", "author_username", "title", "content_type", "visibility", "updated")
-        )
+
+        entries_data = EntrySerializer(entries, many=True).data
         return Response(
             {
                 "user": serializer.data,
-                "entries": list(entries_data),
-                # counts/rel also available in JSON if you want:
+                "entries": entries_data,
                 "posts_count": posts_count,
                 "followers_count": followers_count,
                 "following_count": following_count,
@@ -248,101 +244,6 @@ def author_stream(request, author_id):
     })
 
 
-@login_required     # require login
-@csrf_protect   # use csrf token in browser posts
-@require_http_methods(['POST'])   # only allow post
-def make_entries_public(request, entry_id):
-    # only the owner can change visibility
-    entry = get_object_or_404(Entry, id=entry_id, is_deleted=False)
-    if entry.author_id != request.user.id:
-        return HttpResponseForbidden("only the author can change visibility for this entry.")
-
-    # set to public and save
-    entry.visibility = 'PUBLIC'
-    entry.updated = now()
-    entry.save()
-
-    return JsonResponse({'status': 'ok', 'entry_id': str(entry_id), 'visibility': entry.visibility}, status=200)
-
-
-# -------- api: list + create --------------------------------------------------
-@csrf_exempt  # kept for simple curl testing; ui paths use csrf_protect
-def entries_list_create(request, author_id):
-    # list entries for an author, newest first
-    if request.method == 'GET':
-        qs = Entry.objects.filter(
-            author_id=author_id,     
-            is_deleted=False            # exclude deleted
-        ).order_by('-updated')       
-        data = [helpers.entry_to_json(e, content_type_hint='text/markdown') for e in qs]
-        return JsonResponse({"type": "entries", "count": len(data), "src": data}, status=200)
-
-    # create a new entry locally for the same author
-    if request.method == 'POST':
-        # only the logged-in owner can create entries here
-        if not request.user.is_authenticated or str(request.user.id) != str(author_id):
-            return HttpResponseForbidden("only the author can create entries here.")
-        payload = helpers.json_from_request(request)       # parse json body
-        title       = (payload.get('title') or '').strip() or '(no title)'  # default title
-        content     = payload.get('content') or ''  # allow empty body
-        contentType = payload.get('contentType') or 'text/plain'            # markdown or plain
-        visibility  = payload.get('visibility') or 'PUBLIC'                 # default public
-
-        # fetch owner and insert the record
-        author = get_object_or_404(User, id=author_id)  # ensure author exists
-        e = Entry.objects.create(
-            author=author,              
-            title=title,                
-            content=content,          
-            visibility=visibility,        # enum value
-            is_deleted=False,             # ensure visible
-        )
-        return JsonResponse(helpers.entry_to_json(e, content_type_hint=contentType), status=201)
-
-    # method not allowed guard
-    return HttpResponseNotAllowed(['GET', 'POST'])
-
-
-# -------- api: retrieve + update ---------------------------------------------
-@csrf_exempt  # for curl; the ui form uses csrf_protect
-def entry_retrieve_update(request, author_id, entry_id):
-    # find the entry or return 404
-    e = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-
-    # return a single entry in json format
-    if request.method == 'GET':
-        return JsonResponse(helpers.entry_to_json(e, content_type_hint='text/markdown'), status=200)
-
-    # update fields without delete-recreate
-    if request.method in ['PUT', 'PATCH']:
-        # only the owner can perform updates
-        if not request.user.is_authenticated or str(request.user.id) != str(author_id):
-            return HttpResponseForbidden("only the author can edit this entry.")
-        payload = helpers.json_from_request(request)  # parse body
-
-        # update only provided fields to support patch semantics
-        if 'title' in payload:
-            e.title = payload['title'] or e.title
-        if 'content' in payload:
-            e.content = payload['content'] or e.content
-        if 'visibility' in payload:
-            e.visibility = payload['visibility'] or e.visibility
-
-        # update timestamp and save changes
-        e.updated = now()
-        e.save()
-
-        # echo content type hint back to client
-        contentType = payload.get('contentType') or 'text/plain'
-        return JsonResponse(helpers.entry_to_json(e, content_type_hint=contentType), status=200)
-
-    # method not allowed guard
-    return HttpResponseNotAllowed(['GET', 'PUT', 'PATCH'])
-
-
-
-
-
 # -------- pages: create (server-rendered form) --------------------------------
 @login_required
 @csrf_protect
@@ -356,66 +257,6 @@ def entry_create_page(request, author_id):
     if request.method == 'GET':
         return render(request, 'entry/entry_create.html', {'author_id': author_id})
 
-    # POST -> create an entry
-    title       = (request.POST.get('title') or '').strip() or '(no title)'
-    visibility  = request.POST.get('visibility') or 'PUBLIC'
-    contentType = request.POST.get('contentType') or 'text/plain'
-    as_image    = request.POST.get('as_image') == 'on'  # checkbox "Upload as image entry"
-    author      = get_object_or_404(User, id=author_id)
-
-    # NOTE:
-    # If as_image is checked, we read the uploaded file, validate with Pillow,
-    # transcode when needed, and store base64 bytes as content with an image/*;base64 content_type.
-    # Otherwise, we treat it as a text entry (markdown or plain) and store raw text.
-
-    if as_image:
-        # Ensure a file is provided
-        file_obj = request.FILES.get('image')
-        if not file_obj:
-            # simple fallback: redirect back with a message, or raise 400
-            return JsonResponse({"error": "no image file uploaded"}, status=400)
-
-        # Validate and (optionally) transcode -> returns (content_type, base64_str)
-        try:
-            img_ct, b64_str = handle_uploaded_image(file_obj)
-        except ValueError as exc:
-            return JsonResponse({"error": str(exc)}, status=400)
-
-        # Create the image entry
-        e = Entry.objects.create(
-            author=author,
-            title=title,
-            content=b64_str,          # store base64 string
-            visibility=visibility,
-            is_deleted=False,
-        )
-        # Persist the MIME type if your model has this field
-        if hasattr(e, 'content_type'):
-            e.content_type = img_ct          # e.g., "image/png;base64" or "image/jpeg;base64"
-            e.save(update_fields=['content_type'])
-
-    else:
-        # Text entry (markdown/plain)
-        text_content = request.POST.get('content') or ''
-        e = Entry.objects.create(
-            author=author,
-            title=title,
-            content=text_content,
-            visibility=visibility,
-            is_deleted=False,
-        )
-        # Save the text content type hint if the model has content_type
-        if hasattr(e, 'content_type'):
-            # "text/markdown" or "text/plain"
-            e.content_type = contentType
-            e.save(update_fields=['content_type'])
-
-    # Done -> back to stream
-    return redirect('author-all-entries', author_id=author_id)
-
-
-
-
 
 #part2 update
 # -------- pages: edit (server-rendered form) ----------------------------------
@@ -424,25 +265,6 @@ def entry_create_page(request, author_id):
 def entry_edit_page(request, author_id, entry_id):
     """
     Renders + updates a single Entry for the logged-in owner.
-
-    IMPORTANT BEHAVIOUR:
-    - An Entry can be either:
-        (A) text-based   (content_type like "text/markdown" or "text/plain")
-        (B) image-based  (content_type like "image/png;base64" or "image/jpeg;base64",
-                          content holds base64 data of the image)
-
-    - On GET: render the edit form (entry_edit.html). That template shows:
-          * Title / Visibility
-          * 4 "content type" tabs (markdown/plain/png/jpeg)
-          * If currently an image entry, it shows a preview + a file picker
-          * If currently text, it shows the textarea with the text content
-
-    - On POST:
-        The user may:
-          * keep it text
-          * keep it image
-          * convert text -> image   (pick PNG/JPEG tab and upload a file)
-          * convert image -> text   (pick Markdown/Plain tab)
     """
 
     # --- auth guard: only the owner can edit ---
@@ -467,138 +289,7 @@ def entry_edit_page(request, author_id, entry_id):
         }
         return render(request, 'entry/entry_edit.html', ctx)
 
-    # --- POST: actually apply the edits ---
 
-    # 1. Basic editable metadata fields (title, visibility)
-    new_title = request.POST.get('title')
-    if new_title:
-        e.title = new_title
-
-    new_vis = request.POST.get('visibility')
-    if new_vis:
-        e.visibility = new_vis
-
-    # 2. Figure out what the *user now wants this entry to be*.
-
-    #    The tab selection is posted as hidden <input name="contentType">
-    #    Examples:
-    #      "text/markdown"
-    #      "text/plain"
-    #      "image/png;base64"
-    #      "image/jpeg;base64"
-    posted_ct = (
-        request.POST.get('contentType')
-        or getattr(e, 'content_type', '')
-        or 'text/markdown'
-    ).strip()
-
-    #    The hidden checkbox <input name="as_image"> is only "checked"
-    #    (=> appears in POST with value "on") when the user chose an image tab.
-    #    If user chose text tab, that checkbox is unchecked and may be absent.
-    wants_image_mode = (
-        request.POST.get('as_image') == 'on'  # typical browser "checked" value
-        or request.POST.get('as_image') == 'true'  # just in case
-    )
-
-    #    If user uploaded a new file, it'll be here. May be None if unchanged.
-    img_file = request.FILES.get('image')
-
-    # ignore the old "e.is_image" / old mode. 
-    # Instead  use the user's newly chosen intent:
-    #   - If they picked an image/* tab OR wants_image_mode == True,
-    #     final post should be an image post.
-    #   - Otherwise final post should be a text post.
-    # Decide final mode
-    final_is_image = wants_image_mode or posted_ct.startswith('image/')
-
-    if final_is_image:
-        # --- Treat as IMAGE ENTRY now ---
-
-        # Case 1: user uploaded a new replacement file
-        if img_file:
-            try:
-                # handle_uploaded_image should:
-                # - validate file is actually an image
-                # - maybe transcode/resize
-                # - return (content_type_str, base64_string)
-                #   e.g. ("image/png;base64", "iVBORw0KGgoAAA...")
-                img_ct, b64_str = handle_uploaded_image(img_file)
-
-                # persist it to this Entry
-                e.content = b64_str            # raw base64 body
-                e.content_type = img_ct        # "image/png;base64", etc.
-            except ValueError:
-                # If validation failed (bad file, too large, not an img, etc):
-                # We do NOT wipe out the old image. We just keep whatever was there.
-                # So: pass
-                pass
-        else:
-            # Case 2: no new file uploaded.
-            # Two scenarios:
-            #   1. It was already an image entry -> keep existing base64.
-            #   2. User switched text->image, but forgot to upload a file:
-            #      then we basically have no new binary to store, so we won't
-            #      overwrite content with garbage. We just trust "content"
-            #      if they manually pasted base64 (unlikely but okay).
-            #
-            # If they manually pasted base64 into the textarea (front-end does that
-            # preview trick), we can choose to accept it as new content.
-            maybe_base64 = request.POST.get('content')
-            if maybe_base64:
-                # If user pasted base64, store it and honor posted_ct as MIME
-                # posted_ct *should* be "image/...;base64" if they clicked PNG/JPEG tab
-                e.content = maybe_base64
-                e.content_type = posted_ct or e.content_type
-            else:
-                # No file, no pasted base64:
-                # still update the MIME to whatever tab says so UI stays consistent.
-                # (For an already-image entry this just keeps the same content body.)
-                if posted_ct.startswith('image/'):
-                    e.content_type = posted_ct or e.content_type
-    else:
-        # --- Treat as TEXT ENTRY now ---
-
-        # pull the textarea body
-        text_body = request.POST.get('content')
-        if text_body is not None:
-            # overwrite whatever was there before (including old base64 if it used to be an image)
-            e.content = text_body
-
-        # update MIME to "text/markdown" or "text/plain", etc.
-        if posted_ct:
-            e.content_type = posted_ct
-        # at this point we've effectively "downgraded" an image entry
-        # into a text entry, which was impossible in the old logic.
-
-    # 3. update timestamp and save the Entry
-    e.updated = now()
-    e.save()
-
-    # 4. Redirect back to the user's stream page
-    return redirect('author-all-entries', author_id=author_id)
-
-
-
-
-
-
-
-@login_required
-def browse_public_entries(request):
-    # querying for all public entries (local and received)
-    all_public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False).order_by('-created')
-
-    # pre-rendered HTML for each entry
-    for entry in all_public_entries:
-        entry.rendered = helpers.render_entry(entry)  # Add a transient field for template use
-
-    # render the entries in the existing browse_entries.html template
-    return render(request, 'entry/browse_entries.html', {
-        'entries': all_public_entries,
-    })
-
-
-    
 #part2 update
 @require_http_methods(['GET'])
 def entry_image_binary(request, author_id, entry_id):
@@ -653,37 +344,20 @@ def entry_image_binary(request, author_id, entry_id):
 
 
 
+# @require_POST
+# @login_required
+# @csrf_protect
+# def entry_delete(request, author_id, entry_id):
+#     # only the author can delete
+#     if str(request.user.id) != str(author_id):
+#         return HttpResponseForbidden("Only the author can delete this entry.")
 
-
-
-def entry_shared_view(request, token):
-    entry = get_object_or_404(Entry, share_token=token, is_deleted=False)
-    
-    if entry.visibility not in ['PUBLIC', 'UNLISTED']:
-        if not helpers.can_view_entry(request.user, entry):
-            return HttpResponseForbidden("This entry is not shareable.")
-
-    # render the entry content
-    entry.rendered = helpers.render_entry(entry)
-    #return render(request, "does_not_exist.html", {"entry": entry})
-    return render(request, "entry/entry_shared.html", {"entry": entry})
-
-
-
-@require_POST
-@login_required
-@csrf_protect
-def entry_delete(request, author_id, entry_id):
-    # only the author can delete
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Only the author can delete this entry.")
-
-    # soft delete the entry because it says to delete my own entries locally
-    e = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-    e.is_deleted = True
-    e.updated = now()
-    e.save(update_fields=['is_deleted', 'updated'])
-    return redirect('author-all-entries', author_id=author_id)
+#     # soft delete the entry because it says to delete my own entries locally
+#     e = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+#     e.is_deleted = True
+#     e.updated = now()
+#     e.save(update_fields=['is_deleted', 'updated'])
+#     return redirect('author-all-entries', author_id=author_id)
 
 
 @login_required

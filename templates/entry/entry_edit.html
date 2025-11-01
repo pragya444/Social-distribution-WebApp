@@ -1,10 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Edit Entry{% endblock %}
 {% block content %}
+
+<style>
+  .non-field-err{
+    background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;
+    padding:10px 12px; border-radius:10px; margin-bottom:14px;
+  }
+</style>
+
 <div class="page-form">
   <h1>Edit Entry</h1>
 
-  <form method="post" enctype="multipart/form-data" class="form" id="editForm">
+  
+  {% if errors %}
+    <div class="non-field-err">
+      {{ errors.error.0 }}
+    </div>
+  {% endif %}
+
+  <form action="{% url 'entry-retrieve-update' author_id=author_id entry_id=entry.id %}" method="post" enctype="multipart/form-data" class="form" id="editForm">
     {% csrf_token %}
 
     <label class="form-row">
@@ -46,7 +61,7 @@
       </div>
 
       <input type="hidden"
-             name="contentType"
+             name="content_type"
              id="contentType"
              value="{{ entry.content_type|default:'text/markdown' }}">
     </div>

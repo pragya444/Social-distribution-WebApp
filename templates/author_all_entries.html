@@ -99,8 +99,9 @@
             <button type="button" class="link danger" onclick="openDeleteModal('{{ e.id }}')">Delete</button>
 
             {# MODAL FORM (hidden) #}
-            <form id="deleteForm-{{ e.id }}" method="post" action="{% url 'entry-delete' author_id=author_id entry_id=e.id %}" style="display:none;">
+            <form id="deleteForm-{{ e.id }}" method="post" action="{% url 'entry-retrieve-update' author_id=author_id entry_id=e.id %}" style="display:none;">
               {% csrf_token %}
+              <input type="hidden" name="_method" value="DELETE">
               <button type="submit" class="link danger"
                       onclick="return confirm('Delete this entry?');">
                 Delete
@@ -122,8 +123,6 @@
           <img
             {% if e.url %}
                 src="{{ e.url }}"
-            {% elif e.content and e.content_type %}
-                src="data:{{ e.content_type }};base64,{{ e.content|safe }}"
             {% else %}
                 src="{% url 'entry-image' author_id=e.author.id entry_id=e.id %}"
             {% endif %}
@@ -138,54 +137,55 @@
       <div class="time">{{ e.updated }}</div>
     </div>
 
-<div class="card-foot">
-  <div class="action">
-    <!-- Like -->
-<button
-  type="button"
-  class="action like-toggle {% if e.user_liked %}liked{% endif %}"
-  aria-pressed="{{ e.user_liked|yesno:'true,false' }}"
-  data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
->
-  <!-- Heart icon -->
-  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-       stroke="currentColor" stroke-width="2" aria-hidden="true">
-    <path stroke-linecap="round" stroke-linejoin="round"
-          d="M21 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35l-.45-.41C6.4 15.36 3 12.28 3 8.5A4.5 4.5 0 0 1 7.5 4c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 4 4.5 4.5 0 0 1 21 8.5z"/>
-  </svg>
-  <span class="sr-only">Like</span>
-  <span data-like-count>{{e.like_count}}</span>
-</button>
+    <div class="card-foot">
+      <div class="action">
+        <!-- Like -->
+        <button
+          type="button"
+          class="action like-toggle {% if e.user_liked %}liked{% endif %}"
+          aria-pressed="{{ e.user_liked|yesno:'true,false' }}"
+          data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
+        >
+          <!-- Heart icon -->
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M21 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35l-.45-.41C6.4 15.36 3 12.28 3 8.5A4.5 4.5 0 0 1 7.5 4c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 4 4.5 4.5 0 0 1 21 8.5z"/>
+          </svg>
+          <span class="sr-only">Like</span>
+          <span data-like-count>{{e.like_count}}</span>
+        </button>
 
-  <!-- COMMENTS -->
-  <button
-    type="button"
-    class="action-icon comment-trigger"
-    aria-label="Comments"
-    data-comments-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/comments"
-  >
-    <svg class="icon icon-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path stroke-linecap="round" stroke-linejoin="round"
-            d="M21 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v9z"/>
-    </svg>
-    <span class="count" data-comment-count>{{e.comment_count}}</span>
-  </button>
+        <!-- COMMENTS -->
+        <button
+          type="button"
+          class="action-icon comment-trigger"
+          aria-label="Comments"
+          data-comments-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/comments"
+        >
+          <svg class="icon icon-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M21 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v9z"/>
+          </svg>
+          <span class="count" data-comment-count>{{e.comment_count}}</span>
+        </button>
 
 
-  
-  <div class="action">
-    <!-- Replaced share emoji with heroicon -->
-    <svg class="share-icon" data-token="{{ e.share_token }}" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-      <circle cx="6" cy="12" r="3" />
-      <circle cx="18" cy="6" r="3" />
-      <circle cx="18" cy="18" r="3" />
-      <line x1="8.7" y1="10.7" x2="15.3" y2="7.3" />
-      <line x1="8.7" y1="13.3" x2="15.3" y2="16.7" />
-    </svg>
-    Share
-   </div>
-  </div>
+      
+        <div class="action">
+          <!-- Replaced share emoji with heroicon -->
+          <svg class="share-icon" data-author_id="{{ e.author.id }}" data-entry_id="{{ e.id }}" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="6" r="3" />
+            <circle cx="18" cy="18" r="3" />
+            <line x1="8.7" y1="10.7" x2="15.3" y2="7.3" />
+            <line x1="8.7" y1="13.3" x2="15.3" y2="16.7" />
+          </svg>
+          Share
+        </div>
+      </div>
+    </div>
 
   </article>
 {% empty %}
@@ -244,9 +244,10 @@
   document.addEventListener('click', e => {
     const icon = e.target.closest('.share-icon');
     if (icon) {
-      const token = icon.dataset.token;
-      if (!token) return;
-      const link = `${window.location.origin}/api/share/${token}/`;
+      const entry_id = icon.dataset.entry_id;
+      const author_id = icon.dataset.author_id;
+      if (!entry_id || !author_id) return;
+      const link = `${window.location.origin}/api/authors/${author_id}/entries/${entry_id}/`;
       navigator.clipboard.writeText(link).then(() => {
         shareInput.value = link;
         shareModal.style.display = 'flex';

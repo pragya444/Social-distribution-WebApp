@@ -4,6 +4,18 @@
  <link rel="stylesheet" href="{% static 'css/app.css' %}">
 
 {% block content %}
+<style>
+/* Ensure images inside the entry content fit within the card */
+.card-body img,
+.entry-text img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0.5rem auto; 
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+</style>
 
 <div class="feed-header">
   <h1>Shared Entry</h1>

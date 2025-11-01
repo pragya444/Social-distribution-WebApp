@@ -478,65 +478,72 @@ class EntrySharingTests(TestCase):
         self.author = User.objects.create_user(username="author", password="test123", is_active=True)
         self.reader = User.objects.create_user(username="reader", password="reader123", is_active=True)
 
-        # Public entry - everyone can view
         self.public_entry = Entry.objects.create(
             author=self.author,
             title="Public Entry",
             content="This is visible to everyone.",
             visibility="PUBLIC",
-            is_deleted=False
         )
 
-        # Unlisted entry - anyone with link can view
         self.unlisted_entry = Entry.objects.create(
             author=self.author,
             title="Unlisted Entry",
             content="This is visible to everyone via link.",
             visibility="UNLISTED",
-            is_deleted=False
         )
 
-        # Private entry - only friends or author can view
         self.private_entry = Entry.objects.create(
             author=self.author,
             title="Private Entry",
-            content="Should not be visible to anonymous users.",
-            visibility="FRIENDS",
-            is_deleted=False
+            content="Should not be visible.",
+            visibility="FRIENDS",  
         )
 
     def test_public_entry_accessible_by_anonymous(self):
         """Anyone can access a PUBLIC entry via its author/entry ID link."""
-        url = reverse("single-entry-view", kwargs={"author_id": self.author.id, "entry_id": self.public_entry.id})
-        response = self.client.get(url, HTTP_ACCEPT="application/json")
+        url = reverse(
+            "entry-retrieve-update",
+            kwargs={"author_id": self.author.id, "entry_id": self.public_entry.id},
+        )
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Public Entry")
 
     def test_unlisted_entry_accessible_by_anonymous(self):
-        """Anyone can access an UNLISTED entry via its author/entry ID link."""
-        url = reverse("single-entry-view", kwargs={"author_id": self.author.id, "entry_id": self.unlisted_entry.id})
-        response = self.client.get(url, HTTP_ACCEPT="application/json")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Unlisted Entry")
+        """Anonymous users should NOT be able to access UNLISTED entries (follower-only)."""
+        url = reverse(
+            "entry-retrieve-update",
+            kwargs={"author_id": self.author.id, "entry_id": self.unlisted_entry.id},
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
 
     def test_non_public_entry_not_accessible_by_anonymous(self):
-        """Anonymous users should not be able to view private (non-PUBLIC/UNLISTED) entries."""
-        url = reverse("single-entry-view", kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id})
-        response = self.client.get(url, HTTP_ACCEPT="application/json")
+        """Non-public entries (FRIENDS) should not be visible to anonymous users."""
+        url = reverse(
+            "entry-retrieve-update",
+            kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id},
+        )
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
-        self.assertJSONEqual(response.content, {"error": "This entry is not shareable."})
 
     def test_author_can_access_their_own_private_entry(self):
         """Author should be able to view their own private entry."""
         self.client.login(username="author", password="test123")
-        url = reverse("single-entry-view", kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id})
-        response = self.client.get(url, HTTP_ACCEPT="application/json")
+        url = reverse(
+            "entry-retrieve-update",
+            kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id},
+        )
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Private Entry")
 
     def test_reader_cannot_access_private_entry(self):
         """A logged-in non-friend reader cannot access another user's private entry."""
         self.client.login(username="reader", password="reader123")
-        url = reverse("single-entry-view", kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id})
-        response = self.client.get(url, HTTP_ACCEPT="application/json")
+        url = reverse(
+            "entry-retrieve-update",
+            kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id},
+        )
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 403)

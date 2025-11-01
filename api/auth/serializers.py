@@ -26,13 +26,13 @@ class LoginSerializer(serializers.Serializer):
 class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['username', 'github', 'name', 'password']
+        fields = ['username', 'github', 'name', 'password', 'profile_picture']
         extra_kwargs = {
             'password': {'write_only': True, 'required': True, 'min_length': 8},
             'username': {'required': True},
             'name': {'required': True},
             'github': {'required': False, 'allow_blank': True},
-            'profile_picture': {'required': False}
+            'profile_picture': {'required': False, 'allow_blank': True}
         }
     
     def validate_github(self, value):
@@ -48,11 +48,22 @@ class RegisterSerializer(serializers.ModelSerializer):
     
     def validate_name(self, value):
         return value.strip()
-
+            
 
     def create(self, validated_data):
         username = validated_data.pop('username')
         password = validated_data.pop('password')
+        profile_picture = validated_data.pop('profile_picture', "")
+
+        if not profile_picture:
+            name = validated_data.get('name', "Anonymous")
+            if (len(name.split(" "))) > 1:
+                profile_picture = f"https://avatar.iran.liara.run/username?username={"+".join(name.split())}"
+            else:
+                profile_picture = f"https://avatar.iran.liara.run/username?username={name}"
+            validated_data['profile_picture'] = profile_picture
+        else:
+            validated_data['profile_picture'] = profile_picture.strip()
 
         if User.objects.filter(username=username).exists():
             raise serializers.ValidationError({"error": "Username already exists"})

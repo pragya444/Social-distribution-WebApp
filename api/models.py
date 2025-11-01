@@ -28,8 +28,8 @@ class UserManager(BaseUserManager):
             raise ValueError("User must have a username")
         if not password:
             raise ValueError("User must have a password")
-        is_active = kwargs.pop('is_active', False) 
-        user = self.model(username=username,is_active=is_active, **kwargs)
+        
+        user = self.model(username=username, **kwargs)
         user.set_password(password)
         user.save(using=self._db)
         return user
@@ -40,7 +40,10 @@ class UserManager(BaseUserManager):
         if not password:
             raise ValueError("Superuser must have a password")
         
-        user = self.create_user(username=username, password=password, is_active=True, is_staff=True, is_superuser=True)
+        user = self.create_user(username, password)
+        user.is_superuser = True
+        user.is_active = True
+        user.is_staff = True
         user.save(using=self._db)
         return user
     
@@ -49,16 +52,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
     username = models.CharField(max_length=255, unique=True, db_index=True)
     name = models.CharField(max_length=255, default="Anonymous")
-    github = models.CharField(max_length=255, default="")
-    profile_picture = models.CharField(max_length=255, default="")
-    description = models.CharField(max_length=500, default="")
+    github = models.CharField(max_length=255, blank=True, default="")
+    profile_picture = models.CharField(max_length=255, blank=True, default="")
+    description = models.CharField(max_length=500, blank=True, default="")
     url = models.CharField(max_length=255, default="", db_index=True, unique=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
-    # following = models.ManyToManyField('self', symmetrical=False, related_name='followers')
-    # follwers = models.ManyToManyField('self', symmetrical=False, related_name='following_set')
+    github_etag = models.CharField(blank=True, default="")
+    latest_github_event_id = models.CharField(blank=True, default="")
     
     USERNAME_FIELD = 'username'
     objects = UserManager()
@@ -67,7 +70,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.username
     
     def save(self, *args, **kwargs):
-        self.url = get_url() + "authors/" + self.id  # Creates a fixed URL for each user
+        self.url = get_url() + "api/authors/" + self.id  # Creates a fixed URL for each user
         return super(User, self).save(*args, **kwargs)
     
 

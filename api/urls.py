@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from .auth import authViews
+from .entries import entryView
 
 
 urlpatterns = [   
@@ -19,15 +20,15 @@ urlpatterns = [
     path('authors/<str:author_id>/entries/<str:entry_id>/edit/', views.entry_edit_page, name='entry-edit-page'),
     
     # api: list author entries and create a new entry
-    path('authors/<str:author_id>/entries/', views.entries_list_create, name='entries-list-create'),
+    path('authors/<str:author_id>/entries/', entryView.EntryView.as_view(), name='entries-list-create'),
   
     # api: get and update a single entry by id
-    path('authors/<str:author_id>/entries/<str:entry_id>/', views.entry_retrieve_update, name='entry-retrieve-update'),
+    path('authors/<str:author_id>/entries/<str:entry_id>/', entryView.SingleEntryView.as_view(), name='entry-retrieve-update'),
 
-    path('api/authors/<author_id>/entries/<entry_id>/image/', views.entry_image_binary, name='entry-image'),
+    path('authors/<author_id>/entries/<entry_id>/image/', views.entry_image_binary, name='entry-image'),
     
-    path('authors/<author_id>/entries/<entry_id>/delete/', views.entry_delete, name='entry-delete'),
-    path('share/<uuid:token>/', views.entry_shared_view, name='entry-shared-view'),
+    # path('authors/<author_id>/entries/<entry_id>/delete/', views.entry_delete, name='entry-delete'),
+    # path('share/<uuid:token>/', entryView.SingleEntryView.as_view(), name='entry-shared-view'),
 
     path('authors/<str:author_id>/entries/<str:entry_id>/comments', views.comments_list_create, name='comments-list-create'),
     path('authors/<str:author_id>/entries/<str:entry_id>/likes', views.entry_likes, name='entry-likes'),

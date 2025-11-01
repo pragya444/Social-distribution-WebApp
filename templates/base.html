@@ -12,88 +12,201 @@
       <aside class="sidebar">
         <div class="brand londrina-shadow-regular">TheConnection</div>
         <nav class="nav">
-          <a class="nav-item" href="{% url 'author-all-entries' author_id=request.user.id %}">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 22V12H15V22M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="#1E1E1E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <a
+            class="nav-item"
+            href="{% url 'author-all-entries' author_id=request.user.id %}"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M9 22V12H15V22M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z"
+                stroke="#1E1E1E"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
             Feed
           </a>
           <a class="nav-item" href="#">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
               <g clip-path="url(#clip0_5_124)">
-              <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="#1E1E1E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M16.24 7.76L14.12 14.12L7.76 16.24L9.88 9.88L16.24 7.76Z" stroke="#1E1E1E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path
+                  d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
+                  stroke="#1E1E1E"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M16.24 7.76L14.12 14.12L7.76 16.24L9.88 9.88L16.24 7.76Z"
+                  stroke="#1E1E1E"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </g>
               <defs>
-              <clipPath id="clip0_5_124">
-              <rect width="24" height="24" fill="white"/>
-              </clipPath>
+                <clipPath id="clip0_5_124">
+                  <rect width="24" height="24" fill="white" />
+                </clipPath>
               </defs>
             </svg>
-            Discover</a>
+            Discover</a
+          >
           <a class="nav-item" href="#">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
               <g clip-path="url(#clip0_5_63)">
-              <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21M23 21V19C22.9993 18.1137 22.7044 17.2528 22.1614 16.5523C21.6184 15.8519 20.8581 15.3516 20 15.13M16 3.13C16.8604 3.3503 17.623 3.8507 18.1676 4.55231C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89317 18.7122 8.75608 18.1676 9.45769C17.623 10.1593 16.8604 10.6597 16 10.88M13 7C13 9.20914 11.2091 11 9 11C6.79086 11 5 9.20914 5 7C5 4.79086 6.79086 3 9 3C11.2091 3 13 4.79086 13 7Z" stroke="#1E1E1E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path
+                  d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21M23 21V19C22.9993 18.1137 22.7044 17.2528 22.1614 16.5523C21.6184 15.8519 20.8581 15.3516 20 15.13M16 3.13C16.8604 3.3503 17.623 3.8507 18.1676 4.55231C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89317 18.7122 8.75608 18.1676 9.45769C17.623 10.1593 16.8604 10.6597 16 10.88M13 7C13 9.20914 11.2091 11 9 11C6.79086 11 5 9.20914 5 7C5 4.79086 6.79086 3 9 3C11.2091 3 13 4.79086 13 7Z"
+                  stroke="#1E1E1E"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </g>
               <defs>
-              <clipPath id="clip0_5_63">
-              <rect width="24" height="24" fill="white"/>
-              </clipPath>
+                <clipPath id="clip0_5_63">
+                  <rect width="24" height="24" fill="white" />
+                </clipPath>
               </defs>
             </svg>
-            Following</a>
-          <a class="nav-item" href="{% url 'entry-create-page' author_id=request.user.id %}">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            Following</a
+          >
+          <a
+            class="nav-item"
+            href="{% url 'entry-create-page' author_id=request.user.id %}"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
               <g clip-path="url(#clip0_5_67)">
-              <path d="M11 3.99998H4C3.46957 3.99998 2.96086 4.2107 2.58579 4.58577C2.21071 4.96084 2 5.46955 2 5.99998V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13M18.5 2.49998C18.8978 2.10216 19.4374 1.87866 20 1.87866C20.5626 1.87866 21.1022 2.10216 21.5 2.49998C21.8978 2.89781 22.1213 3.43737 22.1213 3.99998C22.1213 4.56259 21.8978 5.10216 21.5 5.49998L12 15L8 16L9 12L18.5 2.49998Z" stroke="#1E1E1E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path
+                  d="M11 3.99998H4C3.46957 3.99998 2.96086 4.2107 2.58579 4.58577C2.21071 4.96084 2 5.46955 2 5.99998V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13M18.5 2.49998C18.8978 2.10216 19.4374 1.87866 20 1.87866C20.5626 1.87866 21.1022 2.10216 21.5 2.49998C21.8978 2.89781 22.1213 3.43737 22.1213 3.99998C22.1213 4.56259 21.8978 5.10216 21.5 5.49998L12 15L8 16L9 12L18.5 2.49998Z"
+                  stroke="#1E1E1E"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </g>
               <defs>
-              <clipPath id="clip0_5_67">
-              <rect width="24" height="24" fill="white"/>
-              </clipPath>
+                <clipPath id="clip0_5_67">
+                  <rect width="24" height="24" fill="white" />
+                </clipPath>
               </defs>
             </svg>
-            Post</a>
+            Post</a
+          >
         </nav>
-<div class="logout">
-  <form action="{% url 'logout' %}" method="post" style="display:inline;">
-    {% csrf_token %}
-    <button type="submit" class="logout-btn" style="background:none;border:0;padding:0;cursor:pointer;">
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 28H6.66667C5.95942 28 5.28115 27.719 4.78105 27.219C4.28095 26.7189 4 26.0406 4 25.3333V6.66667C4 5.95942 4.28095 5.28115 4.78105 4.78105C5.28115 4.28095 5.95942 4 6.66667 4H12M21.3333 22.6667L28 16M28 16L21.3333 9.33333M28 16H12" stroke="#FC8479" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      Logout
-    </button>
-  </form>
-</div>
-
+        <div class="logout">
+          <form
+            action="{% url 'logout' %}"
+            method="post"
+            style="display: inline"
+          >
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="logout-btn"
+              style="background: none; border: 0; padding: 0; cursor: pointer"
+            >
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 32 32"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 28H6.66667C5.95942 28 5.28115 27.719 4.78105 27.219C4.28095 26.7189 4 26.0406 4 25.3333V6.66667C4 5.95942 4.28095 5.28115 4.78105 4.78105C5.28115 4.28095 5.95942 4 6.66667 4H12M21.3333 22.6667L28 16M28 16L21.3333 9.33333M28 16H12"
+                  stroke="#FC8479"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              Logout
+            </button>
+          </form>
+        </div>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <input class="search" placeholder="Search" />
           <div class="icons">
-            <button class="icon-btn" type="button" aria-label="Notifications" title="Follow requests"
-            onclick="window.location.href='{% url 'follow-requests-page' author_id=request.user.id %}'">
-            
-              <svg width="35" height="35" viewBox="0 0 35 35" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M20.0229 30.625C19.7665 31.0669 19.3985 31.4338 18.9557 31.6889C18.513 31.9439 18.011 32.0781 17.5 32.0781C16.989 32.0781 16.487 31.9439 16.0443 31.6889C15.6015 31.4338 15.2335 31.0669 14.9771 30.625M26.25 11.6666C26.25 9.34598 25.3281 7.12038 23.6872 5.47944C22.0462 3.8385 19.8206 2.91663 17.5 2.91663C15.1794 2.91663 12.9538 3.8385 11.3128 5.47944C9.67187 7.12038 8.75 9.34598 8.75 11.6666C8.75 21.875 4.375 24.7916 4.375 24.7916H30.625C30.625 24.7916 26.25 21.875 26.25 11.6666Z" stroke="#F69673" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-          
+            <button
+              class="icon-btn"
+              type="button"
+              aria-label="Notifications"
+              title="Follow requests"
+              onclick="window.location.href='{% url 'follow-requests-page' author_id=request.user.id %}'"
+            >
+              <svg
+                width="35"
+                height="35"
+                viewBox="0 0 35 35"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M20.0229 30.625C19.7665 31.0669 19.3985 31.4338 18.9557 31.6889C18.513 31.9439 18.011 32.0781 17.5 32.0781C16.989 32.0781 16.487 31.9439 16.0443 31.6889C15.6015 31.4338 15.2335 31.0669 14.9771 30.625M26.25 11.6666C26.25 9.34598 25.3281 7.12038 23.6872 5.47944C22.0462 3.8385 19.8206 2.91663 17.5 2.91663C15.1794 2.91663 12.9538 3.8385 11.3128 5.47944C9.67187 7.12038 8.75 9.34598 8.75 11.6666C8.75 21.875 4.375 24.7916 4.375 24.7916H30.625C30.625 24.7916 26.25 21.875 26.25 11.6666Z"
+                  stroke="#F69673"
+                  stroke-width="3.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </svg>
-              {% if pending_follow_count %}<span class="badge">{{ pending_follow_count }}</span>{% endif %}
-
-              
-              
+              {% if pending_follow_count %}<span class="badge"
+                >{{ pending_follow_count }}</span
+              >{% endif %}
             </button>
-            <a href="{% url 'profile' author_id=request.user.id %}" class="avatar-btn" title="Your Profile">
-              {% if request.user.profile_photo %}
-                <img src="{{ request.user.profile_photo.url }}" alt="Profile" class="avatar-img"/>
+            <a
+              href="{% url 'profile' author_id=request.user.id %}"
+              class="avatar"
+              title="Your Profile"
+            >
+              {% if request.user.profile_picture %}
+              <img
+                src="{{ request.user.profile_picture }}"
+                alt="Profile"
+                class="avatar"
+              />
               {% else %}
-                <!--- Placeholder until we have profile set up--> 
-                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9.74992 28.5C11.1666 27.4167 12.7499 26.5625 14.4999 25.9375C16.2499 25.3125 18.0833 25 19.9999 25C21.9166 25 23.7499 25.3125 25.4999 25.9375C27.2499 26.5625 28.8333 27.4167 30.2499 28.5C31.2221 27.3612 31.9791 26.0695 32.5208 24.625C33.0624 23.1806 33.3333 21.6389 33.3333 20C33.3333 16.3056 32.0346 13.1598 29.4374 10.5625C26.8402 7.96532 23.6944 6.66671 19.9999 6.66671C16.3055 6.66671 13.1596 7.96532 10.5624 10.5625C7.9652 13.1598 6.66659 16.3056 6.66659 20C6.66659 21.6389 6.93742 23.1806 7.47909 24.625C8.02075 26.0695 8.7777 27.3612 9.74992 28.5ZM19.9999 21.6667C18.361 21.6667 16.9791 21.1042 15.8541 19.9792C14.7291 18.8542 14.1666 17.4723 14.1666 15.8334C14.1666 14.1945 14.7291 12.8125 15.8541 11.6875C16.9791 10.5625 18.361 10 19.9999 10C21.6388 10 23.0208 10.5625 24.1458 11.6875C25.2708 12.8125 25.8333 14.1945 25.8333 15.8334C25.8333 17.4723 25.2708 18.8542 24.1458 19.9792C23.0208 21.1042 21.6388 21.6667 19.9999 21.6667ZM19.9999 36.6667C17.6944 36.6667 15.5277 36.2292 13.4999 35.3542C11.4721 34.4792 9.70825 33.2917 8.20825 31.7917C6.70825 30.2917 5.52075 28.5278 4.64575 26.5C3.77075 24.4723 3.33325 22.3056 3.33325 20C3.33325 17.6945 3.77075 15.5278 4.64575 13.5C5.52075 11.4723 6.70825 9.70837 8.20825 8.20837C9.70825 6.70837 11.4721 5.52087 13.4999 4.64587C15.5277 3.77087 17.6944 3.33337 19.9999 3.33337C22.3055 3.33337 24.4721 3.77087 26.4999 4.64587C28.5277 5.52087 30.2916 6.70837 31.7916 8.20837C33.2916 9.70837 34.4791 11.4723 35.3541 13.5C36.2291 15.5278 36.6666 17.6945 36.6666 20C36.6666 22.3056 36.2291 24.4723 35.3541 26.5C34.4791 28.5278 33.2916 30.2917 31.7916 31.7917C30.2916 33.2917 28.5277 34.4792 26.4999 35.3542C24.4721 36.2292 22.3055 36.6667 19.9999 36.6667Z" fill="#F76F62"/>
-                </svg>
+              <!--- Placeholder until we have profile set up-->
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 40 40"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M9.74992 28.5C11.1666 27.4167 12.7499 26.5625 14.4999 25.9375C16.2499 25.3125 18.0833 25 19.9999 25C21.9166 25 23.7499 25.3125 25.4999 25.9375C27.2499 26.5625 28.8333 27.4167 30.2499 28.5C31.2221 27.3612 31.9791 26.0695 32.5208 24.625C33.0624 23.1806 33.3333 21.6389 33.3333 20C33.3333 16.3056 32.0346 13.1598 29.4374 10.5625C26.8402 7.96532 23.6944 6.66671 19.9999 6.66671C16.3055 6.66671 13.1596 7.96532 10.5624 10.5625C7.9652 13.1598 6.66659 16.3056 6.66659 20C6.66659 21.6389 6.93742 23.1806 7.47909 24.625C8.02075 26.0695 8.7777 27.3612 9.74992 28.5ZM19.9999 21.6667C18.361 21.6667 16.9791 21.1042 15.8541 19.9792C14.7291 18.8542 14.1666 17.4723 14.1666 15.8334C14.1666 14.1945 14.7291 12.8125 15.8541 11.6875C16.9791 10.5625 18.361 10 19.9999 10C21.6388 10 23.0208 10.5625 24.1458 11.6875C25.2708 12.8125 25.8333 14.1945 25.8333 15.8334C25.8333 17.4723 25.2708 18.8542 24.1458 19.9792C23.0208 21.1042 21.6388 21.6667 19.9999 21.6667ZM19.9999 36.6667C17.6944 36.6667 15.5277 36.2292 13.4999 35.3542C11.4721 34.4792 9.70825 33.2917 8.20825 31.7917C6.70825 30.2917 5.52075 28.5278 4.64575 26.5C3.77075 24.4723 3.33325 22.3056 3.33325 20C3.33325 17.6945 3.77075 15.5278 4.64575 13.5C5.52075 11.4723 6.70825 9.70837 8.20825 8.20837C9.70825 6.70837 11.4721 5.52087 13.4999 4.64587C15.5277 3.77087 17.6944 3.33337 19.9999 3.33337C22.3055 3.33337 24.4721 3.77087 26.4999 4.64587C28.5277 5.52087 30.2916 6.70837 31.7916 8.20837C33.2916 9.70837 34.4791 11.4723 35.3541 13.5C36.2291 15.5278 36.6666 17.6945 36.6666 20C36.6666 22.3056 36.2291 24.4723 35.3541 26.5C34.4791 28.5278 33.2916 30.2917 31.7916 31.7917C30.2916 33.2917 28.5277 34.4792 26.4999 35.3542C24.4721 36.2292 22.3055 36.6667 19.9999 36.6667Z"
+                  fill="#F76F62"
+                />
+              </svg>
               {% endif %}
             </a>
           </div>
@@ -102,5 +215,331 @@
         <section class="content">{% block content %}{% endblock %}</section>
       </main>
     </div>
+
+    <style>
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 100;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal {
+        width: min(640px, 92vw);
+        max-height: 80vh;
+        overflow: auto;
+        background: #fff;
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      }
+      .modal header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .modal .close {
+        background: none;
+        border: 0;
+        font-size: 20px;
+        cursor: pointer;
+      }
+      .comments-list p {
+        margin: 10px 10;
+      }
+      .comments-list {
+        text-align: left;
+      }
+      .comment-form {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .comment-form input {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+      }
+      .comment-form button {
+        padding: 8px 12px;
+        border: 0;
+        border-radius: 8px;
+        background: #ffa500;
+        color: #fff;
+        cursor: pointer;
+      }
+    </style>
+
+    <div
+      id="commentModal"
+      class="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Comments"
+    >
+      <div class="modal">
+        <header>
+          <h3>Comments</h3>
+          <button type="button" class="close" id="commentModalClose">×</button>
+        </header>
+
+        <div
+          id="commentModalList"
+          class="comments-list"
+          aria-live="polite"
+        ></div>
+
+        <form id="commentModalForm" class="comment-form">
+          {% csrf_token %}
+          <input
+            name="comment"
+            placeholder="Write a comment..."
+            autocomplete="off"
+          />
+          <button type="submit">Post</button>
+        </form>
+      </div>
+    </div>
+
+    <script src="{% static 'js/comments_likes.js' %}"></script>
+    <script>
+      window.__getCookie = function (name) {
+        const m = document.cookie.match(
+          new RegExp("(^|; )" + name + "=([^;]*)")
+        );
+        return m ? decodeURIComponent(m[2]) : null;
+      };
+
+      window.__j = async function (url, opts = {}) {
+        const headers = {
+          "Content-Type": "application/json",
+          ...(opts.headers || {}),
+        };
+        const csrftoken = window.__getCookie("csrftoken");
+        if (csrftoken) headers["X-CSRFToken"] = csrftoken;
+        const r = await fetch(url, {
+          credentials: "same-origin",
+          headers,
+          ...opts,
+        });
+        let data = {};
+        try {
+          data = await r.json();
+        } catch (e) {}
+        return { ok: r.ok, status: r.status, data };
+      };
+    </script>
+
+    <script>
+      // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+
+      (function () {
+        const modal = document.getElementById("commentModal");
+        const list = document.getElementById("commentModalList");
+        const form = document.getElementById("commentModalForm");
+        const closeBtn = document.getElementById("commentModalClose");
+
+        let activeUrl = null;
+        let activeCountEl = null;
+
+        function showModal() {
+          modal.style.display = "flex";
+        }
+        function hideModal() {
+          modal.style.display = "none";
+          list.innerHTML = "";
+          form.reset();
+        }
+
+        const esc = (s) =>
+          String(s ?? "").replace(
+            /[&<>]/g,
+            (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])
+          );
+
+        async function loadComments(url) {
+          list.innerHTML = '<p class="muted">Loading…</p>';
+          const r = await window.__j(url);
+          if (!r.ok) {
+            console.error("Comments GET failed", r.status, r.data);
+            list.innerHTML = '<p class="muted">Failed to load comments.</p>';
+            return;
+          }
+          const items = r.data.src || [];
+          list.innerHTML = items.length
+            ? items
+                .map(
+                  (c) =>
+                    `<p><b>${esc(c.author?.displayName || "")}</b>: ${esc(
+                      c.comment || ""
+                    )}</p>`
+                )
+                .join("")
+            : '<p class="muted">No comments yet.</p>';
+        }
+
+        async function refreshCount(url, el) {
+          const r = await window.__j(url);
+          if (r.ok && el) {
+            el.textContent =
+              typeof r.data.count === "number"
+                ? r.data.count
+                : r.data.src?.length ?? 0;
+          }
+        }
+
+        // Open modal
+        document.addEventListener("click", async (e) => {
+          const btn = e.target.closest(".comment-trigger");
+          if (!btn) return;
+          activeUrl = btn.getAttribute("data-comments-url");
+          activeCountEl = btn.querySelector("[data-comment-count]");
+          showModal();
+          await loadComments(activeUrl);
+          await refreshCount(activeUrl, activeCountEl);
+        });
+
+        // Post a comment
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const text = form.comment.value.trim();
+          if (!text || !activeUrl) return;
+          const r = await window.__j(activeUrl, {
+            method: "POST",
+            body: JSON.stringify({
+              type: "comment",
+              comment: text,
+              contentType: "text/plain",
+            }),
+          });
+          if (r.ok) {
+            form.reset();
+            await loadComments(activeUrl);
+            await refreshCount(activeUrl, activeCountEl); // instant count update
+            // optional optimistic bump if you want immediate feedback:
+            // window.__bumpCommentCountForUrl && window.__bumpCommentCountForUrl(activeUrl);
+          } else if (r.status === 403) {
+            alert("Please log in to comment.");
+            console.warn("403 on comment POST — likely auth/CSRF", r.data);
+          } else {
+            alert("Failed to post comment.");
+            console.error("Comment POST failed", r.status, r.data);
+          }
+        });
+
+        // Close modal
+        closeBtn.addEventListener("click", hideModal);
+        modal.addEventListener("click", (e) => {
+          if (e.target === modal) hideModal();
+        });
+      })();
+    </script>
+
+    <script>
+      // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+
+      (function () {
+        // ---- helpers ----
+        function getCookie(name) {
+          const m = document.cookie.match(
+            new RegExp("(^|; )" + name + "=([^;]*)")
+          );
+          return m ? decodeURIComponent(m[2]) : null;
+        }
+        async function j(url, opts = {}) {
+          const headers = { "Content-Type": "application/json" };
+          // If your likes/comments views are CSRF-protected, send the token:
+          const csrftoken = getCookie("csrftoken");
+          if (csrftoken) headers["X-CSRFToken"] = csrftoken;
+
+          const r = await fetch(url, {
+            credentials: "same-origin",
+            headers,
+            ...opts,
+          });
+          let data = {};
+          try {
+            data = await r.json();
+          } catch (e) {}
+          return { ok: r.ok, status: r.status, data };
+        }
+
+        // ---- Likes: init + toggle ----
+        async function initLike(btn) {
+          const url = btn.dataset.likesUrl;
+          const cnt = btn.querySelector("[data-like-count]");
+
+          // initial GET populates liked + count
+          const g = await j(url);
+          if (g.ok) {
+            btn.classList.toggle("liked", !!g.data.liked);
+            btn.setAttribute("aria-pressed", g.data.liked ? "true" : "false");
+            if (cnt) cnt.textContent = g.data.count ?? 0;
+          }
+
+          btn.addEventListener("click", async () => {
+            const liked = btn.classList.contains("liked");
+            const method = liked ? "DELETE" : "POST";
+            const r = await j(url, { method });
+            if (r.ok) {
+              btn.classList.toggle("liked", r.data.liked === true);
+              btn.setAttribute("aria-pressed", r.data.liked ? "true" : "false");
+              if (cnt && typeof r.data.count === "number")
+                cnt.textContent = r.data.count;
+            } else if (r.status === 403) {
+              alert("Please log in to like.");
+            }
+          });
+        }
+
+        // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+        // ---- Comments: init count + poll periodically ----
+
+        async function initCommentCount(btn) {
+          const url = btn.dataset.commentsUrl;
+          const el = btn.querySelector("[data-comment-count]");
+          if (!el) return;
+
+          async function refresh() {
+            const r = await j(url);
+            if (r.ok) {
+              const c =
+                typeof r.data.count === "number"
+                  ? r.data.count
+                  : r.data.src?.length ?? 0;
+              el.textContent = c;
+            }
+          }
+          await refresh(); // initial
+          // setInterval(refresh, 2000);       // auto-update every 2s
+        }
+        // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+        // ---- Wire up everything on DOM ready ----
+        document.addEventListener("DOMContentLoaded", () => {
+          document
+            .querySelectorAll(".like-toggle[data-likes-url]")
+            .forEach(initLike);
+          document
+            .querySelectorAll(".comment-trigger[data-comments-url]")
+            .forEach(initCommentCount);
+        });
+
+        // ---- Developed with assistance from ChatGPT (GPT-5), October 2025 ----
+
+        // When your comment modal POSTs successfully, call this:
+        window.__bumpCommentCountForUrl = function (commentsUrl) {
+          const btn = document.querySelector(
+            `.comment-trigger[data-comments-url="${CSS.escape(commentsUrl)}"]`
+          );
+          const el = btn?.querySelector("[data-comment-count]");
+          if (!el) return;
+          const n = parseInt(el.textContent || "0", 10);
+          el.textContent = isNaN(n) ? 1 : n + 1;
+        };
+      })();
+    </script>
   </body>
 </html>

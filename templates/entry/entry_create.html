@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}New Entry{% endblock %}
+{% block content %}
+
+<style>
+  .non-field-err{
+    background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;
+    padding:10px 12px; border-radius:10px; margin-bottom:14px;
+  }
+</style>
+
+<div class="page-form">
+  <h1>New Entry</h1>
+
+  {% if errors.error %}
+    <div class="non-field-err">
+      {{ errors.error.0 }}
+    </div>
+  {% endif %}
+
+  {% for field, msgs in errors.items %}
+    {% if field != "error" %}
+      <div class="non-field-err">
+        {{ msgs.0 }}
+      </div>
+    {% endif %}
+  {% endfor %}
+
+
+  <form action="{% url 'entries-list-create' author_id=author_id %}" method="post" class="form" enctype="multipart/form-data" id="createForm">
+    {% csrf_token %}
+
+    <label class="form-row">
+      <span>Title</span>
+      <input name="title" required placeholder="A short title">
+    </label>
+
+    <label class="form-row">
+      <span>Visibility</span>
+      <select name="visibility">
+        <option value="PUBLIC">Public</option>
+        <option value="UNLISTED">Unlisted</option>
+        <option value="FRIENDS">Friends</option>
+      </select>
+    </label>
+
+    <div class="form-row">
+      <span>Content Type</span>
+      <div class="filter-tabs" id="contentTypeTabs">
+        <button type="button" class="tab active" data-value="text/markdown">Markdown</button>
+        <button type="button" class="tab" data-value="text/plain">Plain</button>
+        <button type="button" class="tab" data-value="image/png;base64">PNG Image</button>
+        <button type="button" class="tab" data-value="image/jpeg;base64">JPEG Image</button>
+      </div>
+
+      <input type="hidden" name="content_type" id="contentType" value="text/markdown">
+    </div>
+
+    <input type="checkbox" id="asImageHidden" name="as_image" style="display:none;">
+
+    <div class="form-row" id="imagePicker" style="display:none;">
+      <span>Image</span>
+      <input type="file" id="imageFile" name="image" accept="image/png, image/jpeg">
+    </div>
+
+    <label class="form-row" id="contentRow">
+      <span>Content</span>
+      <textarea name="content" id="content" rows="10" placeholder="Write Markdown or plain text here..."></textarea>
+    </label>
+
+    <div id="preview" style="display:none; margin: .5rem 0;">
+      <img id="previewImg" alt="preview" style="max-width:100%; height:auto; border:1px solid #ddd; border-radius:.5rem;">
+      <div id="imgMeta" style="font-size:.875rem; color:#666; margin-top:.25rem;"></div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">Create</button>
+      <a class="btn ghost" href="{% url 'author-all-entries' author_id=author_id %}">Cancel</a>
+    </div>
+  </form>
+
+  <script>
+    (function () {
+      const tabsWrap      = document.getElementById('contentTypeTabs');
+      const tabs          = tabsWrap.querySelectorAll('.tab');
+      const hiddenType    = document.getElementById('contentType');
+
+      const asImageBox    = document.getElementById('asImageHidden');
+      const imagePicker   = document.getElementById('imagePicker');
+      const imageFile     = document.getElementById('imageFile');
+
+      const contentRow    = document.getElementById('contentRow');
+      const contentTA     = document.getElementById('content');
+
+      const previewBox    = document.getElementById('preview');
+      const previewImg    = document.getElementById('previewImg');
+      const imgMeta       = document.getElementById('imgMeta');
+
+      function syncUIForType(mime) {
+        tabs.forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.value === mime);
+        });
+
+        hiddenType.value = mime;
+
+        const isImage = mime.startsWith('image/');
+
+        if (isImage) {
+          imagePicker.style.display = '';
+          contentRow.style.display  = 'none';
+          asImageBox.checked        = true;
+        } else {
+          imagePicker.style.display = 'none';
+          contentRow.style.display  = '';
+          asImageBox.checked        = false;
+
+          previewBox.style.display  = 'none';
+          previewImg.removeAttribute('src');
+          imgMeta.textContent = '';
+        }
+      }
+
+      syncUIForType(hiddenType.value);
+
+      tabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+          syncUIForType(btn.dataset.value);
+        });
+      });
+
+      imageFile.addEventListener('change', () => {
+        const file = imageFile.files && imageFile.files[0];
+        if (!file) {
+          previewBox.style.display = 'none';
+          previewImg.removeAttribute('src');
+          imgMeta.textContent = '';
+          return;
+        }
+
+        const okTypes = ['image/png', 'image/jpeg'];
+        if (!okTypes.includes(file.type)) {
+          alert('Only PNG or JPEG is supported.');
+          imageFile.value = '';
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result;
+          const comma = dataUrl.indexOf(',');
+          const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+
+          contentTA.value = base64;
+
+          previewImg.src = dataUrl;
+          imgMeta.textContent = `${file.type} · ${(file.size/1024).toFixed(1)} KB`;
+          previewBox.style.display = '';
+        };
+        reader.onerror = () => { alert('Failed to read image file.'); };
+        reader.readAsDataURL(file);
+      });
+    })();
+  </script>
+</div>
+{% endblock %}

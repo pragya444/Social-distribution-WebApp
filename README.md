@@ -18,6 +18,7 @@ Make a distributed social network!
 | Ling Zhuo | lzhuo2 | lz22222     |
 | Kevin Ho He | hohe | kevinhh12     |
 | Kehan Chen | kehan | KarlFranzman     |
+| Amitoj Singh | amitoj2 | amitojxsingh |
 
 ## License
 
@@ -32,4 +33,11 @@ The authors claiming copyright for this project:
 - Ling Zhuo  
 - Kevin Ho He  
 - Kehan Chen  
+- Amitoj Singh
 
+
+## Collaboration (AI)
+
+- The following test cases (EntryModelTests, AuthorEntriesViewTests) were written with the asistance of OpenAI, ChatGPT-5. 2025-10-19.
+
+- The model Entry was written with the assistance of OpenAI, ChatGPT-5. 2025-10-19.

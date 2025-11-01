@@ -105,3 +105,65 @@ form button:hover {
 }
 
 
+:root{
+  --bg1:#bfe3d1;   
+  --bg2:#ffffff;   
+  --brand:#E39774; 
+  --panel:#ffffff;
+  --text:#0f172a;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font:16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  display:grid;
+  place-items:center;
+  color:var(--text);
+
+  /* layered gradient + noise */
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(255,255,255,0.06), transparent 60%),
+    linear-gradient(120deg, var(--bg1), var(--bg2));
+  position:relative;
+}
+body::after{
+  /* subtle noise overlay */
+  content:"";
+  position:fixed; inset:0;
+  background-image:url("../img/noise.jpg"); 
+  opacity:.06; pointer-events:none;
+}
+
+.card{
+  display: flex;
+  width:min(480px, 92vw);
+  background:var(--panel);
+  border-radius:16px;
+  padding:28px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25), 0 2px 8px rgba(0,0,0,.2);
+  border:1px solid rgba(0,0,0,.06);
+}
+
+h1{ margin:0 0 6px; font-size:26px }
+h3{ margin:0 0 24px; font-weight:500; color:#475569 }
+h3 a{ color:var(--brand); text-decoration:none }
+h3 a:hover{ text-decoration:underline }
+
+.input-div{ margin-bottom:14px }
+label{ display:block; font-size:14px; color:#334155; margin-bottom:6px }
+input{
+  width:100%; padding:10px 12px;
+  border:1px solid #e5e7eb; border-radius:10px; outline:0;
+}
+input:focus{ border-color:#cbd5e1; box-shadow:0 0 0 4px rgba(255,165,0,.15) }
+
+.auth-btn{
+  width:100%;
+  padding:10px 14px; border:0; border-radius:12px;
+  background:var(--brand); color:white; font-weight:600; cursor:pointer;
+  box-shadow:0 8px 18px rgba(255,165,0,.35);
+}
+.auth-btn:hover{ transform:translateY(-1px) }
+.auth-btn:active{ transform:translateY(0) }

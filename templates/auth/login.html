@@ -8,14 +8,29 @@
     <title>Document</title>
     <link rel="stylesheet" href="{% static 'css/auth.css' %}" />
   </head>
+
+  <style>
+    .err{
+      background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;
+      padding:10px 12px; border-radius:10px; margin-bottom:14px;
+    }
+  </style>
+
+
   <body>
     <article class="card">
-      <h1>Login to you Account</h1>
+      <h1>Login to your Account</h1>
       <h3>or <a href="{% url 'register' %}">Sign up</a></h3>
 
       <form method="POST">
-        {% csrf_token %} {% if errors.error %}
-        <div class="err">{{ errors.error.0 }}</div>
+        {% csrf_token %} 
+        {% if errors.error %}
+          <div class="err">{{ errors.error.0 }}</div>
+        {% endif %}
+        {% if errors.non_field_errors %}
+          <div class="err">
+            {{ errors.non_field_errors|join:", " }}
+          </div>
         {% endif %}
 
         <div class="input-div">

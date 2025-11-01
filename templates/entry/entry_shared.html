@@ -82,13 +82,19 @@
     <div id="comments-container" style="display:none; margin-top:10px; padding-left:10px; border-left: 2px solid #ddd;">
       <div id="comment-list">
         {% for comment in entry.comments.all %}
-          <div class="comment" style="margin-bottom:8px;">
-            <strong>{{ comment.author.username }}</strong>: {{ comment.comment }}
-            <div class="comment-time" style="font-size:0.8em; color:#555;">
-              {{ comment.created|date:"M d, Y, h:i A" }}
+            <div class="comment" style="margin-bottom:8px;" data-like-url="/api/authors/{{ entry.author.id }}/entries/{{ entry.id }}/comments/{{ comment.id }}/likes">
+              <strong>{{ comment.author.username }}</strong>: {{ comment.comment }}
+              <div class="comment-time" style="font-size:0.8em; color:#555;">
+                {{ comment.created|date:"M d, Y, h:i A" }}
+              </div>
+              <button class="comment-like-btn" data-comment-like-btn
+                      style="border:none;background:none;cursor:pointer;">❤️</button>
+              <span data-comment-like-count>{{ comment.likes.count }}</span>
             </div>
-          </div>
         {% endfor %}
+
+
+        
         {% if entry.comments.count == 0 %}
           <p id="no-comments-msg">No comments yet.</p>
         {% endif %}
@@ -223,6 +229,50 @@
       });
     });
   }
+  // ---- comment like buttons ----
+document.querySelectorAll("[data-comment-like-btn]").forEach((btn) => {
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const commentEl = btn.closest(".comment");
+    const url = commentEl.dataset.likeUrl;
+    const countEl = commentEl.querySelector("[data-comment-like-count]");
+    const csrftoken = document.cookie.match(/csrftoken=([^;]+)/)?.[1];
+    const liked = btn.classList.contains("liked");
+    const method = liked ? "DELETE" : "POST";
+
+
+
+    const r = await fetch(url, {
+      method,
+      headers: {
+        "X-CSRFToken": csrftoken || "",
+        "Content-Type": "application/json",
+      },
+      credentials: "same-origin",
+    });
+
+    if (r.status === 403) {
+      alert("Please log in to like comments.");
+      return;
+    }
+    if (!r.ok) {
+      alert("Error toggling comment like.");
+      return;
+    }
+
+
+
+
+
+    btn.classList.toggle("liked", method === "POST");
+    const diff = method === "POST" ? 1 : -1;
+    const cur = parseInt(countEl.textContent || "0", 10);
+    countEl.textContent = Math.max(cur + diff, 0);
+
+
+  });
+});
+
 });
 
 </script>

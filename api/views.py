@@ -238,7 +238,7 @@ def author_stream(request, author_id):
 
     # render with author ID and the selected tab
     return render(request, 'author_all_entries.html', {
-        'author_id': author_id,
+        'author': request.user,
         'entries': entries,
         'tab': tab,
     })

@@ -60,18 +60,22 @@
     <a href="?tab=friends" class="tab {% if tab == 'friends' %}active{% endif %}">Friends</a>
     <a href="?tab=private" class="tab {% if tab == 'private' %}active{% endif %}">My Entries</a>
   </div>
-  <a class="btn" href="{% url 'entry-create-page' author_id=author_id %}">+ New Entry</a>
+  <a class="btn" href="{% url 'entry-create-page' author_id=author.id %}">+ New Entry</a>
 </div>
 
 {% for e in entries %}
   <article class="card">
     <div class="card-head">
       <div class="author">
-        <a class="avatar" href="{% url 'profile' author_id=e.author_id %}" aria-label="View profile">👤</a>
+        {% if author.profile_picture %}
+          <img class="avatar" src="{{ author.profile_picture }}" alt="{{ e.author.name }}'s profile picture" />
+        {% else %}
+          <a class="avatar" href="{% url 'profile' author_id=e.author.id %}" aria-label="View profile">👤</a>
+        {% endif %}
         <div class="name">
           <div class="display">{{ e.author.name }}</div>
           <div class="handle">
-      <a href="{% url 'profile' author_id=e.author_id %}"
+      <a href="{% url 'profile' author_id=e.author.id %}"
       style="text-decoration:none;">
         @{{ e.author.username|lower }}
       </a>
@@ -93,13 +97,13 @@
           <span class="dots">⋯</span>
 
           <div class="menu-pop">
-            <a href="{% url 'entry-edit-page' author_id=author_id entry_id=e.id %}">Edit</a>
+            <a href="{% url 'entry-edit-page' author_id=author.id entry_id=e.id %}">Edit</a>
 
             {# MODAL TRIGGER BUTTON ADDED #}
             <button type="button" class="link danger" onclick="openDeleteModal('{{ e.id }}')">Delete</button>
 
             {# MODAL FORM (hidden) #}
-            <form id="deleteForm-{{ e.id }}" method="post" action="{% url 'entry-retrieve-update' author_id=author_id entry_id=e.id %}" style="display:none;">
+            <form id="deleteForm-{{ e.id }}" method="post" action="{% url 'entry-retrieve-update' author_id=author.id entry_id=e.id %}" style="display:none;">
               {% csrf_token %}
               <input type="hidden" name="_method" value="DELETE">
               <button type="submit" class="link danger"

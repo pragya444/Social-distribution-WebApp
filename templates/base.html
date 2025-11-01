@@ -184,14 +184,14 @@
             </button>
             <a
               href="{% url 'profile' author_id=request.user.id %}"
-              class="avatar-btn"
+              class="avatar"
               title="Your Profile"
             >
-              {% if request.user.profile_photo %}
+              {% if request.user.profile_picture %}
               <img
-                src="{{ request.user.profile_photo.url }}"
+                src="{{ request.user.profile_picture }}"
                 alt="Profile"
-                class="avatar-img"
+                class="avatar"
               />
               {% else %}
               <!--- Placeholder until we have profile set up-->

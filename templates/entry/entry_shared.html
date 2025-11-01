@@ -12,7 +12,13 @@
 <article class="card">
   <div class="card-head">
     <div class="author">
-      <div class="avatar">👤</div>
+      <div class="author">
+        {% if entry.author.profile_picture %}
+          <img class="avatar" src="{{ entry.author.profile_picture }}" alt="{{ entry.author.name }}'s profile picture" />
+        {% else %}
+          <a class="avatar" href="{% url 'profile' author_id=entry.author.id %}" aria-label="View profile">👤</a>
+        {% endif %}
+      </div>
       <div class="name">
         <div class="display">{{ entry.author.name }}</div>
         <div class="handle">@{{ entry.author.username|lower }}</div>

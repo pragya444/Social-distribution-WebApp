@@ -13,7 +13,7 @@ from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
 from .serializers import UserSerializer, EntrySerializer
 from .utils import helpers
-
+from django.db import IntegrityError, transaction
 
 
 
@@ -529,33 +529,45 @@ def entry_likes(request, author_id, entry_id):
 @csrf_exempt
 @require_http_methods(["GET", "POST", "DELETE"])
 def comment_likes(request, author_id, entry_id, comment_id):
-    """
-    GET     /api/authors/<author_id>/entries/<entry_id>/comments/<comment_id>/likes
-    POST    /api/authors/<author_id>/entries/<entry_id>/comments/<comment_id>/likes
-    DELETE  /api/authors/<author_id>/entries/<entry_id>/comments/<comment_id>/likes
-    """
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
     if not helpers.can_view_entry(request.user, entry):
         return HttpResponseForbidden("no access")
 
     comment = get_object_or_404(Comment, id=comment_id, entry=entry)
 
+    user_liked = request.user.is_authenticated and CommentLike.objects.filter(
+        user=request.user, comment=comment
+    ).exists()
+
     if request.method == "GET":
-        data = [{
-            "type": "author",
-            "id": like.user.url,
-            "displayName": like.user.username,
-            "web": f"/authors/{like.user.id}",
-        } for like in comment.likes.select_related("user").all()]
-        return JsonResponse({"type": "likes", "count": len(data), "src": data}, status=200)
+        data = [
+            {
+                "type": "author",
+                "id": like.user.url,
+                "displayName": like.user.username,
+                "web": f"/authors/{like.user.id}",
+            }
+            for like in comment.likes.select_related("user").all()
+        ]
+        return JsonResponse(
+            {
+                "type": "likes",
+                "count": len(data),
+                "liked": user_liked,
+                "src": data,
+            },
+            status=200,
+        )
 
     if not request.user.is_authenticated:
         return HttpResponseForbidden("login required")
 
     if request.method == "POST":
         CommentLike.objects.get_or_create(user=request.user, comment=comment)
-        return JsonResponse({"ok": True}, status=201)
+        count = CommentLike.objects.filter(comment=comment).count()
+        return JsonResponse({"ok": True, "liked": True, "count": count}, status=201)
 
     # DELETE
     CommentLike.objects.filter(user=request.user, comment=comment).delete()
-    return JsonResponse({"ok": True}, status=200)
+    count = CommentLike.objects.filter(comment=comment).count()
+    return JsonResponse({"ok": True, "liked": False, "count": count}, status=200)

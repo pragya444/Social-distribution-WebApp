@@ -359,27 +359,120 @@
             /[&<>]/g,
             (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])
           );
+        async function likeFetchWithFallback(url, opts) {
+          // 1) try as-is
+          let r = await window.__j(url, opts);
+          if (r.status !== 404) return r;
 
+          // 2) if 404, retry toggling trailing slash
+          const hasSlash = url.endsWith("/");
+          const alt = hasSlash ? url.slice(0, -1) : url + "/";
+          return window.__j(alt, opts);
+        }
         async function loadComments(url) {
           list.innerHTML = '<p class="muted">Loading…</p>';
+          
           const r = await window.__j(url);
           if (!r.ok) {
-            console.error("Comments GET failed", r.status, r.data);
             list.innerHTML = '<p class="muted">Failed to load comments.</p>';
+            console.error("Comments GET failed", r.status, r.data);
             return;
           }
-          const items = r.data.src || [];
-          list.innerHTML = items.length
-            ? items
-                .map(
-                  (c) =>
-                    `<p><b>${esc(c.author?.displayName || "")}</b>: ${esc(
-                      c.comment || ""
-                    )}</p>`
-                )
-                .join("")
-            : '<p class="muted">No comments yet.</p>';
+
+          // normalize response
+          let items = [];
+          const d = r.data;
+          if (Array.isArray(d)) items = d;
+          else items = d.src || d.items || d.comments || d.results || [];
+          const m = String(url).match(/authors\/([^/]+)\/entries\/([^/]+)\/comments/);
+          const entryAuthorId = m?.[1];
+          const entryId = m?.[2];
+
+          if (!items.length) {
+            list.innerHTML = '<p class="muted">No comments yet.</p>';
+            return;
+          }
+
+          const esc = s => String(s ?? "").replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+          list.innerHTML = items.map(c => {
+            const display = c.author?.displayName ?? c.author?.username ?? c.author?.name ?? "Anonymous";
+            let commentId = c.id || c.comment_id || c.uuid || "";
+
+            // If c.id is a full URL, grab the tail after "/comments/"
+            const mId = String(commentId).match(/\/comments\/([^/]+)\/?$/);
+            if (mId) commentId = mId[1];
+
+            const likeUrl = `/api/authors/${entryAuthorId}/entries/${entryId}/comments/${commentId}/likes/`;
+            return `
+              <div class="cmt-row" data-like-url="${likeUrl}">
+                <div class="cmt-text"><b>${esc(display)}</b>: ${esc(c.comment ?? c.text ?? "")}</div>
+                <div class="cmt-actions">
+                  <svg class="icon small-heart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                      fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M21 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35l-.45-.41C6.4 15.36 3 12.28 3 8.5A4.5 4.5 0 0 1 7.5 4c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 4 4.5 4.5 0 0 1 21 8.5z"/>
+                  </svg>
+                  <span data-comment-like-count>0</span>
+                </div>
+              </div>
+            `;
+          }).join("");
+
+          // wire up hearts
+          const rows = list.querySelectorAll(".cmt-row");
+          for (const row of rows) {
+            const likeUrl = row.getAttribute("data-like-url");
+            const heart = row.querySelector(".small-heart");
+            const cnt = row.querySelector("[data-comment-like-count]");
+            
+            // initial GET to populate count + liked state
+          const g = await likeFetchWithFallback(likeUrl, {});
+          if (g.ok && typeof g.data?.count === "number") {
+            cnt.textContent = g.data.count;
+            if (g.data.liked) {
+              heart.classList.add("liked");   //  red initially
+            } else {
+              heart.classList.remove("liked");
+            }
+          }
+
+            const rows = list.querySelectorAll(".cmt-row");
+            for (const row of rows) {
+              const likeUrl = row.getAttribute("data-like-url");
+              const heart = row.querySelector(".small-heart");
+              const cnt = row.querySelector("[data-comment-like-count]");
+
+              // initial GET to populate count and liked state
+              const g = await likeFetchWithFallback(likeUrl, {});
+              if (g.ok) {
+                cnt.textContent = g.data.count ?? 0;
+                heart.classList.toggle("liked", !!g.data.liked);
+                heart.setAttribute("aria-pressed", g.data.liked ? "true" : "false");
+              }
+
+
+              heart.addEventListener("click", async (e) => {
+              e.preventDefault();
+              const liked = heart.classList.contains("liked");
+              const method = liked ? "DELETE" : "POST";
+              const r = await likeFetchWithFallback(likeUrl, { method });
+
+              if (r.ok) {
+                heart.classList.toggle("liked", r.data.liked === true);
+                heart.setAttribute("aria-pressed", r.data.liked ? "true" : "false");
+                if (typeof r.data.count === "number") cnt.textContent = r.data.count;
+              } else if (r.status === 403) {
+                alert("Please log in to like.");
+              } else {
+                alert("Error toggling like.");
+                console.error("Toggle like failed", likeUrl, r);
+              }
+            });
+            }
+          }
         }
+
+
 
         async function refreshCount(url, el) {
           const r = await window.__j(url);
@@ -541,5 +634,32 @@
         };
       })();
     </script>
+        <style>
+      #commentModal .small-heart {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        transition: transform 0.15s ease;
+      }
+      #commentModal .small-heart:hover {
+        transform: scale(1.2);
+      }
+      #commentModal .cmt-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      #commentModal [data-comment-like-count] {
+        font-size: 13px;
+        color: #555;
+      }
+      #commentModal .small-heart.liked {
+        fill: #ff4d4d;
+        stroke: #ff4d4d;
+        transform: scale(1.2);
+      }
+
+    </style>
+
   </body>
 </html>

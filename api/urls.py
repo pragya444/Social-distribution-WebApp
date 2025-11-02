@@ -32,7 +32,8 @@ urlpatterns = [
 
     path('authors/<str:author_id>/entries/<str:entry_id>/comments', views.comments_list_create, name='comments-list-create'),
     path('authors/<str:author_id>/entries/<str:entry_id>/likes', views.entry_likes, name='entry-likes'),
-    path('authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes',views.comment_likes, name='comment-likes'),
+    path('authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/',views.comment_likes, name='comment-likes'),
+    
     path("authors/<str:author_id>/follow", views.send_follow_request, name="follow-send"),
     path("authors/<str:author_id>/unfollow", views.unfollow_post, name="follow-unfollow"),
     path("authors/<str:author_id>/requests", views.follow_requests_page, name="follow-requests-page"),

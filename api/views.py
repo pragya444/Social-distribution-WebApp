@@ -528,6 +528,7 @@ def entry_likes(request, author_id, entry_id):
 
 @csrf_exempt
 @require_http_methods(["GET", "POST", "DELETE"])
+# the comment likes function
 def comment_likes(request, author_id, entry_id, comment_id):
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
     if not helpers.can_view_entry(request.user, entry):
@@ -538,7 +539,7 @@ def comment_likes(request, author_id, entry_id, comment_id):
     user_liked = request.user.is_authenticated and CommentLike.objects.filter(
         user=request.user, comment=comment
     ).exists()
-
+    # get if the user liked the comment or not for GET
     if request.method == "GET":
         data = [
             {

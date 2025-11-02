@@ -425,7 +425,7 @@
             const heart = row.querySelector(".small-heart");
             const cnt = row.querySelector("[data-comment-like-count]");
             
-            // initial GET to populate count + liked state
+            // initial GET to populate count + liked state, initialize like button
           const g = await likeFetchWithFallback(likeUrl, {});
           if (g.ok && typeof g.data?.count === "number") {
             cnt.textContent = g.data.count;
@@ -436,7 +436,7 @@
             }
           }
 
-            const rows = list.querySelectorAll(".cmt-row");
+          const rows = list.querySelectorAll(".cmt-row");
             for (const row of rows) {
               const likeUrl = row.getAttribute("data-like-url");
               const heart = row.querySelector(".small-heart");
@@ -454,12 +454,17 @@
               heart.addEventListener("click", async (e) => {
               e.preventDefault();
               const liked = heart.classList.contains("liked");
+              // POST = like, DELETE = unlike
               const method = liked ? "DELETE" : "POST";
               const r = await likeFetchWithFallback(likeUrl, { method });
-
+              //Update visual + state based on response
               if (r.ok) {
+                
+                // Flip the red heart on/off
                 heart.classList.toggle("liked", r.data.liked === true);
+                //store state for screen readers
                 heart.setAttribute("aria-pressed", r.data.liked ? "true" : "false");
+                //Update like count
                 if (typeof r.data.count === "number") cnt.textContent = r.data.count;
               } else if (r.status === 403) {
                 alert("Please log in to like.");
@@ -473,7 +478,7 @@
         }
 
 
-
+        // refresh counts
         async function refreshCount(url, el) {
           const r = await window.__j(url);
           if (r.ok && el) {
@@ -484,7 +489,8 @@
           }
         }
 
-        // Open modal
+
+        // toggles like/unlike behavior on heart click
         document.addEventListener("click", async (e) => {
           const btn = e.target.closest(".comment-trigger");
           if (!btn) return;
@@ -494,6 +500,7 @@
           await loadComments(activeUrl);
           await refreshCount(activeUrl, activeCountEl);
         });
+
 
         // Post a comment
         form.addEventListener("submit", async (e) => {
@@ -508,7 +515,9 @@
               contentType: "text/plain",
             }),
           });
+
           if (r.ok) {
+
             form.reset();
             await loadComments(activeUrl);
             await refreshCount(activeUrl, activeCountEl); // instant count update
@@ -654,6 +663,7 @@
         color: #555;
       }
       #commentModal .small-heart.liked {
+        /* red heart same as entry like  */
         fill: #ff4d4d;
         stroke: #ff4d4d;
         transform: scale(1.2);

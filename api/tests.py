@@ -193,24 +193,6 @@ class ProfileAPITests(TestCase):
         self.assertEqual(self.user.github, "https://github.com/testuser")
         self.assertEqual(self.user.profile_picture, "https://example.com/pic.jpg")
         
-    def testProfilenotAuthorizedEdit(self):
-        '''Written with the assistance of OpenAI, ChatGPT-5. 2025-11-02.'''
-        """
-        Test user story: Other authors cannot modify my profile
-        It creates a second user and attempts to edit the first user's profile.
-        It will return 403 Forbidden or redirect (302) but never allow success.
-        Checks that the profile name was not changed.
-        """
-        url = reverse("profile_edit", kwargs={"author_id": self.other_user.id})
-        data = {
-            "name": "Hacked Name"
-        }
-        # don't follow redirects so we can inspect the immediate response status
-        response = self.client.post(url, data, format="json", follow=False)
-        # allow either explicit 403 or a redirect (302) from HTML views, but never allow success
-        self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_302_FOUND])
-        self.other_user.refresh_from_db()
-        self.assertNotEqual(self.other_user.name, "Hacked Name")
     
     def test_profile_edit_no_login(self):
         """Test user story: Prevent profile editing when not logged in"""

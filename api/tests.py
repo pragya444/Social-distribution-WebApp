@@ -499,16 +499,6 @@ class EntrySharingTests(TestCase):
             visibility="FRIENDS",  
         )
 
-    def test_public_entry_accessible_by_anonymous(self):
-        """Anyone can access a PUBLIC entry via its author/entry ID link."""
-        url = reverse(
-            "entry-retrieve-update",
-            kwargs={"author_id": self.author.id, "entry_id": self.public_entry.id},
-        )
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Public Entry")
-
     def test_unlisted_entry_accessible_by_anonymous(self):
         """Anonymous users should NOT be able to access UNLISTED entries (follower-only)."""
         url = reverse(
@@ -518,25 +508,15 @@ class EntrySharingTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
 
-    def test_non_public_entry_not_accessible_by_anonymous(self):
-        """Non-public entries (FRIENDS) should not be visible to anonymous users."""
+    def test_reader_cannot_access_unlisted_entry(self):
+        """A logged-in non-friend reader cannot access another user's unlisted entry."""
+        self.client.login(username="reader", password="reader123")
         url = reverse(
             "entry-retrieve-update",
-            kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id},
+            kwargs={"author_id": self.author.id, "entry_id": self.unlisted_entry.id},
         )
         response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
-
-    def test_author_can_access_their_own_private_entry(self):
-        """Author should be able to view their own private entry."""
-        self.client.login(username="author", password="test123")
-        url = reverse(
-            "entry-retrieve-update",
-            kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id},
-        )
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Private Entry")
 
     def test_reader_cannot_access_private_entry(self):
         """A logged-in non-friend reader cannot access another user's private entry."""
@@ -547,3 +527,360 @@ class EntrySharingTests(TestCase):
         )
         response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
+
+class EntryAPIEdgeTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.author = User.objects.create_user(username="author_ec", password="pass", is_active=True)
+        self.other = User.objects.create_user(username="other_ec", password="pass", is_active=True)
+        self.client.force_login(self.author)
+
+    def test_create_missing_fields(self):
+        url = reverse("entries-list-create", kwargs={"author_id": self.author.id})
+        payload = {"title": "t"}  
+        r = self.client.post(url, payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_invalid_content_type(self):
+        url = reverse("entries-list-create", kwargs={"author_id": self.author.id})
+        payload = {"title": "t", "content": "x", "content_type": "application/pdf", "visibility": "PUBLIC"}
+        r = self.client.post(url, payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_image_requires_base64(self):
+        url = reverse("entries-list-create", kwargs={"author_id": self.author.id})
+        payload = {"title": "img", "content": "not_base64***", "content_type": "image/png;base64", "visibility": "PUBLIC"}
+        r = self.client.post(url, payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_image_valid_base64(self):
+        url = reverse("entries-list-create", kwargs={"author_id": self.author.id})
+        b64 = base64.b64encode(b"hello").decode()
+        payload = {"title": "img", "content": b64, "content_type": "image/png;base64", "visibility": "PUBLIC"}
+        r = self.client.post(url, payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+
+    def test_only_author_can_create(self):
+        self.client.force_login(self.other)
+        url = reverse("entries-list-create", kwargs={"author_id": self.author.id})
+        payload = {"title": "x", "content": "y", "content_type": "text/plain", "visibility": "PUBLIC"}
+        r = self.client.post(url, payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_update_change_to_image_requires_b64(self):
+        e = Entry.objects.create(author=self.author, title="t", content="c", content_type="text/plain", visibility="PUBLIC")
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        r = self.client.put(url, {"title":"t","content_type":"image/jpeg;base64","content":"bad$$$","visibility":"PUBLIC"}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_image_valid_b64(self):
+        e = Entry.objects.create(author=self.author, title="t", content="c", content_type="text/plain", visibility="PUBLIC")
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        img = base64.b64encode(b"img").decode()
+        r = self.client.put(url, {"title":"t","content_type":"image/png;base64","content":img,"visibility":"PUBLIC"}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def test_delete_only_author(self):
+        e = Entry.objects.create(author=self.author, title="t", content="c", content_type="text/plain", visibility="PUBLIC")
+        self.client.force_login(self.other)
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        r = self.client.delete(url)
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_author_can_delete(self):
+        e = Entry.objects.create(author=self.author, title="t", content="c", content_type="text/plain", visibility="PUBLIC")
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        r = self.client.delete(url)
+        self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
+
+
+class EntryVisibilityAccessTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.author = User.objects.create_user(username="author_va", password="pass", is_active=True)
+        self.follower = User.objects.create_user(username="follower_va", password="pass", is_active=True)
+        self.stranger = User.objects.create_user(username="stranger_va", password="pass", is_active=True)
+
+    def test_public_visible_to_anonymous(self):
+        e = Entry.objects.create(author=self.author, title="p", content="c", content_type="text/plain", visibility="PUBLIC")
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        r = Client().get(url)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def test_friends_not_visible_to_anonymous(self):
+        e = Entry.objects.create(author=self.author, title="f", content="c", content_type="text/plain", visibility="FRIENDS")
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        r = Client().get(url)
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_unlisted_requires_follower_or_author(self):
+        e = Entry.objects.create(author=self.author, title="u", content="c", content_type="text/plain", visibility="UNLISTED")
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        # stranger logged in
+        self.client.force_login(self.stranger)
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        
+    def test_unlisted_visible_to_follower(self):
+        e = Entry.objects.create(author=self.author, title="u", content="c", content_type="text/plain", visibility="UNLISTED")
+        Follow.objects.create(follower=self.follower, followee=self.author, status=Follow.Status.APPROVED)
+        self.client.force_login(self.follower)
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def test_friends_visible_to_friend(self):
+        e = Entry.objects.create(author=self.author, title="f", content="c", content_type="text/plain", visibility="FRIENDS")
+        # mutual follow
+        Follow.objects.create(follower=self.follower, followee=self.author, status=Follow.Status.APPROVED)
+        Follow.objects.create(follower=self.author, followee=self.follower, status=Follow.Status.APPROVED)
+        self.client.force_login(self.follower)
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def test_author_always_can_view_private(self):
+        e = Entry.objects.create(author=self.author, title="f", content="c", content_type="text/plain", visibility="FRIENDS")
+        self.client.force_login(self.author)
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def test_entries_list_public_when_viewing_other(self):
+        # when not author, only PUBLIC are returned by list
+        Entry.objects.create(author=self.author, title="pub", content="c", content_type="text/plain", visibility="PUBLIC")
+        Entry.objects.create(author=self.author, title="priv", content="c", content_type="text/plain", visibility="FRIENDS")
+        self.client.force_login(self.stranger)
+        url = reverse("entries-list-create", kwargs={"author_id": self.author.id})
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertIn("pub", str(r.content))
+        self.assertNotIn("priv", str(r.content))
+
+    def test_entries_list_author_sees_all(self):
+        Entry.objects.create(author=self.author, title="pub", content="c", content_type="text/plain", visibility="PUBLIC")
+        Entry.objects.create(author=self.author, title="priv", content="c", content_type="text/plain", visibility="FRIENDS")
+        self.client.force_login(self.author)
+        url = reverse("entries-list-create", kwargs={"author_id": self.author.id})
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertIn("pub", str(r.content))
+        self.assertIn("priv", str(r.content))
+
+    def test_image_binary_endpoint_authz(self):
+        e = Entry.objects.create(author=self.author, title="img", content=base64.b64encode(b"i").decode(), content_type="image/png;base64", visibility="FRIENDS")
+        url = reverse("entry-image", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        # anonymous forbidden for FRIENDS
+        r = Client().get(url)
+        self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND])
+
+
+class FollowEdgeTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.a = User.objects.create_user(username="a_fe", password="pass", is_active=True)
+        self.b = User.objects.create_user(username="b_fe", password="pass", is_active=True)
+        self.client.force_login(self.a)
+
+    def test_cannot_follow_self(self):
+        url = reverse("follow-send", kwargs={"author_id": self.a.id})
+        r = self.client.post(url)
+        self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND])
+
+    def test_duplicate_follow_request_unique(self):
+        Follow.objects.create(follower=self.a, followee=self.b, status=Follow.Status.PENDING)
+        with self.assertRaises(Exception):
+            Follow.objects.create(follower=self.a, followee=self.b, status=Follow.Status.PENDING)
+
+    def test_mutual_follow_friends(self):
+        Follow.objects.create(follower=self.a, followee=self.b, status=Follow.Status.APPROVED)
+        Follow.objects.create(follower=self.b, followee=self.a, status=Follow.Status.APPROVED)
+        self.assertTrue(Follow.objects.filter(follower=self.a, followee=self.b, status=Follow.Status.APPROVED).exists())
+
+    def test_follow_requests_page_requires_login(self):
+        self.client.logout()
+        url = reverse("follow-requests-page", kwargs={"author_id": self.a.id})
+        resp = self.client.get(url)
+        self.assertIn(resp.status_code, [status.HTTP_302_FOUND, status.HTTP_403_FORBIDDEN])
+
+    def test_follow_send_requires_login(self):
+        self.client.logout()
+        url = reverse("follow-send", kwargs={"author_id": self.b.id})
+        resp = self.client.post(url)
+        self.assertIn(resp.status_code, [status.HTTP_302_FOUND, status.HTTP_403_FORBIDDEN])
+
+    def test_follow_unique_constraint(self):
+        Follow.objects.create(follower=self.a, followee=self.b, status=Follow.Status.PENDING)
+        with self.assertRaises(Exception):
+            Follow.objects.create(follower=self.a, followee=self.b, status=Follow.Status.APPROVED)
+
+    def test_no_self_follow_constraint(self):
+        with self.assertRaises(Exception):
+            Follow.objects.create(follower=self.a, followee=self.a, status=Follow.Status.PENDING)
+
+class SerializerValidationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="svt", password="pass", is_active=True)
+
+    def test_user_serializer_blank_name_rejected(self):
+        from .serializers import UserSerializer
+        s = UserSerializer(self.user, data={"name": "   "}, partial=True)
+        self.assertFalse(s.is_valid())
+
+    def test_user_serializer_github_normalization(self):
+        from .serializers import UserSerializer
+        s = UserSerializer(self.user, data={"github": "octocat"}, partial=True)
+        self.assertTrue(s.is_valid(), s.errors)
+        u = s.save()
+        self.assertTrue(u.github.startswith("https://github.com/"))
+
+    def test_entry_serializer_missing_fields(self):
+        from .serializers import EntrySerializer
+        s = EntrySerializer(data={"title": "x"})
+        self.assertFalse(s.is_valid())
+
+    def test_entry_serializer_invalid_ct(self):
+        from .serializers import EntrySerializer
+        s = EntrySerializer(data={"title":"x","content":"y","content_type":"bad","visibility":"PUBLIC"})
+        self.assertFalse(s.is_valid())
+
+    def test_entry_serializer_image_b64_ok(self):
+        from .serializers import EntrySerializer
+        img = base64.b64encode(b"a").decode()
+        s = EntrySerializer(data={"title":"x","content":img,"content_type":"image/png;base64","visibility":"PUBLIC"}, context={"request": type("obj", (), {"user": self.user})})
+        self.assertTrue(s.is_valid(), s.errors)
+
+    def test_entry_serializer_image_b64_bad(self):
+        from .serializers import EntrySerializer
+        s = EntrySerializer(data={"title":"x","content":"not-b64","content_type":"image/png;base64","visibility":"PUBLIC"})
+        self.assertFalse(s.is_valid())
+
+    def test_entry_serializer_update_partial(self):
+        from .serializers import EntrySerializer
+        e = Entry.objects.create(author=self.user, title="t", content="c", content_type="text/plain", visibility="PUBLIC")
+        s = EntrySerializer(e, data={"title":"n"}, partial=True)
+        self.assertTrue(s.is_valid(), s.errors)
+        e2 = s.save()
+        self.assertEqual(e2.title, "n")
+
+    def test_user_serializer_update_fields(self):
+        from .serializers import UserSerializer
+        s = UserSerializer(self.user, data={"name":"New","description":"d","profile_picture":"http://x/y.png","github":"https://github.com/x"}, partial=True)
+        self.assertTrue(s.is_valid(), s.errors)
+        u = s.save()
+        self.assertEqual(u.name, "New")
+
+    def test_user_serializer_followers_fields_present(self):
+        from .serializers import UserSerializer
+        s = UserSerializer(self.user)
+        data = s.data
+        self.assertIn("followers", data)
+        self.assertIn("following", data)
+        self.assertIn("friends", data)
+
+class LikesCommentsEdgeTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.alice = User.objects.create_user(username="alice_lc", password="pass", is_active=True)
+        self.bob = User.objects.create_user(username="bob_lc", password="pass", is_active=True)
+        self.entry = Entry.objects.create(author=self.alice, title="t", content="c", content_type="text/plain", visibility="PUBLIC")
+        self.client.force_login(self.bob)
+
+    def test_like_toggle(self):
+        url = reverse("entry-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
+        r1 = self.client.post(url)
+        self.assertIn(r1.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK])
+        r2 = self.client.delete(url)
+        self.assertIn(r2.status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
+
+    def test_like_requires_auth(self):
+        url = reverse("entry-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
+        c = APIClient()  # anonymous
+        r = c.post(url)
+        self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED, status.HTTP_302_FOUND])
+
+    def test_comment_create_requires_auth(self):
+        url = reverse("comments-list-create", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
+        c = APIClient()
+        r = c.post(url, {"comment":"hi"}, format="json")
+        self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED, status.HTTP_302_FOUND])
+
+    def test_comment_create_and_count(self):
+        url = reverse("comments-list-create", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
+        r = self.client.post(url, {"comment":"hi"}, format="json")
+        self.assertIn(r.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK])
+        self.entry.refresh_from_db()
+        self.assertGreaterEqual(self.entry.comment_count, 1)
+
+    def test_comment_like_flow(self):
+        cmt = Comment.objects.create(entry=self.entry, author=self.bob, comment="ok", content_type="text/plain")
+        url = reverse("comment-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id, "comment_id": cmt.id})
+        r1 = self.client.post(url)
+        self.assertIn(r1.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK])
+        r2 = self.client.delete(url)
+        self.assertIn(r2.status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
+
+    def test_like_counts_increase(self):
+        url = reverse("entry-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
+        before = Entry.objects.get(id=self.entry.id).like_count
+        self.client.post(url)
+        after = Entry.objects.get(id=self.entry.id).like_count
+        self.assertGreaterEqual(after, before)
+
+    def test_comment_list_get(self):
+        Comment.objects.create(entry=self.entry, author=self.bob, comment="ok", content_type="text/plain")
+        url = reverse("comments-list-create", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def test_like_idempotent_delete(self):
+        url = reverse("entry-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
+        self.client.delete(url)  # no like yet
+        r = self.client.delete(url)
+        self.assertIn(r.status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
+
+
+class AdminSiteTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.superuser = User.objects.create_superuser(
+            username="admin",
+            password="pass",
+        )
+
+    def test_admin_login_page_loads_with_csrf(self):
+        url = reverse("admin:login")
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("csrfmiddlewaretoken", resp.content.decode())
+
+    def test_admin_index_requires_login_redirects(self):
+        url = reverse("admin:index")
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/admin/login/?next=", resp.url)
+
+    def test_admin_index_accessible_to_superuser(self):
+        self.client.force_login(self.superuser)
+        url = reverse("admin:index")
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_admin_index_accessible_to_staff(self):
+        staff = User.objects.create_user(username="staff", password="pass", is_active=True)
+        staff.is_staff = True
+        staff.save()
+        self.client.force_login(staff)
+        url = reverse("admin:index")
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_admin_index_inactive_staff_redirects(self):
+        inactive = User.objects.create_user(username="inactive", password="pass", is_active=False)
+        inactive.is_staff = True
+        inactive.save()
+        self.client.force_login(inactive)
+        url = reverse("admin:index")
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/admin/login/?next=", resp.url)

@@ -620,17 +620,13 @@ class EntryVisibilityAccessTests(TestCase):
         r = Client().get(url)
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
-    '''
-    # not done yet
     def test_unlisted_requires_follower_or_author(self):
         e = Entry.objects.create(author=self.author, title="u", content="c", content_type="text/plain", visibility="UNLISTED")
         url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
-        # stranger logged in
         self.client.force_login(self.stranger)
         r = self.client.get(url)
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
-        
-    # not done yet
+
     def test_unlisted_visible_to_follower(self):
         e = Entry.objects.create(author=self.author, title="u", content="c", content_type="text/plain", visibility="UNLISTED")
         Follow.objects.create(follower=self.follower, followee=self.author, status=Follow.Status.APPROVED)
@@ -638,11 +634,9 @@ class EntryVisibilityAccessTests(TestCase):
         url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
         r = self.client.get(url)
         self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertEqual(r.status_code, status.HTTP_200_OK)'''
 
     def test_friends_visible_to_friend(self):
         e = Entry.objects.create(author=self.author, title="f", content="c", content_type="text/plain", visibility="FRIENDS")
-        # mutual follow
         Follow.objects.create(follower=self.follower, followee=self.author, status=Follow.Status.APPROVED)
         Follow.objects.create(follower=self.author, followee=self.follower, status=Follow.Status.APPROVED)
         self.client.force_login(self.follower)
@@ -658,7 +652,6 @@ class EntryVisibilityAccessTests(TestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_entries_list_public_when_viewing_other(self):
-        # when not author, only PUBLIC are returned by list
         Entry.objects.create(author=self.author, title="pub", content="c", content_type="text/plain", visibility="PUBLIC")
         Entry.objects.create(author=self.author, title="priv", content="c", content_type="text/plain", visibility="FRIENDS")
         self.client.force_login(self.stranger)
@@ -681,7 +674,6 @@ class EntryVisibilityAccessTests(TestCase):
     def test_image_binary_endpoint_authz(self):
         e = Entry.objects.create(author=self.author, title="img", content=base64.b64encode(b"i").decode(), content_type="image/png;base64", visibility="FRIENDS")
         url = reverse("entry-image", kwargs={"author_id": self.author.id, "entry_id": e.id})
-        # anonymous forbidden for FRIENDS
         r = Client().get(url)
         self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND])
 
@@ -824,7 +816,7 @@ class LikesCommentsEdgeTests(TestCase):
 
     def test_like_requires_auth(self):
         url = reverse("entry-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
-        c = APIClient()  # anonymous
+        c = APIClient()  
         r = c.post(url)
         self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED, status.HTTP_302_FOUND])
 
@@ -848,6 +840,26 @@ class LikesCommentsEdgeTests(TestCase):
         self.assertIn(r1.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK])
         r2 = self.client.delete(url)
         self.assertIn(r2.status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
+
+    def test_comment_like_requires_auth(self):
+        cmt = Comment.objects.create(entry=self.entry, author=self.bob, comment="ok", content_type="text/plain")
+        url = reverse("comment-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id, "comment_id": cmt.id})
+        anon = APIClient()
+        r = anon.post(url)
+        self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED, status.HTTP_302_FOUND])
+
+    def test_comment_likes_get_counts(self):
+        cmt = Comment.objects.create(entry=self.entry, author=self.bob, comment="ok", content_type="text/plain")
+        url = reverse("comment-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id, "comment_id": cmt.id})
+        r0 = self.client.get(url)
+        self.assertEqual(r0.status_code, status.HTTP_200_OK)
+        data0 = json.loads(r0.content.decode())
+        self.assertEqual(data0.get("type"), "likes")
+        self.client.post(url)
+        r1 = self.client.get(url)
+        self.assertEqual(r1.status_code, status.HTTP_200_OK)
+        data1 = json.loads(r1.content.decode())
+        self.assertGreaterEqual(data1.get("count", 0), data0.get("count", 0))
 
     def test_like_counts_increase(self):
         url = reverse("entry-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})

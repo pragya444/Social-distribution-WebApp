@@ -24,6 +24,22 @@ class EntryModelTests(TestCase):
         # create a minimal user for FK relations
         self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
 
+    def testModelCreateSucceeds(self):
+        '''
+        Test that an Entry can be created successfully
+        '''
+        e = Entry.objects.create(
+            author=self.user,
+            title="Test Entry",
+            content="This is a test entry.",
+            content_type="text/plain",
+        )
+        self.assertIsNotNone(e.id)
+        self.assertEqual(e.author, self.user)
+        self.assertEqual(e.title, "Test Entry")
+        self.assertEqual(e.content, "This is a test entry.")
+        self.assertEqual(e.content_type, "text/plain")
+
     def test_create_entry_defaults_and_timestamps(self):
         '''
         Test that creating an Entry sets default fields and timestamps correctly
@@ -48,6 +64,7 @@ class EntryModelTests(TestCase):
         local = timezone.localtime(e.created, ZoneInfo("America/Edmonton"))
         # zoneinfo.ZoneInfo has a .key attribute containing the zone name
         self.assertEqual(local.tzinfo.key, "America/Edmonton")
+        
 
     def test_deleted_entries_are_excluded_from_default_queryset(self):
         '''
@@ -175,6 +192,7 @@ class ProfileAPITests(TestCase):
         self.assertEqual(self.user.description, "Updated description")
         self.assertEqual(self.user.github, "https://github.com/testuser")
         self.assertEqual(self.user.profile_picture, "https://example.com/pic.jpg")
+        
     
     def test_profile_edit_no_login(self):
         """Test user story: Prevent profile editing when not logged in"""
@@ -262,7 +280,10 @@ class EntryAPITests(TestCase):
         self.assertIn("https://example.com/image.jpg", entry.content)
 
     def test_edit_entry_browser(self):
-        """Test user story: Manage/author entries via web browser"""
+        """
+        Test user story: Manage/author entries via web browser
+        """
+        
         entry = Entry.objects.create(
             author=self.user,
             title="Original",
@@ -378,6 +399,7 @@ class ShareAPITests(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
         self.client.force_login(self.user)
+        self.other_user = User.objects.create_user(username="otheruser", password="pass", is_active=True)
 
     def test_share_entry(self):
         """Test user story: Get link to public or unlisted entry"""
@@ -392,6 +414,44 @@ class ShareAPITests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertContains(response, "Shared Entry")
+        
+    def testShareEntryPublic(self):
+        '''
+        Test case: Share link works for public entries
+        Create an entry with PUBLIC visibility and attempt to access it as another user.
+        It will return 200 OK.
+        '''
+
+        entry = Entry.objects.create(
+            author=self.user,
+            title="Private Entry",
+            content="Content",
+            content_type="text/plain",
+            visibility="PUBLIC"
+        )
+        # use the real author id, and perform request as the other_user to trigger permission check
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.user.id, "entry_id": entry.id})
+        self.client.force_login(self.other_user)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_share_entry_as_non_friend(self):
+        """
+        Create an entry with FRIENDS visibility and attempt to access it as another user thats not a friend.
+        return 403 Forbidden.
+        """
+        entry = Entry.objects.create(
+            author=self.user,
+            title="Private Entry",
+            content="Content",
+            content_type="text/plain",
+            visibility="FRIENDS"
+        )
+        # use the real author id, and perform request as the other_user to trigger permission check
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.user.id, "entry_id": entry.id})
+        self.client.force_login(self.other_user)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 class FollowAPITests(TestCase):
     def setUp(self):
@@ -479,7 +539,7 @@ class CommentAndLikeAPITests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         comment = Comment.objects.get(entry=self.entry, author=self.user)
         self.assertEqual(comment.comment, "Great post!")
-
+        
     def test_like_entry(self):
         """Test user story: Like accessible entries"""
         url = reverse("entry-likes", kwargs={"author_id": self.other_user.id, "entry_id": self.entry.id})

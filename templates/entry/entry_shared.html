@@ -72,8 +72,8 @@
 
   <div class="card-foot">
    <div class="action">
-      <button id="like-btn" class="like-toggle" aria-pressed="{{ entry.user_has_liked|yesno:'true,false' }}">
-        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+      <button id="like-btn" class="like-toggle {% if like %}liked{% endif %}"  aria-pressed="{{ entry.user_has_liked|yesno:'true,false' }}">
+        <svg class="icon " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round"
               d="M21 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35l-.45-.41C6.4 15.36 3 12.28 3 8.5A4.5 4.5 0 0 1 7.5 4c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 4 4.5 4.5 0 0 1 21 8.5z"/>
@@ -93,12 +93,12 @@
     <div id="comments-container" style="display:none; margin-top:10px; padding-left:10px; border-left: 2px solid #ddd;">
       <div id="comment-list">
         {% for comment in entry.comments.all %}
-            <div class="comment" style="margin-bottom:8px;" data-like-url="/api/authors/{{ entry.author.id }}/entries/{{ entry.id }}/comments/{{ comment.id }}/likes">
+            <div class="comment" style="margin-bottom:8px;" data-like-url="/api/authors/{{ entry.author.id }}/entries/{{ entry.id }}/comments/{{ comment.id }}/likes/">
               <strong>{{ comment.author.username }}</strong>: {{ comment.comment }}
               <div class="comment-time" style="font-size:0.8em; color:#555;">
                 {{ comment.created|date:"M d, Y, h:i A" }}
               </div>
-              <button class="comment-like-btn" data-comment-like-btn
+              <button class="comment-like-btn " data-comment-like-btn
                       style="border:none;background:none;cursor:pointer;">❤️</button>
               <span data-comment-like-count>{{ comment.likes.count }}</span>
             </div>
@@ -143,6 +143,7 @@
   const likeBtn = document.getElementById("like-btn");
   const likeCount = document.getElementById("like-count");
   const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
+  
     if (likeBtn) {
       likeBtn.addEventListener("click", async function(e) {
         e.preventDefault(); // prevent default
@@ -173,6 +174,7 @@
 
           // Toggle liked class
           likeBtn.classList.toggle("liked", data.liked === true);
+     
 
           // Update aria-pressed
           likeBtn.setAttribute("aria-pressed", data.liked ? "true" : "false");
@@ -241,49 +243,58 @@
     });
   }
   // ---- comment like buttons ----
-document.querySelectorAll("[data-comment-like-btn]").forEach((btn) => {
-  btn.addEventListener("click", async (e) => {
-    e.preventDefault();
+  document.querySelectorAll("[data-comment-like-btn]").forEach(async (btn) => {
+    // Debugged with assistance from OpenAI, ChatGPT (GPT-5), 2025-11-02
+
     const commentEl = btn.closest(".comment");
     const url = commentEl.dataset.likeUrl;
     const countEl = commentEl.querySelector("[data-comment-like-count]");
     const csrftoken = document.cookie.match(/csrftoken=([^;]+)/)?.[1];
-    const liked = btn.classList.contains("liked");
-    const method = liked ? "DELETE" : "POST";
 
+    // 1️⃣ Initial GET to fetch real state
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (res.ok) {
+      const data = await res.json();
+      btn.classList.toggle("liked", data.liked === true);
+      btn.setAttribute("aria-pressed", data.liked ? "true" : "false");
+      if (countEl && typeof data.count === "number") countEl.textContent = data.count;
+    }
 
+    // Like/unlike logic on click
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
 
-    const r = await fetch(url, {
-      method,
-      headers: {
-        "X-CSRFToken": csrftoken || "",
-        "Content-Type": "application/json",
-      },
-      credentials: "same-origin",
+      const liked = btn.classList.contains("liked"); // now synced with backend
+      const method = liked ? "DELETE" : "POST";
+
+      const r = await fetch(url, {
+        method,
+        headers: {
+          "X-CSRFToken": csrftoken || "",
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+      });
+
+      if (r.status === 403) {
+        alert("Please log in to like comments.");
+        return;
+      }
+      if (!r.ok) {
+        alert("Error toggling comment like.");
+        return;
+      }
+
+      const data = await r.json();
+
+      // Update count and button state based on backend truth
+      btn.classList.toggle("liked", data.liked === true);
+      btn.setAttribute("aria-pressed", data.liked ? "true" : "false");
+      if (countEl && typeof data.count === "number") {
+        countEl.textContent = data.count;
+      }
     });
-
-    if (r.status === 403) {
-      alert("Please log in to like comments.");
-      return;
-    }
-    if (!r.ok) {
-      alert("Error toggling comment like.");
-      return;
-    }
-
-
-
-
-
-    btn.classList.toggle("liked", method === "POST");
-    const diff = method === "POST" ? 1 : -1;
-    const cur = parseInt(countEl.textContent || "0", 10);
-    countEl.textContent = Math.max(cur + diff, 0);
-
-
   });
-});
-
 });
 
 </script>

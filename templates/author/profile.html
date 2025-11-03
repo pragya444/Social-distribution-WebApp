@@ -213,12 +213,27 @@
       </div>
 
       <div class="stats">
-        <div><b>{{ posts_count }}</b> Posts</div>
-        <div><b>{{ followers_count }}</b> Followers</div>
-        <div><b>{{ following_count }}</b> Following</div>
-        <div><b>{{ friends_count }}</b> Friends</div>
-        
-      </div>
+  <div><b>{{ posts_count }}</b> Posts</div>
+
+  <div>
+    <a href="{% url 'followers-page' author_id=user.id %}" style="text-decoration:none; color:inherit;">
+      <b>{{ followers_count }}</b> Followers
+    </a>
+  </div>
+
+  <div>
+    <a href="{% url 'following-page' author_id=user.id %}" style="text-decoration:none; color:inherit;">
+      <b>{{ following_count }}</b> Following
+    </a>
+  </div>
+
+  <div>
+    <a href="{% url 'friends-page' author_id=user.id %}" style="text-decoration:none; color:inherit;">
+      <b>{{ friends_count }}</b> Friends
+    </a>
+  </div>
+</div>
+
 
       {% if request.user.is_authenticated and request.user.id != user.id %}
         {% if rel_status == "approved" %}

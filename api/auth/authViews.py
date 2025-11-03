@@ -21,7 +21,7 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
 
         if not serializer.is_valid():
-            print("Not Valid")
+            # print("Not Valid")
             return Response(
                 {"errors": serializer.errors, "data": request.data},
                 template_name="auth/login.html",
@@ -32,13 +32,13 @@ class LoginView(APIView):
         if not user.is_active:
             return Response(
                 {"errors": {"non_field_errors": ["Your account is pending admin approval."]}},
-                template_name="templates/login.html", status=403,)
+                template_name="auth/login.html", status=403,)
 
         jwt_token = jwtUtils.make_access_token(user.id)
-        print(jwt_token)
+        # print(jwt_token)
         response = redirect(reverse("author-all-entries", args=[user.id]))
         response.set_cookie('jwt', jwt_token, httponly=True, max_age=60*60*24*7)
-        print("Redirecting")
+        # print("Redirecting")
         return response
 
 

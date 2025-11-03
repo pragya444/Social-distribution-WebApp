@@ -232,6 +232,18 @@ class EntryAPITests(TestCase):
         self.assertEqual(entry.visibility, "PUBLIC")
         self.assertIsNotNone(entry.is_markdown)
 
+    def test_create_entry_not_logged_in(self):
+        """Test user story: Prevent entry creation when not logged in"""
+        self.client.logout()
+        url = reverse("entries-list-create", kwargs={"author_id": self.user.id})
+        data = {
+            "title": "Test Entry",
+            "content": "Content",
+            "content_type": "text/plain",
+            "visibility": "PUBLIC"
+        }
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_create_entry_with_image_link(self):
         """Test user story: CommonMark entries can link to images"""
@@ -331,6 +343,22 @@ class EntryAPITests(TestCase):
         entry.refresh_from_db()
         self.assertTrue(entry.is_deleted)
 
+    def test_unauthorized_delete_entry(self):
+        """Test user story: Other authors cannot delete my entries"""
+        entry = Entry.objects.create(
+            author=self.user,
+            title="Test Entry",
+            content="Content",
+            content_type="text/plain",
+            visibility="PUBLIC"
+        )
+        self.client.force_login(self.other_user)
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.user.id, "entry_id": entry.id})
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        entry.refresh_from_db()
+        self.assertFalse(entry.is_deleted)
+    
     def test_author_sees_own_entries(self):
         """Test user story: Entries visible to me until deleted"""
         entry = Entry.objects.create(
@@ -1020,3 +1048,48 @@ class UserRegisterTests(TestCase):
         user = User.objects.get(username="inactiveuser")
         self.assertFalse(user.is_active)
 
+class LoginTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.login_url = reverse("login")
+        self.logout_url = reverse("logout")
+        self.active_user = User.objects.create_user(username="activeUser", password="pass1234", is_active=True)
+        self.inactive_user = User.objects.create_user(username="inactiveUser", password="pass1234")
+
+    def test_active_login_success(self):
+        payload = {
+            "username": "activeUser",
+            "password": "pass1234"
+        }
+
+        response = self.client.post(self.login_url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertRedirects(response, reverse("author-all-entries", args=[self.active_user.id]))
+        self.assertIn("jwt", response.cookies)
+    
+    def test_logout_success(self):
+        payload = {
+            "username": "activeUser",
+            "password": "pass1234"
+        }
+
+        response = self.client.post(self.login_url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn("jwt", response.cookies)
+        
+
+        response = self.client.post(self.logout_url)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertRedirects(response, reverse("login"))
+        cookie = response.cookies["jwt"]
+        self.assertEqual(cookie.value, '')
+    
+    def test_inactive_login_failure(self):
+        payload = {
+            "username": "inactiveUser",
+            "password": "pass1234"
+        }
+
+        response = self.client.post(self.login_url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertNotIn("jwt", response.cookies)

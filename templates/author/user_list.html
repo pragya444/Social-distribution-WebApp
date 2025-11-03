@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<style>
+  .userlist { display:grid; gap:12px; margin-top:1rem; }
+  .usercard { display:flex; align-items:center; gap:12px; padding:12px;
+              background:#fff; border:1px solid #e5e7eb; border-radius:12px; }
+  .avatar { width:40px; height:40px; border-radius:999px; background:#eee; object-fit:cover; }
+  .meta { display:flex; flex-direction:column; }
+  .name { font-weight:700; }
+  .username { color:#6b7280; font-size:14px; }
+</style>
+
+<h1>{{ title }}</h1>
+
+<div class="userlist">
+  {% for u in users %}
+    <div class="usercard">
+      {% if u.profile_picture %}
+        <img class="avatar" src="{{ u.profile_picture }}" alt="{{ u.name }}">
+      {% else %}
+        <div class="avatar" aria-hidden="true"></div>
+      {% endif %}
+      <div class="meta">
+        <a class="name" href="{% url 'profile' author_id=u.id %}">{{ u.name|default:u.username }}</a>
+        <div class="username">@{{ u.username }}</div>
+      </div>
+    </div>
+  {% empty %}
+    <p>No users to show.</p>
+  {% endfor %}
+</div>
+{% endblock %}

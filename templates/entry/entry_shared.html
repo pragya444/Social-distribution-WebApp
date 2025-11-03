@@ -93,7 +93,7 @@
     <div id="comments-container" style="display:none; margin-top:10px; padding-left:10px; border-left: 2px solid #ddd;">
       <div id="comment-list">
         {% for comment in entry.comments.all %}
-            <div class="comment" style="margin-bottom:8px;" data-like-url="/api/authors/{{ entry.author.id }}/entries/{{ entry.id }}/comments/{{ comment.id }}/likes">
+            <div class="comment" style="margin-bottom:8px;" data-like-url="/api/authors/{{ entry.author.id }}/entries/{{ entry.id }}/comments/{{ comment.id }}/likes/">
               <strong>{{ comment.author.username }}</strong>: {{ comment.comment }}
               <div class="comment-time" style="font-size:0.8em; color:#555;">
                 {{ comment.created|date:"M d, Y, h:i A" }}

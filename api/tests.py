@@ -175,6 +175,36 @@ class ProfileAPITests(TestCase):
         self.assertEqual(self.user.description, "Updated description")
         self.assertEqual(self.user.github, "https://github.com/testuser")
         self.assertEqual(self.user.profile_picture, "https://example.com/pic.jpg")
+    
+    def test_profile_edit_no_login(self):
+        """Test user story: Prevent profile editing when not logged in"""
+        self.client.logout()
+        url = reverse("profile_edit", kwargs={"author_id": self.user.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_profile_edit_unauthorized_user(self):
+        """Test user story: Prevent profile editing by other users"""
+        self.client.force_login(self.other_user)
+        url = reverse("profile_edit", kwargs={"author_id": self.user.id})
+        csrf_response = self.client.get(url)        # Get CSRF token
+        csrf_token = csrf_response.cookies.get('csrftoken', '') # Extract token from cookies
+        data = {
+            "name": "New Name",
+            "description": "Updated description",
+            "github": "https://github.com/testuser",
+            "profile_picture": "https://example.com/pic.jpg"
+        }
+        response = self.client.post(url, data, HTTP_X_CSRFTOKEN=csrf_token, format='json', HTTP_ACCEPT='application/json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)  # Follow handles redirect
+
+    def check_user_not_found(self):
+        """Test user story: Handle non-existent users gracefully"""
+        url = reverse("profile", kwargs={"author_id": "nonexistent"})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    
 
 class EntryAPITests(TestCase):
     def setUp(self):
@@ -516,7 +546,7 @@ class EntrySharingTests(TestCase):
             kwargs={"author_id": self.author.id, "entry_id": self.unlisted_entry.id},
         )
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
 
     def test_non_public_entry_not_accessible_by_anonymous(self):
         """Non-public entries (FRIENDS) should not be visible to anonymous users."""
@@ -644,23 +674,24 @@ class EntryVisibilityAccessTests(TestCase):
         url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
         r = Client().get(url)
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
-    '''
-    # not done yet
-    def test_unlisted_requires_follower_or_author(self):
+    
+    
+    def test_unlisted_entry_visible_to_all_by_link(self):
         e = Entry.objects.create(author=self.author, title="u", content="c", content_type="text/plain", visibility="UNLISTED")
         url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
         # stranger logged in
         self.client.force_login(self.stranger)
         r = self.client.get(url)
-        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
-    # not done yet
-    def test_unlisted_visible_to_follower(self):
-        e = Entry.objects.create(author=self.author, title="u", content="c", content_type="text/plain", visibility="UNLISTED")
-        Follow.objects.create(follower=self.follower, followee=self.author, status=Follow.Status.APPROVED)
-        self.client.force_login(self.follower)
-        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
-        r = self.client.get(url)
-        self.assertEqual(r.status_code, status.HTTP_200_OK)'''
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+    
+    
+    # def test_unlisted_visible_to_follower(self):
+    #     e = Entry.objects.create(author=self.author, title="u", content="c", content_type="text/plain", visibility="UNLISTED")
+    #     Follow.objects.create(follower=self.follower, followee=self.author, status=Follow.Status.APPROVED)
+    #     self.client.force_login(self.follower)
+    #     url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+    #     r = self.client.get(url)
+    #     self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_friends_visible_to_friend(self):
         e = Entry.objects.create(author=self.author, title="f", content="c", content_type="text/plain", visibility="FRIENDS")
@@ -940,3 +971,67 @@ class AdminSiteTests(TestCase):
         # Inactive users should not be allowed into admin; expect redirect to login
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/admin/login/?next=", resp.url)
+
+
+class UserRegisterTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.register_url = reverse("register")
+    
+    def test_register_user_success(self):
+        payload = {
+            "username": "newuser",
+            "name": "New User",
+            "password": "newpass123",
+        }
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(User.objects.filter(username="newuser").exists())
+    
+    def test_register_user_missing_fields(self):
+        payload = {}
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        payload = {
+            "username": "Incomplete User",
+            "password": "pass1234",
+        }
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        payload = {
+            "username": "Incomplete User",
+            "name": "pass1234",
+        }
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        payload = {
+            "name": "Incomplete User",
+            "password": "pass1234",
+        }
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_register_user_duplicate_username(self):
+        User.objects.create_user(username="existinguser", password="pass1234", is_active=True)
+        payload = {
+            "username": "existinguser",
+            "name": "Existing User",
+            "password": "newpass123",
+        }
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_register_user_needs_activation(self):
+        payload = {
+            "username": "inactiveuser",
+            "name": "Inactive User",
+            "password": "pass1234",
+        }
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(username="inactiveuser")
+        self.assertFalse(user.is_active)
+

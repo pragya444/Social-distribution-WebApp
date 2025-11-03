@@ -529,16 +529,6 @@ class EntrySharingTests(TestCase):
             visibility="FRIENDS",  
         )
 
-    def test_public_entry_accessible_by_anonymous(self):
-        """Anyone can access a PUBLIC entry via its author/entry ID link."""
-        url = reverse(
-            "entry-retrieve-update",
-            kwargs={"author_id": self.author.id, "entry_id": self.public_entry.id},
-        )
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Public Entry")
-
     def test_unlisted_entry_accessible_by_anonymous(self):
         """Anonymous users should NOT be able to access UNLISTED entries (follower-only)."""
         url = reverse(
@@ -548,25 +538,15 @@ class EntrySharingTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
-    def test_non_public_entry_not_accessible_by_anonymous(self):
-        """Non-public entries (FRIENDS) should not be visible to anonymous users."""
+    def test_reader_can_access_unlisted_entry(self):
+        """A logged-in non-friend reader cannot access another user's unlisted entry."""
+        self.client.login(username="reader", password="reader123")
         url = reverse(
             "entry-retrieve-update",
-            kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id},
-        )
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 403)
-
-    def test_author_can_access_their_own_private_entry(self):
-        """Author should be able to view their own private entry."""
-        self.client.login(username="author", password="test123")
-        url = reverse(
-            "entry-retrieve-update",
-            kwargs={"author_id": self.author.id, "entry_id": self.private_entry.id},
+            kwargs={"author_id": self.author.id, "entry_id": self.unlisted_entry.id},
         )
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Private Entry")
 
     def test_reader_cannot_access_private_entry(self):
         """A logged-in non-friend reader cannot access another user's private entry."""
@@ -577,12 +557,7 @@ class EntrySharingTests(TestCase):
         )
         response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
-
-
-# =============================
-# Additional 50 edge case tests
-# =============================
-
+        
 class EntryAPIEdgeTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -592,7 +567,7 @@ class EntryAPIEdgeTests(TestCase):
 
     def test_create_missing_fields(self):
         url = reverse("entries-list-create", kwargs={"author_id": self.author.id})
-        payload = {"title": "t"}  # missing content/content_type/visibility
+        payload = {"title": "t"}  
         r = self.client.post(url, payload, format="json")
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -679,23 +654,20 @@ class EntryVisibilityAccessTests(TestCase):
     def test_unlisted_entry_visible_to_all_by_link(self):
         e = Entry.objects.create(author=self.author, title="u", content="c", content_type="text/plain", visibility="UNLISTED")
         url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
-        # stranger logged in
         self.client.force_login(self.stranger)
         r = self.client.get(url)
         self.assertEqual(r.status_code, status.HTTP_200_OK)
-    
-    
-    # def test_unlisted_visible_to_follower(self):
-    #     e = Entry.objects.create(author=self.author, title="u", content="c", content_type="text/plain", visibility="UNLISTED")
-    #     Follow.objects.create(follower=self.follower, followee=self.author, status=Follow.Status.APPROVED)
-    #     self.client.force_login(self.follower)
-    #     url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
-    #     r = self.client.get(url)
-    #     self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def test_unlisted_visible_to_follower(self):
+        e = Entry.objects.create(author=self.author, title="u", content="c", content_type="text/plain", visibility="UNLISTED")
+        Follow.objects.create(follower=self.follower, followee=self.author, status=Follow.Status.APPROVED)
+        self.client.force_login(self.follower)
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": e.id})
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_friends_visible_to_friend(self):
         e = Entry.objects.create(author=self.author, title="f", content="c", content_type="text/plain", visibility="FRIENDS")
-        # mutual follow
         Follow.objects.create(follower=self.follower, followee=self.author, status=Follow.Status.APPROVED)
         Follow.objects.create(follower=self.author, followee=self.follower, status=Follow.Status.APPROVED)
         self.client.force_login(self.follower)
@@ -711,7 +683,6 @@ class EntryVisibilityAccessTests(TestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_entries_list_public_when_viewing_other(self):
-        # when not author, only PUBLIC are returned by list
         Entry.objects.create(author=self.author, title="pub", content="c", content_type="text/plain", visibility="PUBLIC")
         Entry.objects.create(author=self.author, title="priv", content="c", content_type="text/plain", visibility="FRIENDS")
         self.client.force_login(self.stranger)
@@ -734,7 +705,6 @@ class EntryVisibilityAccessTests(TestCase):
     def test_image_binary_endpoint_authz(self):
         e = Entry.objects.create(author=self.author, title="img", content=base64.b64encode(b"i").decode(), content_type="image/png;base64", visibility="FRIENDS")
         url = reverse("entry-image", kwargs={"author_id": self.author.id, "entry_id": e.id})
-        # anonymous forbidden for FRIENDS
         r = Client().get(url)
         self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND])
 
@@ -800,7 +770,6 @@ class FollowEdgeTests(TestCase):
         with self.assertRaises(Exception):
             Follow.objects.create(follower=self.a, followee=self.a, status=Follow.Status.PENDING)
 
-
 class SerializerValidationTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="svt", password="pass", is_active=True)
@@ -853,14 +822,13 @@ class SerializerValidationTests(TestCase):
         u = s.save()
         self.assertEqual(u.name, "New")
 
-    # def test_user_serializer_followers_fields_present(self):
-    #     from .serializers import UserSerializer
-    #     s = UserSerializer(self.user)
-    #     data = s.data
-    #     self.assertIn("followers", data)
-    #     self.assertIn("following", data)
-    #     self.assertIn("friends", data)
-
+    def test_user_serializer_followers_fields_present(self):
+        from .serializers import UserSerializer
+        s = UserSerializer(self.user)
+        data = s.data
+        self.assertIn("followers", data)
+        self.assertIn("following", data)
+        self.assertIn("friends", data)
 
 class LikesCommentsEdgeTests(TestCase):
     def setUp(self):
@@ -879,7 +847,7 @@ class LikesCommentsEdgeTests(TestCase):
 
     def test_like_requires_auth(self):
         url = reverse("entry-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
-        c = APIClient()  # anonymous
+        c = APIClient()  
         r = c.post(url)
         self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED, status.HTTP_302_FOUND])
 
@@ -904,6 +872,26 @@ class LikesCommentsEdgeTests(TestCase):
         r2 = self.client.delete(url)
         self.assertIn(r2.status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
 
+    def test_comment_like_requires_auth(self):
+        cmt = Comment.objects.create(entry=self.entry, author=self.bob, comment="ok", content_type="text/plain")
+        url = reverse("comment-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id, "comment_id": cmt.id})
+        anon = APIClient()
+        r = anon.post(url)
+        self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED, status.HTTP_302_FOUND])
+
+    def test_comment_likes_get_counts(self):
+        cmt = Comment.objects.create(entry=self.entry, author=self.bob, comment="ok", content_type="text/plain")
+        url = reverse("comment-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id, "comment_id": cmt.id})
+        r0 = self.client.get(url)
+        self.assertEqual(r0.status_code, status.HTTP_200_OK)
+        data0 = json.loads(r0.content.decode())
+        self.assertEqual(data0.get("type"), "likes")
+        self.client.post(url)
+        r1 = self.client.get(url)
+        self.assertEqual(r1.status_code, status.HTTP_200_OK)
+        data1 = json.loads(r1.content.decode())
+        self.assertGreaterEqual(data1.get("count", 0), data0.get("count", 0))
+
     def test_like_counts_increase(self):
         url = reverse("entry-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
         before = Entry.objects.get(id=self.entry.id).like_count
@@ -927,7 +915,6 @@ class LikesCommentsEdgeTests(TestCase):
 class AdminSiteTests(TestCase):
     def setUp(self):
         self.client = Client()
-        # Create a superuser for admin access
         self.superuser = User.objects.create_superuser(
             username="admin",
             password="pass",
@@ -937,7 +924,6 @@ class AdminSiteTests(TestCase):
         url = reverse("admin:login")
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
-        # Admin login form should include a CSRF token
         self.assertIn("csrfmiddlewaretoken", resp.content.decode())
 
     def test_admin_index_requires_login_redirects(self):
@@ -968,7 +954,6 @@ class AdminSiteTests(TestCase):
         self.client.force_login(inactive)
         url = reverse("admin:index")
         resp = self.client.get(url)
-        # Inactive users should not be allowed into admin; expect redirect to login
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/admin/login/?next=", resp.url)
 

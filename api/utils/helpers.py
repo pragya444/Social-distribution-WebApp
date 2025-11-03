@@ -93,6 +93,19 @@ def is_friends(viewer: User, owner: User) -> bool:
         return False
 
 
+def is_follower(viewer: User, owner: User) -> bool:
+    """
+    Return True if `viewer` follows `owner` with APPROVED status.
+    This mirrors UNLISTED access semantics in entry retrieval.
+    """
+    if not (viewer and owner):
+        return False
+    try:
+        return Follow.objects.filter(follower_id=viewer.id, followee_id=owner.id, status=Follow.Status.APPROVED).exists()
+    except Exception:
+        return False
+
+
 def can_view_entry(current_user, entry: Entry) -> bool:
     # normalize whatever is in the DB/form
     vis = (entry.visibility or "PUBLIC").upper()

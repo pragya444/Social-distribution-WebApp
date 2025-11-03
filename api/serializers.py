@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Entry
+from .utils import helpers
 User = get_user_model()
 import base64
 
@@ -10,10 +11,17 @@ class UserSerializer(serializers.ModelSerializer):
     github = serializers.CharField(allow_blank=True, required=False)
     profile_picture = serializers.CharField(allow_blank=True, required=False)
 
+    followers = serializers.SerializerMethodField()
+    following = serializers.SerializerMethodField()
+    friends = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ["id","username","name","description","github","profile_picture","url","created"]
-        read_only_fields = ["id","username","url","created"]
+        fields = [
+            "id","username","name","description","github","profile_picture","url","created",
+            "followers","following","friends",
+        ]
+        read_only_fields = ["id","username","url","created","followers","following","friends"]
 
     def validate(self, attrs):
         """
@@ -33,6 +41,28 @@ class UserSerializer(serializers.ModelSerializer):
         if not v.startswith("http"):
             v = f"https://github.com/{v}"
         return v
+
+    def _serialize_user_list(self, qs):
+        """Return a lightweight list representation for a queryset of User objects."""
+        return [{"id": u.id, "url": u.url, "username": u.username} for u in qs]
+
+    def get_followers(self, obj):
+        try:
+            return self._serialize_user_list(helpers.followers_of(obj))
+        except Exception:
+            return []
+
+    def get_following(self, obj):
+        try:
+            return self._serialize_user_list(helpers.users_i_follow(obj))
+        except Exception:
+            return []
+
+    def get_friends(self, obj):
+        try:
+            return self._serialize_user_list(helpers.friends_of(obj))
+        except Exception:
+            return []
 
     def update(self, user, validated_data):
         if "name" in validated_data:
@@ -72,8 +102,6 @@ class EntrySerializer(serializers.ModelSerializer):
         visibility = attrs.get('visibility', getattr(instance, 'visibility', None))
         title = attrs.get('title', getattr(instance, 'title', None))
         content = attrs.get('content', getattr(instance, 'content', ""))
-
-        # On CREATE (no instance), enforce all required fields.
         if instance is None:
             if not all([content_type, visibility, title, content]):
                 raise serializers.ValidationError({
@@ -86,15 +114,12 @@ class EntrySerializer(serializers.ModelSerializer):
                     }
                 })
 
-        # Common checks (apply to both create & update once values are resolved)
         if content_type not in ['text/plain', 'text/markdown', 'image/png;base64', 'image/jpeg;base64']:
             raise serializers.ValidationError({"error": "Invalid content type. Must be one of text/plain, text/markdown, image/png;base64, image/jpeg;base64."})
 
         if visibility not in ["PUBLIC", "FRIENDS", "UNLISTED"]:
             raise serializers.ValidationError({"error": "Invalid visibility. Visibility must be one of PUBLIC, FRIENDS, UNLISTED."})
 
-        # Validate base64 only when image content is relevant to this request
-        # i.e., on create, or when content is being changed, or content_type is changing to an image.
         is_image_type = content_type in ['image/png;base64', 'image/jpeg;base64']
         if is_image_type and (instance is None or 'content' in attrs or 'content_type' in attrs):
             try:

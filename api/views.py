@@ -134,7 +134,9 @@ class ProfileEditView(APIView):
 
     def post(self, request, author_id):
         if request.user.id != author_id:
-            return redirect('home')
+            if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+                return redirect('home')
+            return Response({"errors": "Only the author can edit their profile"}, status=403)
         
         serializer = UserSerializer(request.user, data=request.data, partial=True)
 

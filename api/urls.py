@@ -13,7 +13,7 @@ urlpatterns = [
     # author stream, show public entries for a given author
     path('authors/<str:author_id>/stream/', views.author_stream, name='author-all-entries'),
 
-    # pages: simple create and edit forms
+    # pages: simple create form
     path('authors/<str:author_id>/entries/new/', views.entry_create_page, name='entry-create-page'),
  
     # edit page for a specific entry

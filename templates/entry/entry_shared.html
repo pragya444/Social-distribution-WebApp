@@ -98,7 +98,7 @@
               <div class="comment-time" style="font-size:0.8em; color:#555;">
                 {{ comment.created|date:"M d, Y, h:i A" }}
               </div>
-              <button class="comment-like-btn" data-comment-like-btn
+              <button class="comment-like-btn " data-comment-like-btn
                       style="border:none;background:none;cursor:pointer;">❤️</button>
               <span data-comment-like-count>{{ comment.likes.count }}</span>
             </div>
@@ -241,49 +241,58 @@
     });
   }
   // ---- comment like buttons ----
-document.querySelectorAll("[data-comment-like-btn]").forEach((btn) => {
-  btn.addEventListener("click", async (e) => {
-    e.preventDefault();
+  document.querySelectorAll("[data-comment-like-btn]").forEach(async (btn) => {
+    // Debugged with assistance from OpenAI, ChatGPT (GPT-5), 2025-11-02
+
     const commentEl = btn.closest(".comment");
     const url = commentEl.dataset.likeUrl;
     const countEl = commentEl.querySelector("[data-comment-like-count]");
     const csrftoken = document.cookie.match(/csrftoken=([^;]+)/)?.[1];
-    const liked = btn.classList.contains("liked");
-    const method = liked ? "DELETE" : "POST";
 
+    // 1️⃣ Initial GET to fetch real state
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (res.ok) {
+      const data = await res.json();
+      btn.classList.toggle("liked", data.liked === true);
+      btn.setAttribute("aria-pressed", data.liked ? "true" : "false");
+      if (countEl && typeof data.count === "number") countEl.textContent = data.count;
+    }
 
+    // Like/unlike logic on click
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
 
-    const r = await fetch(url, {
-      method,
-      headers: {
-        "X-CSRFToken": csrftoken || "",
-        "Content-Type": "application/json",
-      },
-      credentials: "same-origin",
+      const liked = btn.classList.contains("liked"); // now synced with backend
+      const method = liked ? "DELETE" : "POST";
+
+      const r = await fetch(url, {
+        method,
+        headers: {
+          "X-CSRFToken": csrftoken || "",
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+      });
+
+      if (r.status === 403) {
+        alert("Please log in to like comments.");
+        return;
+      }
+      if (!r.ok) {
+        alert("Error toggling comment like.");
+        return;
+      }
+
+      const data = await r.json();
+
+      // Update count and button state based on backend truth
+      btn.classList.toggle("liked", data.liked === true);
+      btn.setAttribute("aria-pressed", data.liked ? "true" : "false");
+      if (countEl && typeof data.count === "number") {
+        countEl.textContent = data.count;
+      }
     });
-
-    if (r.status === 403) {
-      alert("Please log in to like comments.");
-      return;
-    }
-    if (!r.ok) {
-      alert("Error toggling comment like.");
-      return;
-    }
-
-
-
-
-
-    btn.classList.toggle("liked", method === "POST");
-    const diff = method === "POST" ? 1 : -1;
-    const cur = parseInt(countEl.textContent || "0", 10);
-    countEl.textContent = Math.max(cur + diff, 0);
-
-
   });
-});
-
 });
 
 </script>

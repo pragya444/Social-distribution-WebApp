@@ -17,8 +17,8 @@ class LoginSerializer(serializers.Serializer):
         if not user.check_password(password):
             raise serializers.ValidationError({"error": "Invalid username or password"})
 
-        if not user.is_active:
-            raise serializers.ValidationError({"non_field_errors": ["Your account is not yet approved by the admin."]})
+        # if not user.is_active:
+        #     raise serializers.ValidationError({"non_field_errors": ["Your account is not yet approved by the admin."]})
 
         attrs['user'] = user
         return attrs

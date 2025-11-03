@@ -134,7 +134,9 @@ class ProfileEditView(APIView):
 
     def post(self, request, author_id):
         if request.user.id != author_id:
-            return redirect('home')
+            if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+                return redirect('home')
+            return Response({"errors": "Only the author can edit their profile"}, status=403)
         
         serializer = UserSerializer(request.user, data=request.data, partial=True)
 
@@ -572,3 +574,61 @@ def comment_likes(request, author_id, entry_id, comment_id):
     CommentLike.objects.filter(user=request.user, comment=comment).delete()
     count = CommentLike.objects.filter(comment=comment).count()
     return JsonResponse({"ok": True, "liked": False, "count": count}, status=200)
+
+
+
+
+@login_required
+def followers_page(request, author_id):
+    owner = get_object_or_404(User, id=author_id)
+    qs = helpers.followers_of(owner).order_by("name", "username")
+    return render(request, "author/user_list.html", {
+        "title": f"Followers of {owner.username}",
+        "owner": owner,
+        "users": qs,
+    })
+
+@login_required
+def following_page(request, author_id):
+    owner = get_object_or_404(User, id=author_id)
+    qs = helpers.users_i_follow(owner).order_by("name", "username")
+    return render(request, "author/user_list.html", {
+        "title": f"{owner.username} is Following",
+        "owner": owner,
+        "users": qs,
+    })
+
+@login_required
+def friends_page(request, author_id):
+    owner = get_object_or_404(User, id=author_id)
+    qs = helpers.friends_of(owner).order_by("name", "username")
+    return render(request, "author/user_list.html", {
+        "title": f"Friends of {owner.username}",
+        "owner": owner,
+        "users": qs,
+    })
+
+
+# --- People lists (JSON) 
+from django.http import JsonResponse
+
+@login_required  # switch to AllowAny if you truly want public JSON
+def followers_api(request, author_id):
+    owner = get_object_or_404(User, id=author_id)
+    data = [{"id": u.id, "username": u.username, "name": u.name, "url": u.url} 
+            for u in helpers.followers_of(owner)]
+    return JsonResponse({"count": len(data), "results": data}, status=200)
+
+@login_required
+def following_api(request, author_id):
+    owner = get_object_or_404(User, id=author_id)
+    data = [{"id": u.id, "username": u.username, "name": u.name, "url": u.url} 
+            for u in helpers.users_i_follow(owner)]
+    return JsonResponse({"count": len(data), "results": data}, status=200)
+
+@login_required
+def friends_api(request, author_id):
+    owner = get_object_or_404(User, id=author_id)
+    data = [{"id": u.id, "username": u.username, "name": u.name, "url": u.url} 
+            for u in helpers.friends_of(owner)]
+    return JsonResponse({"count": len(data), "results": data}, status=200)   

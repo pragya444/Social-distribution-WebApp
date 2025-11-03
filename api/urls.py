@@ -13,7 +13,7 @@ urlpatterns = [
     # author stream, show public entries for a given author
     path('authors/<str:author_id>/stream/', views.author_stream, name='author-all-entries'),
 
-    # pages: simple create and edit forms
+    # pages: simple create form
     path('authors/<str:author_id>/entries/new/', views.entry_create_page, name='entry-create-page'),
  
     # edit page for a specific entry
@@ -39,4 +39,14 @@ urlpatterns = [
     path("authors/<str:author_id>/requests", views.follow_requests_page, name="follow-requests-page"),
     path("authors/<str:author_id>/requests/<str:follower_id>/approve", views.approve_follow_request, name="follow-approve"),
     path("authors/<str:author_id>/requests/<str:follower_id>/deny", views.deny_follow_request, name="follow-deny"),
+
+
+
+    path("authors/<str:author_id>/followers/", views.followers_page, name="followers-page"),
+    path("authors/<str:author_id>/following/", views.following_page, name="following-page"),
+    path("authors/<str:author_id>/friends/",   views.friends_page,   name="friends-page"),
+
+    path("api/authors/<str:author_id>/followers", views.followers_api, name="followers-api"),
+    path("api/authors/<str:author_id>/following", views.following_api, name="following-api"),
+    path("api/authors/<str:author_id>/friends",   views.friends_api,   name="friends-api"),
 ]

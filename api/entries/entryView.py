@@ -4,7 +4,7 @@ from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from ..serializers import EntrySerializer
-from ..models import Entry
+from ..models import Entry, EntryLike
 from ..utils import helpers, images
 
 
@@ -58,6 +58,7 @@ class SingleEntryView(APIView):
 
     def get(self, request, author_id, entry_id):
         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+        like = EntryLike.objects.filter(user=request.user.id, entry=entry).first()
         serializer = EntrySerializer(entry)
         
         # if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
@@ -77,7 +78,7 @@ class SingleEntryView(APIView):
             return Response(serializer.data, status=200)
         
         entry.rendered = helpers.render_entry(entry)
-        return render(request, "entry/entry_shared.html", {"entry": entry})
+        return render(request, "entry/entry_shared.html", {"entry": entry, "like": like})
     
     
     def put(self, request, author_id, entry_id):

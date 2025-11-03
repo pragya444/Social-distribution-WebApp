@@ -72,8 +72,8 @@
 
   <div class="card-foot">
    <div class="action">
-      <button id="like-btn" class="like-toggle" aria-pressed="{{ entry.user_has_liked|yesno:'true,false' }}">
-        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+      <button id="like-btn" class="like-toggle {% if like %}liked{% endif %}"  aria-pressed="{{ entry.user_has_liked|yesno:'true,false' }}">
+        <svg class="icon " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round"
               d="M21 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35l-.45-.41C6.4 15.36 3 12.28 3 8.5A4.5 4.5 0 0 1 7.5 4c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 4 4.5 4.5 0 0 1 21 8.5z"/>
@@ -143,6 +143,7 @@
   const likeBtn = document.getElementById("like-btn");
   const likeCount = document.getElementById("like-count");
   const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
+  
     if (likeBtn) {
       likeBtn.addEventListener("click", async function(e) {
         e.preventDefault(); // prevent default
@@ -173,6 +174,7 @@
 
           // Toggle liked class
           likeBtn.classList.toggle("liked", data.liked === true);
+     
 
           // Update aria-pressed
           likeBtn.setAttribute("aria-pressed", data.liked ? "true" : "false");

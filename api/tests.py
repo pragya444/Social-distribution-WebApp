@@ -1047,6 +1047,15 @@ class UserRegisterTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         user = User.objects.get(username="inactiveuser")
         self.assertFalse(user.is_active)
+    
+    def test_register_user_short_password(self):
+        payload = {
+            "username": "shortpassuser",
+            "name": "Short Pass User",
+            "password": "123",
+        }
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 class LoginTests(TestCase):
     def setUp(self):
@@ -1055,6 +1064,24 @@ class LoginTests(TestCase):
         self.logout_url = reverse("logout")
         self.active_user = User.objects.create_user(username="activeUser", password="pass1234", is_active=True)
         self.inactive_user = User.objects.create_user(username="inactiveUser", password="pass1234")
+
+
+    def test_missing_fields(self):
+        payloads = [{}, {"username": "activeUser"}, {"password": "pass1234"}]
+        for payload in payloads:
+            response = self.client.post(self.login_url, payload, format='json')
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertNotIn("jwt", response.cookies)
+    
+    def test_short_password(self):
+        payload = {
+            "username": "activeUser",
+            "password": "pas"
+        }
+
+        response = self.client.post(self.login_url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn("jwt", response.cookies)
 
     def test_active_login_success(self):
         payload = {
@@ -1093,3 +1120,37 @@ class LoginTests(TestCase):
         response = self.client.post(self.login_url, payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertNotIn("jwt", response.cookies)
+    
+    def test_wrong_password(self):
+        payload = {
+            "username": "activeUser",
+            "password": "passs1234"
+        }
+
+        response = self.client.post(self.login_url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn("jwt", response.cookies)
+        self.assertEqual(response.data["errors"]["error"][0], "Invalid username or password")
+    
+    def test_wrong_username(self):
+        payload = {
+            "username": "activeUsesr",
+            "password": "pass1234"
+        }
+
+        response = self.client.post(self.login_url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn("jwt", response.cookies)
+        self.assertEqual(response.data["errors"]["error"][0], "Invalid username or password")
+    
+    def test_wrong_username_or_password(self):
+        payload = {
+            "username": "activeUsesr",
+            "password": "pass12345"
+        }
+
+        response = self.client.post(self.login_url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn("jwt", response.cookies)
+        self.assertEqual(response.data["errors"]["error"][0], "Invalid username or password")
+        # print(response.data)

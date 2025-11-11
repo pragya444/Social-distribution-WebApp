@@ -203,7 +203,7 @@ class EntrySerializer(serializers.ModelSerializer):
     def update(self, entry, validated_data):
         entry.title = validated_data.get('title', entry.title)
         entry.content = validated_data.get('content', entry.content)
-        entry.content_type = validated_data.get('content_type', entry.content_type)
+        entry.content_type = validated_data.get('contentType', entry.content_type)
         entry.visibility = validated_data.get('visibility', entry.visibility)
         entry.save()
         return entry

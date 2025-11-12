@@ -262,7 +262,7 @@ class EntryCreateView(APIView):
         if serializer.is_valid():
             entry = serializer.save(author=request.user)
             if request.accepted_renderer.format == 'html':
-                return redirect('author-stream', author_id=author_id)
+                return redirect('author-all-entries', author_id=author_id)
             return Response(serializer.data, status=201)
 
         if request.accepted_renderer.format == 'html':
@@ -435,71 +435,8 @@ class CommentDetailView(APIView):
         comment.delete()
         return Response({"ok": True}, status=204)
 
-
-class EntryListCreateView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
-    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
-
-    def get(self, request, author_id):
-        author = get_object_or_404(User, id=author_id)
-        try:
-            page = int(request.GET.get('page', 1))
-            size = int(request.GET.get('size', 10))
-        except (TypeError, ValueError):
-            page = 1
-            size = 10
-
-        if not request.user.is_authenticated:
-            entries = Entry.objects.filter(author=author, visibility='PUBLIC', is_deleted=False)
-        elif request.user == author:
-            entries = Entry.objects.filter(author=author, is_deleted=False)
-        elif helpers.is_friend(request.user, author):
-            entries = Entry.objects.filter(author=author, visibility__in=['PUBLIC', 'UNLISTED', 'FRIENDS'], is_deleted=False)
-        elif helpers.is_follower(request.user, author):
-            entries = Entry.objects.filter(author=author, visibility__in=['PUBLIC', 'UNLISTED'], is_deleted=False)
-        else:
-            entries = Entry.objects.filter(author=author, visibility='PUBLIC', is_deleted=False)
-
-        entries = entries.order_by('-updated')
-        start = (page - 1) * size
-        end = page * size
-        entries_page = entries[start:end]
-
-        if request.accepted_renderer.format == 'html':
-            return Response({
-                'author': author,
-                'entries': entries_page,
-            }, template_name='author/entries_list.html')
-
-        return Response({
-            'type': 'entries',
-            'page_number': page,
-            'size': size,
-            'count': entries.count(),
-            'src': EntrySerializer(entries_page, many=True, context={'request': request}).data
-        })
-
-    def post(self, request, author_id):
-        if str(request.user.id) != str(author_id):
-            return Response({"error": "Not authorized"}, status=403)
-
-        serializer = EntrySerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            entry = serializer.save(author=request.user)
-            if request.accepted_renderer.format == 'html':
-                return redirect('author-stream', author_id=author_id)
-            return Response(serializer.data, status=201)
-
-        if request.accepted_renderer.format == 'html':
-            return Response({
-                'author_id': author_id,
-                'errors': serializer.errors
-            }, template_name='entry/entry_create.html')
-        return Response(serializer.errors, status=400)
-
-
 class CommentListCreateView(APIView):
-    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+    renderer_classes = [JSONRenderer]  
     permission_classes = [AllowAny]
     authentication_classes = [SessionAuthentication]
     parser_classes = [JSONParser, FormParser, MultiPartParser]

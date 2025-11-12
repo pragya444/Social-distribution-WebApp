@@ -102,13 +102,9 @@
             <button type="button" class="link danger" onclick="openDeleteModal('{{ e.id }}')">Delete</button>
 
             {# MODAL FORM (hidden) #}
-            <form id="deleteForm-{{ e.id }}" method="post" action="{% url 'entry-retrieve-update' author_id=author.id entry_id=e.id %}" style="display:none;">
+            <form id="deleteForm-{{ e.id }}" method="POST" action="{% url 'entry-retrieve-update' author_id=author.id entry_id=e.id %}">
               {% csrf_token %}
               <input type="hidden" name="_method" value="DELETE">
-              <button type="submit" class="link danger"
-                      onclick="return confirm('Delete this entry?');">
-                Delete
-              </button>               
             </form>
           </div>
         </div>
@@ -235,7 +231,8 @@
 
   function confirmDelete() {
     if (currentDeleteId) {
-      document.getElementById(`deleteForm-${currentDeleteId}`).submit();
+      const form = document.getElementById(`deleteForm-${currentDeleteId}`);
+      form.submit();
     }
   }
   document.getElementById('deleteModal').addEventListener('click', function(e) {

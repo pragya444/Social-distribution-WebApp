@@ -131,13 +131,12 @@ def entries_page_obj(request, entries, page_obj, size):
 def create_payload(request):
     data = request.data
     payload = {}
-    title = data.get('title')
-    description = data.get('description')
     
-    # handle both contentType (spec) and content_type (internal)
+    title = data.get('title')
+    description = data.get('description', '')
     content_type = data.get('contentType') or data.get('content_type')
     visibility = data.get('visibility')
-    content = data.get('content')
+    content = data.get('content', '')
     
     if title:
         payload['title'] = title
@@ -145,24 +144,24 @@ def create_payload(request):
         payload['description'] = description
     if visibility:
         payload['visibility'] = visibility
+
+    # Use 'contentType' key for serializer (not 'content_type')
+    if content_type:
+        payload['contentType'] = content_type  # Changed from 'content_type'
     
-    is_image = content_type in ['image/png;base64', 'image/jpeg;base64', 'application/base64']
-    if is_image:
+    # handle images
+    if content_type in ['image/png;base64', 'image/jpeg;base64', 'application/base64']:
         img_file = request.FILES.get('image')
         if img_file:
             img_ct, b64_str = images.handle_uploaded_image(img_file)
-            payload['content_type'] = img_ct
+            payload['contentType'] = img_ct  # Changed from 'content_type'
             payload['content'] = b64_str
-        else:
-            if content:
-                payload['content'] = content
-            if content_type:
-                payload['content_type'] = content_type
+        elif content:
+            payload['content'] = content
     else:
+        # Text content
         if content:
             payload['content'] = content
-        if content_type:
-            payload['content_type'] = content_type
     
     return payload
 

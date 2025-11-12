@@ -153,15 +153,26 @@ class EntrySerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         instance = getattr(self, 'instance', None)
         content_type = attrs.get('content_type')
-        visibility = attrs.get('visibility', getattr(instance, 'visibility', None))
-        title = attrs.get('title', getattr(instance, 'title', None))
-        content = attrs.get('content', getattr(instance, 'content', ""))
+        visibility = attrs.get('visibility')
+        title = attrs.get('title')
+        content = attrs.get('content')
         
-        # Only validate required fields on create (not update)
+        # Only validate required fields on CREATE (instance is None)
         if instance is None:
-            if not all([content_type, visibility, title, content]):
+            # Check what's actually missing
+            missing = []
+            if not content_type:
+                missing.append('contentType')
+            if not visibility:
+                missing.append('visibility')
+            if not title:
+                missing.append('title')
+            if content is None or content == '':  # Allow empty string for now
+                missing.append('content')
+            
+            if missing:
                 raise serializers.ValidationError({
-                    "error": "Missing required fields.",
+                    "error": f"Missing required fields: {', '.join(missing)}",
                     "format": {
                         "title": "string (required)",
                         "content": "string (required)",
@@ -170,7 +181,7 @@ class EntrySerializer(serializers.ModelSerializer):
                     }
                 })
 
-        # Validate content type
+        # Validate content type if provided
         if content_type:
             allowed = ['text/plain', 'text/markdown', 'image/png;base64', 'image/jpeg;base64', 'application/base64']
             if content_type not in allowed:
@@ -178,21 +189,22 @@ class EntrySerializer(serializers.ModelSerializer):
                     "contentType": f"Invalid content type. Must be one of {', '.join(allowed)}"
                 })
 
-        # Validate visibility
+        # Validate visibility if provided
         if visibility and visibility not in ["PUBLIC", "FRIENDS", "UNLISTED", "PRIVATE"]:
             raise serializers.ValidationError({
                 "visibility": "Invalid visibility. Must be one of PUBLIC, FRIENDS, UNLISTED, PRIVATE."
             })
 
-        # Validate base64 for images
-        is_image_type = content_type in ['image/png;base64', 'image/jpeg;base64', 'application/base64']
-        if is_image_type and (instance is None or 'content' in attrs):
-            try:
-                base64.b64decode(content, validate=True)
-            except Exception:
-                raise serializers.ValidationError({
-                    "content": "Invalid content. Image content must be valid base64."
-                })
+        # Validate base64 for images (only if content_type is image)
+        if content_type and content_type in ['image/png;base64', 'image/jpeg;base64', 'application/base64']:
+            if content:  # Only validate if content is provided
+                try:
+                    import base64
+                    base64.b64decode(content, validate=True)
+                except Exception:
+                    raise serializers.ValidationError({
+                        "content": "Invalid content. Image content must be valid base64."
+                    })
 
         return attrs
     
@@ -210,6 +222,7 @@ class EntrySerializer(serializers.ModelSerializer):
         entry.content = validated_data.get('content', entry.content)
         entry.content_type = validated_data.get('content_type', entry.content_type)
         entry.visibility = validated_data.get('visibility', entry.visibility)
+        entry.description = validated_data.get('description', entry.description)
         entry.save()
         return entry
 

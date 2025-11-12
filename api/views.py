@@ -436,7 +436,7 @@ class CommentDetailView(APIView):
         return Response({"ok": True}, status=204)
 
 class CommentListCreateView(APIView):
-    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+    renderer_classes = [JSONRenderer]  
     permission_classes = [AllowAny]
     authentication_classes = [SessionAuthentication]
     parser_classes = [JSONParser, FormParser, MultiPartParser]

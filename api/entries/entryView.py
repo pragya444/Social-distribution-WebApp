@@ -133,32 +133,37 @@ def create_payload(request):
     payload = {}
     title = data.get('title')
     description = data.get('description')
-    content_type = data.get('contentType')
+    
+    # handle both contentType (spec) and content_type (internal)
+    content_type = data.get('contentType') or data.get('content_type')
     visibility = data.get('visibility')
     content = data.get('content')
+    
     if title:
         payload['title'] = title
     if description:
         payload['description'] = description
     if visibility:
         payload['visibility'] = visibility
+    
     is_image = content_type in ['image/png;base64', 'image/jpeg;base64', 'application/base64']
     if is_image:
         img_file = request.FILES.get('image')
         if img_file:
             img_ct, b64_str = images.handle_uploaded_image(img_file)
-            payload['contentType'] = img_ct
+            payload['content_type'] = img_ct
             payload['content'] = b64_str
         else:
             if content:
                 payload['content'] = content
             if content_type:
-                payload['contentType'] = content_type
+                payload['content_type'] = content_type
     else:
         if content:
             payload['content'] = content
         if content_type:
-            payload['contentType'] = content_type
+            payload['content_type'] = content_type
+    
     return payload
 
 

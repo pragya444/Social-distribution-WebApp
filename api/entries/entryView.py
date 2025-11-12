@@ -174,8 +174,19 @@ class SingleEntryView(APIView):
                 return Response({"error": "This entry is not shareable."}, status=403)
         
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            like = False
+            if request.user.is_authenticated:
+                like = EntryLike.objects.filter(
+                    entry=entry, 
+                    user=request.user
+                ).exists()
+            
             return Response(
-                {"entry": entry, "author_id": author_id},
+                {
+                    "entry": entry, 
+                    "author_id": author_id,
+                    "like": like
+                },
                 template_name="entry/entry_shared.html" 
             )
         

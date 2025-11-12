@@ -108,6 +108,8 @@ class Entry(models.Model):
     share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     comment_count = models.IntegerField(default=0)
     like_count = models.IntegerField(default=0)
+    
+    fqid = models.URLField(unique=True, blank=True, null=True)  # Fully Qualified ID for federated entries
 
     
     @property
@@ -159,6 +161,7 @@ class Comment(models.Model):
     comment = models.TextField()
     content_type = models.CharField(max_length=60, default="text/plain")
     created = models.DateTimeField(default=timezone.now)
+    fqid = models.URLField(unique=True, blank=True, null=True)  # Fully Qualified ID for federated comments
 
     class Meta:
         ordering = ["-created"]

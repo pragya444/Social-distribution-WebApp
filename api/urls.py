@@ -35,21 +35,23 @@ urlpatterns = [
 
     # Like routes
 
-    # TODO: URL: ://service/api/authors/{AUTHOR_SERIAL}/inbox
+    # TODO: URL: ://service/api/authors/{AUTHOR_SERIAL}/inbox 
     path('authors/<str:author_id>/entries/<str:entry_id>/likes', views.EntryLikesView.as_view(), name='entry-likes'), # Local access
     path('entries/<path:entry_fqid>/likes', views.EntryLikesView.as_view(), name='entry-likes-fqid'),  # for FQID
+    # TODO: The comment Section
     path('authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/likes', views.CommentLikesView.as_view(), name='comment-likes-fqid'),  # for FQID
+    
     
     
     path('authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/', views.CommentLikesView.as_view(), name='comment-likes'), # Local access
     
     # Liked routes
     
-    # TODO: Fix the API controllers
-    path('authors/<str:author_id>/liked', views.LikedEntriesView.as_view(), name='liked-entries'),
-    path('authors/<str:author_id>/liked/<str:like_id>', views.LikedEntriesView.as_view(), name='liked-entry-detail'),
-    # path('authors/<path:author_fqid>/liked', views.LikedEntriesView.as_view(), name='liked-entries-fqid'),  # for FQID
-    # path('liked/<path:like_id>', views.LikedEntriesView.as_view(), name='liked-entry-detail-fqid'),  # for FQID
+    # TODO: Check with postman if these work as intended
+    path('authors/<str:author_id>/liked', views.LikedView.as_view(), name='liked-entries'),
+    path('authors/<str:author_id>/liked/<str:like_id>', views.LikedView.as_view(), name='liked-entry-detail'),
+    path('authors/<path:author_fqid>/liked', views.LikedView.as_view(), name='liked-entries-fqid'),  # for FQID
+    path('liked/<path:liked_fqid>', views.LikedView.as_view(), name='liked-entry-detail-fqid'),  # for FQID
 
     # Follow send/unfollow (POST actions)
     path("authors/<str:author_id>/follow", views.FollowRequestActionView.as_view(), name="follow-send"),

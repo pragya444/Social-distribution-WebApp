@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import F, Q
-from .models import User, Entry, Comment, EntryLike, CommentLike, Follow
+from .models import User, Entry, Comment, EntryLike, CommentLike, Follow, Liked
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
 from django.views.decorators.http import require_POST, require_http_methods
@@ -529,12 +529,11 @@ class EntryLikesView(APIView):
     authentication_classes = [SessionAuthentication]
     renderer_classes = [JSONRenderer]
 
-    def get(self, request, author_fqid=None, author_id=None, entry_id=None):
+    def get(self, request, entry_fqid=None, author_id=None, entry_id=None):
         if author_id:
             entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-        elif author_fqid:
-            entry_id_str = str(entry_id)
-            entry = get_object_or_404(Entry, fqid=entry_id_str, is_deleted=False)
+        elif entry_fqid:
+            entry = get_object_or_404(Entry, fqid=entry_fqid, is_deleted=False)
         else:
             return Response({"error": "Invalid request"}, status=400)
 
@@ -565,55 +564,74 @@ class EntryLikesView(APIView):
         serializer = LikesSerializer(data, context={'request': request})
         return Response(serializer.data, status=200)
 
-
+    # TODO: I refactored the like/unlike to use Liked model instead of EntryLike.
+    # the html might be tweeking 
     def post(self, request, author_id, entry_id):
+        """
+        Handles liking an entry:
+        - Creates a new Liked object if not already liked.
+        - Increments the entry's like_count.
+        """
         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+
         if not helpers.can_view_entry(request.user, entry):
             return HttpResponseForbidden("no access")
 
-        like, created = EntryLike.objects.get_or_create(user=request.user, entry=entry)
+        # Get or create the like record
+        like, created = Liked.objects.get_or_create(user=request.user, entry=entry, defaults={"comment": None})
+
         if created:
+            # Increment like_count if it's a new like
             Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
-        entry.refresh_from_db(fields=['like_count'])
-        return JsonResponse({"ok": True, "liked": True, "count": entry.like_count}, status=201)
+            entry.refresh_from_db(fields=['like_count'])
+            print(f"User {request.user.id} liked Entry {entry.id} likecount: {entry.like_count}")
+            return JsonResponse({"ok": True, "liked": True, "count": entry.like_count}, status=201)
+        else:
+            # Already liked
+            entry.refresh_from_db(fields=['like_count'])
+            print(f"User {request.user.id} already liked Entry {entry.id} likecount: {entry.like_count}")
+            return JsonResponse({"ok": True, "liked": True, "count": entry.like_count}, status=200)
 
     def delete(self, request, author_id, entry_id):
+        """
+        Handles unliking an entry:
+        - Deletes the Liked object.
+        - Decrements the entry's like_count.
+        """
         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+
         if not helpers.can_view_entry(request.user, entry):
             return HttpResponseForbidden("no access")
 
-        deleted, _ = EntryLike.objects.filter(user=request.user, entry=entry).delete()
+        deleted, _ = Liked.objects.filter(user=request.user, entry=entry).delete()
+
         if deleted:
             entry.like_count = max(entry.like_count - 1, 0)
             entry.save(update_fields=['like_count'])
+        
+        # test message
+        print(f"User {request.user.id} unliked Entry {entry.id} likecount: {entry.like_count}")
+
         entry.refresh_from_db(fields=['like_count'])
-        return JsonResponse({"ok": True, "liked": False, "count": entry.like_count}, status=200)
-    
-class LikedEntriesView(APIView):
+        
+class LikedView(APIView):
+    """
+    Handles:
+    - GET /api/authors/{author_id}/liked
+    - GET /api/authors/{author_id}/liked/{like_id}
+    - GET /api/authors/{author_fqid}/liked
+    - GET /api/liked/{liked_fqid}
+    """
     permission_classes = [IsAuthenticatedOrReadOnly]
     renderer_classes = [JSONRenderer]
 
     def get(self, request, author_id=None, like_id=None, author_fqid=None, liked_fqid=None):
-        """
-        This is developed with assistance from OpenAI, ChatGPT (GPT-5), 2025-11-11.
-        
-        Handles:
-        - /authors/{author_id}/liked
-        - /authors/{author_id}/liked/{like_id}
-        - /authors/{author_fqid}/liked
-        - /liked/{liked_fqid}
-        """
-
         # Case 1: /authors/{author_id}/liked — all likes (entries + comments)
         if author_id and not like_id:
             user = get_object_or_404(User, id=author_id)
+            likes = Liked.objects.filter(user=user).order_by("-created")
 
-            # Combine entry likes + comment likes
-            entry_likes = EntryLike.objects.filter(user=user)
-            comment_likes = CommentLike.objects.filter(user=user)
-            all_likes = list(entry_likes) + list(comment_likes)
-
-            # Build likes-list object for LikesSerializer
+            # Like-list wrapper for serialization
             class LikeListObject:
                 def __init__(self, author, id, page_number, size, count, src):
                     self.author = author
@@ -627,9 +645,9 @@ class LikedEntriesView(APIView):
                 author=user,
                 id=user.id,
                 page_number=1,
-                size=len(all_likes),
-                count=len(all_likes),
-                src=all_likes
+                size=len(likes),
+                count=likes.count(),
+                src=likes
             )
 
             serializer = LikesSerializer(data, context={'request': request})
@@ -637,21 +655,14 @@ class LikedEntriesView(APIView):
 
         # Case 2: /authors/{author_id}/liked/{like_id} — single like by this author
         elif author_id and like_id:
-            like = (
-                EntryLike.objects.filter(id=like_id, user__id=author_id).first()
-                or CommentLike.objects.filter(id=like_id, user__id=author_id).first()
-            )
-            if not like:
-                return Response({"error": "Like not found"}, status=404)
+            like = get_object_or_404(Liked, id=like_id, user__id=author_id)
             serializer = LikeSerializer(like, context={'request': request})
             return Response(serializer.data, status=200)
 
         # Case 3: /authors/{author_fqid}/liked — remote author’s likes by FQID
         elif author_fqid:
             user = get_object_or_404(User, fqid=author_fqid)
-            entry_likes = EntryLike.objects.filter(user=user)
-            comment_likes = CommentLike.objects.filter(user=user)
-            all_likes = list(entry_likes) + list(comment_likes)
+            likes = Liked.objects.filter(user=user).order_by("-created")
 
             class LikeListObject:
                 def __init__(self, author, id, page_number, size, count, src):
@@ -666,9 +677,9 @@ class LikedEntriesView(APIView):
                 author=user,
                 id=user.id,
                 page_number=1,
-                size=len(all_likes),
-                count=len(all_likes),
-                src=all_likes
+                size=len(likes),
+                count=likes.count(),
+                src=likes
             )
 
             serializer = LikesSerializer(data, context={'request': request})
@@ -676,12 +687,7 @@ class LikedEntriesView(APIView):
 
         # Case 4: /liked/{liked_fqid} — single like by its FQID
         elif liked_fqid:
-            like = (
-                EntryLike.objects.filter(fqid=liked_fqid).first()
-                or CommentLike.objects.filter(fqid=liked_fqid).first()
-            )
-            if not like:
-                return Response({"error": "Like not found"}, status=404)
+            like = get_object_or_404(Liked, fqid=liked_fqid)
             serializer = LikeSerializer(like, context={'request': request})
             return Response(serializer.data, status=200)
 

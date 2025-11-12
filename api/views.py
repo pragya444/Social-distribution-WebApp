@@ -222,7 +222,10 @@ class AuthorStreamView(APIView):
         liked_ids = set()
         if request.user.is_authenticated and entries:
             liked_ids = set(EntryLike.objects.filter(user=request.user, entry__in=entries).values_list('entry_id', flat=True))
-
+        
+        # TODO: Got a Like toggle display issue (The like button doesn't show correctly after refreshing the page)
+        # I guess it is related to the entry.user_liked attribute setting here.
+        
         for e in entries:
             e.user_liked = e.id in liked_ids
             e.rendered = helpers.render_entry(e)

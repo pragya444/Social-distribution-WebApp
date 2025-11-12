@@ -152,8 +152,6 @@ class EntrySerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         instance = getattr(self, 'instance', None)
-
-        # Get content_type from either contentType or content_type field
         content_type = attrs.get('content_type')
         visibility = attrs.get('visibility', getattr(instance, 'visibility', None))
         title = attrs.get('title', getattr(instance, 'title', None))

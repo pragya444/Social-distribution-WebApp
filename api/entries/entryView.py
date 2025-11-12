@@ -164,14 +164,21 @@ def create_payload(request):
 
 
 class SingleEntryView(APIView):
-    renderer_classes = [JSONRenderer]
-    parser_classes = [JSONParser]
+    renderer_classes = [JSONRenderer, TemplateHTMLRenderer]  
+    parser_classes = [JSONParser, MultiPartParser, FormParser]  
 
     def get(self, request, author_id, entry_id):
         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
         if entry.visibility not in ['PUBLIC', 'UNLISTED']:
             if not helpers.can_view_entry(request.user, entry):
                 return Response({"error": "This entry is not shareable."}, status=403)
+        
+        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            return Response(
+                {"entry": entry, "author_id": author_id},
+                template_name="entry/entry_shared.html" 
+            )
+        
         return Response(entry_obj(request, entry), status=200)
     
     
@@ -202,8 +209,10 @@ class SingleEntryView(APIView):
         
         updated_entry = serializer.save()
         
+        # Redirect on success for browser
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
             return redirect('author-all-entries', author_id=author_id)
+        
         return Response(entry_obj(request, updated_entry), status=200)
 
 
@@ -224,8 +233,10 @@ class SingleEntryView(APIView):
         entry.is_deleted = True
         entry.save()
 
+        # Redirect on delete for browser
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
             return redirect('author-all-entries', author_id=author_id)
+        
         return Response({"msg": "Entry deleted successfully."}, status=204)
 
 

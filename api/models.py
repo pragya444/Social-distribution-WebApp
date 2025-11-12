@@ -82,7 +82,12 @@ This model Entry was written with the assistance of OpenAI, ChatGPT-5. 2025-10-1
 '''
 
 class Entry(models.Model):
-    
+    """
+    This model represents a blog entry or post created by an author.
+    Each entry has a title, content, visibility settings, and timestamps for creation and updates.
+    The visibility can be set to 'PUBLIC', 'FRIENDS', 'PRIVATE', or 'UNLISTED'.
+    The foreign key relationship to the User model indicates which author created the entry.
+    """
     VISIBILITY_CHOICES = [
         ('PUBLIC', 'Public'),
         ('FRIENDS', 'Friends'),

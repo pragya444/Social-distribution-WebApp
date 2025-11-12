@@ -22,8 +22,8 @@ urlpatterns = [
     path('authors/<str:author_id>/entries/new/', views.EntryCreateView.as_view(), name='entry-create-page'),
     # edit page for a specific entry
     path('authors/<str:author_id>/entries/<str:entry_id>/edit/', views.EntryEditView.as_view(), name='entry-edit-page'),
-    # list author entries and create a new entry
-    path('authors/<str:author_id>/entries/', views.EntryListCreateView.as_view(), name='entries-list-create'),
+    # list author entries and create a new entry 
+    path('authors/<str:author_id>/entries/', entryView.EntryView.as_view(), name='entries-list-create'),
     # get and update a single entry by id
     path('authors/<str:author_id>/entries/<str:entry_id>/', entryView.SingleEntryView.as_view(), name='entry-retrieve-update'),
     path('authors/<str:author_id>/entries/<str:entry_id>/image/', views.EntryImageView.as_view(), name='entry-image'),

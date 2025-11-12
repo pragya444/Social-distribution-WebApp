@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Entry, Follow, Comment, EntryLike, CommentLike
 from .utils import helpers
+from .models import get_url 
 User = get_user_model()
 import base64
 
@@ -10,7 +11,7 @@ class AuthorSerializer(serializers.ModelSerializer):
     id = serializers.SerializerMethodField()
     host = serializers.CharField(read_only=True)
     displayName = serializers.CharField(source='name', allow_blank=False, required=False)
-    #description = serializers.CharField(allow_blank=True, required=False)
+    description = serializers.CharField(allow_blank=True, required=False)
     github = serializers.CharField(allow_blank=True, required=False)
     profileImage = serializers.CharField(allow_blank=True, required=False)
     web = serializers.SerializerMethodField()
@@ -20,7 +21,7 @@ class AuthorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["type", "id","host","displayName","github","profileImage","web"]
+        fields = ["type", "id","host","displayName","description","github","profileImage","web"]
         read_only_fields = ["type","id","host", "web"] #"created","followers","following","friends"]
 
     def get_id(self, obj):
@@ -107,6 +108,7 @@ class EntrySerializer(serializers.ModelSerializer):
     type = serializers.CharField(default='entry', read_only=True)
     id = serializers.SerializerMethodField()
     web = serializers.SerializerMethodField()
+    description = serializers.CharField(allow_blank=True, required=False)
     contentType = serializers.CharField()
     author = AuthorSerializer(read_only=True)
     comments = serializers.SerializerMethodField()
@@ -115,7 +117,7 @@ class EntrySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Entry
-        fields = ['type', 'id', 'author', 'author_username', 'title', 'content', 'web', 'contentType', 'visibility', 'comments', 'likes', 'comment_count', 'like_count', 'updated', 'published']
+        fields = ['type', 'id', 'web', 'title', 'description', 'contentType', 'content', 'author', 'comments', 'likes', 'published', 'visibility', 'author_username']
         read_only_fields = ['id', 'author', 'author_username', 'comment_count', 'like_count', 'updated']
         extra_kwargs = {
             'title': {'required': True, 'allow_blank': False},
@@ -129,7 +131,8 @@ class EntrySerializer(serializers.ModelSerializer):
 
     def get_web(self, obj):
         request = self.context.get('request')
-        return f"{request.build_absolute_uri('/authors/')}{obj.author.id}/entries/{obj.id}"
+        # Frontend HTML URL (not the API URL)
+        return get_url().rstrip("/") + "/authors/" + obj.author.id + "/entries/" + obj.id
 
     def get_comments(self, obj):
         request = self.context.get('request')
@@ -193,6 +196,9 @@ class EntrySerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get('request')
         user = request.user
+        # API uses contentType; model expects content_type
+        if 'contentType' in validated_data:
+            validated_data['content_type'] = validated_data.pop('contentType')
         try:
             entry = Entry.objects.create(author=user, **validated_data)
         except Exception as e:
@@ -201,9 +207,12 @@ class EntrySerializer(serializers.ModelSerializer):
         return entry
     
     def update(self, entry, validated_data):
+        # Map API contentType -> model content_type before applying updates
+        if 'contentType' in validated_data:
+            validated_data['content_type'] = validated_data.pop('contentType')
         entry.title = validated_data.get('title', entry.title)
         entry.content = validated_data.get('content', entry.content)
-        entry.content_type = validated_data.get('contentType', entry.content_type)
+        entry.content_type = validated_data.get('content_type', entry.content_type)
         entry.visibility = validated_data.get('visibility', entry.visibility)
         entry.save()
         return entry

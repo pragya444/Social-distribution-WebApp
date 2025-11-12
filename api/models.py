@@ -56,6 +56,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     profile_picture = models.CharField(max_length=255, blank=True, default="")
     description = models.CharField(max_length=500, blank=True, default="")
     url = models.CharField(max_length=255, default="", db_index=True, unique=True)
+    host = models.CharField(max_length=255, default="")
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
@@ -71,6 +72,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def save(self, *args, **kwargs):
         self.url = get_url() + "api/authors/" + self.id  # Creates a fixed URL for each user
+        self.host = get_url() + "api/"  # API base URL
         return super(User, self).save(*args, **kwargs)
     
 
@@ -80,13 +82,7 @@ This model Entry was written with the assistance of OpenAI, ChatGPT-5. 2025-10-1
 '''
 
 class Entry(models.Model):
-    """
-    This model represents a blog entry or post created by an author.
-    Each entry has a title, content, visibility settings, and timestamps for creation and updates.
-    The visibility can be set to 'PUBLIC', 'FRIENDS', 'PRIVATE', or 'UNLISTED'.
-    The foreign key relationship to the User model indicates which author created the entry.
-    """
-
+    
     VISIBILITY_CHOICES = [
         ('PUBLIC', 'Public'),
         ('FRIENDS', 'Friends'),
@@ -97,9 +93,10 @@ class Entry(models.Model):
     id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='entries')
     title = models.CharField(max_length=255)
+    description = models.CharField(max_length=500, blank=True, default="")
 
-    content = models.TextField(blank=True, default="")  #stores text OR base64 image data
-    content_type = models.CharField(max_length=60, blank=True, default="")  # e.g. text/markdown,  image/png;base64
+    content = models.TextField(blank=True, default="")
+    content_type = models.CharField(max_length=60, blank=True, default="")
 
     visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='PUBLIC')
     is_deleted = models.BooleanField(default=False)
@@ -109,7 +106,10 @@ class Entry(models.Model):
     comment_count = models.IntegerField(default=0)
     like_count = models.IntegerField(default=0)
 
-    
+    @property
+    def published(self):
+        return self.created
+
     @property
     def is_image(self) -> bool:
         """NEW: True if entry is an image entry encoded as base64 (e.g., image/png;base64)."""
@@ -160,6 +160,10 @@ class Comment(models.Model):
     content_type = models.CharField(max_length=60, default="text/plain")
     created = models.DateTimeField(default=timezone.now)
 
+    @property
+    def published(self):
+        return self.created
+
     class Meta:
         ordering = ["-created"]
 
@@ -174,15 +178,23 @@ class EntryLike(models.Model):
     entry = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name="likes")
     created = models.DateTimeField(default=timezone.now)
 
+    @property
+    def published(self):
+        return self.created
+
     class Meta:
         unique_together = ("user", "entry")
+
 
 class CommentLike(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="comment_likes")
     comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name="likes")
     created = models.DateTimeField(default=timezone.now)
 
+    @property
+    def published(self):
+        return self.created
+
     class Meta:
         unique_together = ("user", "comment")
 
-        

@@ -158,7 +158,6 @@ def comment_to_json(c):
 
 
 
-
 def _looks_like_markdown(t: str) -> bool:
     # normalize to empty string when none
     t = t or ""
@@ -202,3 +201,6 @@ def render_entry(entry):
     safe = escape(text)         # prevent html injection
     html = linebreaksbr(safe)       # convert \n to <br>              
     return mark_safe(html)       # mark as safe             
+
+
+

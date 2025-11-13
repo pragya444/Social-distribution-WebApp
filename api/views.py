@@ -18,6 +18,8 @@ from django.db import IntegrityError, transaction
 from django.core.paginator import Paginator
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 import base64
+from urllib.parse import urlparse, unquote
+from .entries import entryView
 
 
 User = get_user_model()
@@ -301,21 +303,60 @@ class EntryImageView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, author_id, entry_id):
-        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-        if not helpers.can_view_entry(request.user, entry):
-            return Response({"error": "no access to this image"}, status=403)
+        # Fetch the entry by author and id, ensure it is not deleted
+        entry = get_object_or_404(
+            Entry,
+            id=entry_id,
+            author_id=author_id,
+            is_deleted=False,
+        )
+        return entryView._serve_entry_image(request, entry)
 
-        ct = (getattr(entry, 'content_type', '') or '').lower()
-        if not (ct.startswith('image/') and ct.endswith(';base64')):
-            raise Http404('not an image entry')
+
+class EntryImageFQIDView(APIView):
+    """
+    GET /api/entries/{ENTRY_FQID}/image
+
+    ENTRY_FQID is the full URL of the entry (usually percent-encoded).
+    Steps:
+      1. Decode the FQID.
+      2. Parse its path to extract authors/{author_id}/entries/{entry_id}.
+      3. Fetch the local Entry and serve it as an image.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, entry_fqid):
+        # 1) Decode percent-encoding (e.g. http%3A%2F%2F... -> http://...)
+        decoded = unquote(entry_fqid)
+
+        # 2) Parse URL and get the path, e.g. "/api/authors/222/entries/249"
+        parsed = urlparse(decoded)
+        path = parsed.path
+
+        parts = path.strip("/").split("/")  # e.g. ["api", "authors", "222", "entries", "249"]
 
         try:
-            raw_bytes = base64.b64decode(entry.content or '')
-        except Exception:
-            raise Http404('invalid image data')
+            # Find "authors" and "entries" segments and read the IDs after them
+            idx_auth = parts.index("authors")
+            author_id = parts[idx_auth + 1]
 
-        mime_type = ct.replace(';base64', '')
-        return HttpResponse(raw_bytes, content_type=mime_type)
+            idx_entry = parts.index("entries")
+            entry_id = parts[idx_entry + 1]
+        except (ValueError, IndexError):
+            # Path does not look like .../authors/{id}/entries/{id}
+            raise Http404("invalid entry FQID format")
+
+        # 3) Fetch the entry and reuse the same image-serving helper
+        entry = get_object_or_404(
+            Entry,
+            id=entry_id,
+            author_id=author_id,
+            is_deleted=False,
+        )
+        return _serve_entry_image(request, entry)
+
+
+
 
 
 class FollowRequestActionView(APIView):

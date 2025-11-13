@@ -10,14 +10,15 @@ from django.conf import settings
 from ..serializers import EntrySerializer
 from ..models import Entry, EntryLike, Comment, CommentLike  
 from ..utils import helpers, images
-
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils.timezone import is_naive
 from django.utils.timezone import make_aware
 from urllib.parse import urljoin
+import base64
 
 
+# Developed with assistance from ChatGPT (GPT-5), November 2025
 
 def _site_root(request):
     # Ensures trailing slash
@@ -127,6 +128,34 @@ def entries_page_obj(request, entries, page_obj, size):
         "count": page_obj.paginator.count,
         "src": [entry_obj(request, e) for e in entries],
     }
+
+
+def _serve_entry_image(request, entry):
+    """
+    Serve an Entry whose content is an image (base64) as a binary HTTP response.
+    """
+    # 1) Permission check: does the current user have access to this entry
+    #    (PUBLIC / FRIENDS etc. logic is handled in helpers)
+    if not helpers.can_view_entry(request.user, entry):
+        return Response({"error": "no access to this image"}, status=403)
+
+    # 2) Ensure this is a base64-encoded image type, e.g. image/png;base64
+    ct = (getattr(entry, "content_type", "") or "").lower()
+    if not (ct.startswith("image/") and ct.endswith(";base64")):
+        raise Http404("not an image entry")
+
+    # 3) Decode the base64 string stored in the content field into raw bytes
+    try:
+        raw_bytes = base64.b64decode(entry.content or "")
+    except Exception:
+        raise Http404("invalid image data")
+
+    # 4) Strip the trailing ;base64 to get the actual MIME type,
+    #    then return a binary image response
+    mime_type = ct.replace(";base64", "")
+    return HttpResponse(raw_bytes, content_type=mime_type)
+
+
 
 def create_payload(request):
     data = request.data

@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from .auth import authViews
 from .entries import entryView
+from .views import EntryImageView, EntryImageFQIDView
 
 urlpatterns = [
     # Auth routes
@@ -27,6 +28,14 @@ urlpatterns = [
     # get and update a single entry by id
     path('authors/<str:author_id>/entries/<str:entry_id>/', entryView.SingleEntryView.as_view(), name='entry-retrieve-update'),
     path('authors/<str:author_id>/entries/<str:entry_id>/image/', views.EntryImageView.as_view(), name='entry-image'),
+    
+    #/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image
+    path("authors/<uuid:author_id>/entries/<uuid:entry_id>/image",EntryImageView.as_view(),name="entry-image-api",),
+    #/entries/{ENTRY_FQID}/image
+    path("entries/<path:entry_fqid>/image",EntryImageFQIDView.as_view(),name="entry-image-fqid",),
+
+
+
 
     # Comment routes
     path('authors/<str:author_id>/entries/<str:entry_id>/comments', views.CommentListCreateView.as_view(), name='comments-list-create'),

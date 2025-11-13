@@ -7,7 +7,7 @@ import secrets
 import uuid
 from django.utils import timezone
 
-
+# TODO: Use get_url for fqid generation
 
 def generate_id():
     return secrets.token_urlsafe(16)
@@ -124,7 +124,7 @@ class Entry(models.Model):
         super().save(*args, **kwargs)
         if not self.fqid:
             # Build FQID after we know the ID
-            host = "http://127.0.0.1:8000"  # or your domain
+            host = get_url()  # or your domain
             self.fqid = f"{host}/api/authors/{self.author.id}/entries/{self.id}"
             super().save(update_fields=["fqid"])
 
@@ -186,7 +186,7 @@ class Comment(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         if not self.fqid:
-            host = "http://127.0.0.1:8000"  # Replace with your domain in production
+            host = get_url()  # Replace with your domain in production
             self.fqid = f"{host}/api/authors/{self.entry.author.id}/entries/{self.entry.id}/comments/{self.id}"
             super().save(update_fields=["fqid"])
         
@@ -247,7 +247,7 @@ class Liked(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         if not self.fqid:
-            base = "http://127.0.0.1:8000"  # TODO: Replace with get_url() if available
+            base = get_url()  
 
             if self.entry:
                 # For entry likes

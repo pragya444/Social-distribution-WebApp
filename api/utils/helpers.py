@@ -5,6 +5,7 @@ from django.utils.safestring import mark_safe
 from django.template.defaultfilters import linebreaksbr
 from django.urls import reverse
 
+# Developed with assistance from ChatGPT (GPT-5), October 2025
 
 def json_from_request(request):
     # parse json body safely, return empty dict on failure
@@ -113,7 +114,7 @@ def can_view_entry(current_user, entry: Entry) -> bool:
     if vis in ("PUBLIC", "UNLISTED"):
         return True
 
-    if not current_user or not getattr(current_user, "is_authenticated", False):
+    if not current_user or not getattr(current_user, "is_authenticated", False): #Unauth users cannot view non-public
         return False
 
     # owner can always see
@@ -124,10 +125,12 @@ def can_view_entry(current_user, entry: Entry) -> bool:
         # replace with  actual friend check
         return is_friends(current_user, entry.author)
 
-    if vis == "PRIVATE":
+    if vis == "PRIVATE": #Only author can view
         return str(current_user.id) == str(entry.author_id)
 
     return False
+
+
 
 
 def comment_to_json(c):
@@ -153,6 +156,9 @@ def comment_to_json(c):
     }
 
 
+
+
+
 def _looks_like_markdown(t: str) -> bool:
     # normalize to empty string when none
     t = t or ""
@@ -162,31 +168,37 @@ def _looks_like_markdown(t: str) -> bool:
     return any(tok in t for tok in tokens)
 
 
+
+
+#![](/api/authors/E9l5Mg5wW68V2Csk6a6zuw/entries/s-FaCgpezzb0WWwMBPQG7g/image)
+#![](/api/authors/E9l5Mg5wW68V2Csk6a6zuw/entries/uO25NJA1UTrcg71nUf0bLw/image)
+#Render Entry content to HTML
 def render_entry(entry):
     # read content type and text from the model
-    ct = (getattr(entry, "content_type", "") or "").lower()
-    text = getattr(entry, "content", "") or ""
+    ct = (getattr(entry, "content_type", "") or "").lower() # Lowercased content_type
+    text = getattr(entry, "content", "") or "" #Get content text
 
-    if ct in ("image/png;base64", "image/jpeg;base64", "image/jpg;base64"):
-        img_url = reverse("entry-image", args=[entry.author_id, entry.id])
-        html = f'<img src="{img_url}" alt="{escape(entry.title or "")}" style="max-width:100%;height:auto;" />'
-        return mark_safe(html)
+    #image branch：  Markdown image syntax   is rendered into   an HTML <img> element
+    if ct in ("image/png;base64", "image/jpeg;base64", "image/jpg;base64"): #If entry is an image type
+        img_url = reverse("entry-image", args=[entry.author_id, entry.id]) #Build binary image endpoint URL
+        html = f'<img src="{img_url}" alt="{escape(entry.title or "")}" style="max-width:100%;height:auto;" />'  # Build <img> tag
+        return mark_safe(html)   # Return as safe HTML
     
     # auto-detect markdown when content type is missing
     if not ct:
-        ct = "text/markdown" if _looks_like_markdown(text) else "text/plain"
+        ct = "text/markdown" if _looks_like_markdown(text) else "text/plain" #Guess ct by heuristic
 
     # markdown rendering branch
-    if ct in ("text/markdown", "text/commonmark", "text/md"):
-        try:
+    if ct in ("text/markdown", "text/commonmark", "text/md"): #Accept several aliases
+        try: # Try rendering
             from commonmark import commonmark 
-            html = commonmark(text)   
-            return mark_safe(html)  
-        except Exception:
+            html = commonmark(text)     #Convert to HTML
+            return mark_safe(html)   #Return safe HTML
+        except Exception:  
             # fallback: show raw text in a <pre> block on any error
             return mark_safe(f"<pre>{escape(text)}</pre>")
 
     # plain text branch: escape html and keep line breaks
     safe = escape(text)         # prevent html injection
-    html = linebreaksbr(safe)     
-    return mark_safe(html)       
+    html = linebreaksbr(safe)       # convert \n to <br>              
+    return mark_safe(html)       # mark as safe             

@@ -198,37 +198,44 @@ class SingleEntryView(APIView):
     
     
     def put(self, request, author_id, entry_id):
+        # Only the owner (author_id) can update this entry
         if not request.user or str(request.user.id) != str(author_id):
             if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
                 return HttpResponseForbidden("Only the author can edit this entry.")
-            return Response({"error" : "Only the author can edit this entry"}, status=403)
-        
+            return Response({"error": "Only the author can edit this entry"}, status=403)
+
+        # Fetch the target entry (must not be deleted)
         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+
+        # Normalize incoming data (text vs image, contentType, base64, etc.)
         payload = create_payload(request)
 
-        serializer = EntrySerializer(entry, data=payload, partial=True)
+        serializer = EntrySerializer(entry, data=payload, partial=True, context={"request": request})
 
         if not serializer.is_valid():
+            # HTML: re-render edit page with errors; JSON: return 400 with errors
             if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
                 return Response(
                     {
                         "author_id": author_id,
                         "entry": entry,
                         "errors": serializer.errors,
+                        "contentType": getattr(entry, "content_type", "") or "text/markdown",
                     },
                     template_name="entry/entry_edit.html",
                     status=400,
                 )
-
             return Response({"errors": serializer.errors}, status=400)
-        
+
         updated_entry = serializer.save()
-        
-        # Redirect on success for browser
+
+        # HTML: redirect back to entries list; JSON: return updated entry object
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-            return redirect('author-all-entries', author_id=author_id)
-        
+            return redirect("author-all-entries", author_id=author_id)
+
         return Response(entry_obj(request, updated_entry), status=200)
+
+
 
 
     def post(self, request, author_id, entry_id):

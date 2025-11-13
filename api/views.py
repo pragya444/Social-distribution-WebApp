@@ -19,6 +19,7 @@ from django.core.paginator import Paginator
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 import base64
 
+
 User = get_user_model()
 
 try:
@@ -294,25 +295,6 @@ class EntryEditView(APIView):
         serializer = EntrySerializer(entry)
         return Response(serializer.data)
 
-    def put(self, request, author_id, entry_id):
-        if str(request.user.id) != str(author_id):
-            return Response({"error": "Not authorized"}, status=403)
-
-        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-        serializer = EntrySerializer(entry, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            if request.accepted_renderer.format == 'html':
-                return redirect('author-stream', author_id=author_id)
-            return Response(serializer.data)
-
-        if request.accepted_renderer.format == 'html':
-            return Response({
-                'author_id': author_id,
-                'entry': entry,
-                'contentType': getattr(entry, 'content_type', '') or 'text/markdown',
-            }, template_name='entry/entry_edit.html')
-        return Response(serializer.errors, status=400)
 
 
 class EntryImageView(APIView):

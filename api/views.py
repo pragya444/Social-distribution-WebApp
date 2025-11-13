@@ -1,5 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import F, Q
+from urllib3 import request
 from .models import User, Entry, Comment, EntryLike, CommentLike, Follow, Liked
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
@@ -534,6 +535,10 @@ class EntryLikesView(APIView):
     renderer_classes = [JSONRenderer]
 
     def get(self, request, entry_fqid=None, author_id=None, entry_id=None):
+        '''
+        This handles a get request to retrieve the list of likes for a specific entry.
+        it returns a paginated list of likes along with metadata about the entry and pagination.
+        '''
         if author_id:
             entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
         elif entry_fqid:
@@ -543,8 +548,12 @@ class EntryLikesView(APIView):
 
         if not helpers.can_view_entry(request.user, entry):
             return HttpResponseForbidden("no access")
-
-        likes = EntryLike.objects.filter(entry=entry)
+        
+        page_number = int(request.GET.get("page", 1))  # default to page 1
+        size = int(request.GET.get("size", 50)) # default to 50 items per page
+        likes = EntryLike.objects.filter(entry=entry).order_by("-created")
+        paginator = Paginator(likes, size)
+        page = paginator.get_page(page_number)
 
         # Use an object, not a dict to avoid DRF treating 'src' as a field
         class LikeListObject:
@@ -559,10 +568,10 @@ class EntryLikesView(APIView):
         data = LikeListObject(
             author=entry.author,
             id=entry.id,
-            page_number=1,
+            page_number=page_number,
             size=len(likes),
-            count=likes.count(),
-            src=likes
+            count=paginator.count,
+            src=page.object_list
         )
 
         serializer = LikesSerializer(data, context={'request': request})
@@ -630,12 +639,19 @@ class LikedView(APIView):
     renderer_classes = [JSONRenderer]
 
     def get(self, request, author_id=None, like_id=None, author_fqid=None, liked_fqid=None):
+
         # Case 1: /authors/{author_id}/liked — all likes (entries + comments)
         if author_id and not like_id:
             user = get_object_or_404(User, id=author_id)
             likes = Liked.objects.filter(user=user).order_by("-created")
 
-            # Like-list wrapper for serialization
+            # Pagination
+            page_number = int(request.GET.get("page", 1))
+            size = int(request.GET.get("size", 5))
+            paginator = Paginator(likes, size)
+            page = paginator.get_page(page_number)
+
+            # Wrapper
             class LikeListObject:
                 def __init__(self, author, id, page_number, size, count, src):
                     self.author = author
@@ -648,16 +664,16 @@ class LikedView(APIView):
             data = LikeListObject(
                 author=user,
                 id=user.id,
-                page_number=1,
+                page_number=page_number,
                 size=len(likes),
-                count=likes.count(),
-                src=likes
+                count=paginator.count,
+                src=page.object_list
             )
 
             serializer = LikesSerializer(data, context={'request': request})
             return Response(serializer.data, status=200)
 
-        # Case 2: /authors/{author_id}/liked/{like_id} — single like by this author
+        # Case 2: single like by this author
         elif author_id and like_id:
             like = get_object_or_404(Liked, id=like_id, user__id=author_id)
             serializer = LikeSerializer(like, context={'request': request})
@@ -668,6 +684,12 @@ class LikedView(APIView):
             user = get_object_or_404(User, fqid=author_fqid)
             likes = Liked.objects.filter(user=user).order_by("-created")
 
+            # Pagination (same logic)
+            page_number = int(request.GET.get("page", 1))
+            size = int(request.GET.get("size", 5))
+            paginator = Paginator(likes, size)
+            page = paginator.get_page(page_number)
+
             class LikeListObject:
                 def __init__(self, author, id, page_number, size, count, src):
                     self.author = author
@@ -680,22 +702,21 @@ class LikedView(APIView):
             data = LikeListObject(
                 author=user,
                 id=user.id,
-                page_number=1,
+                page_number=page_number,
                 size=len(likes),
-                count=likes.count(),
-                src=likes
+                count=paginator.count,
+                src=page.object_list
             )
 
             serializer = LikesSerializer(data, context={'request': request})
             return Response(serializer.data, status=200)
 
-        # Case 4: /liked/{liked_fqid} — single like by its FQID
+        # Case 4: single like by FQID
         elif liked_fqid:
             like = get_object_or_404(Liked, fqid=liked_fqid)
             serializer = LikeSerializer(like, context={'request': request})
             return Response(serializer.data, status=200)
 
-        # Invalid route
         else:
             return Response({"error": "Invalid request"}, status=400)
 
@@ -727,23 +748,47 @@ class CommentLikesView(APIView):
         }, status=200)
 
     def post(self, request, author_id, entry_id, comment_id):
+        """
+        Handles liking a comment using the unified Liked model.
+        """
+        # 1. Validate the entry and comment
         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
         if not helpers.can_view_entry(request.user, entry):
             return HttpResponseForbidden("no access")
 
         comment = get_object_or_404(Comment, id=comment_id, entry=entry)
-        CommentLike.objects.get_or_create(user=request.user, comment=comment)
-        count = CommentLike.objects.filter(comment=comment).count()
+
+        # 2. Create (or reuse) the like
+        like, created = Liked.objects.get_or_create(user=request.user, comment=comment, defaults={"entry": entry})
+
+        if created:
+            # Optional: update comment like count if you track it
+            Comment.objects.filter(id=comment.id).update(like_count=F('like_count') + 1)
+
+        # 3. Return the total count
+        count = Liked.objects.filter(comment=comment).count()
         return JsonResponse({"ok": True, "liked": True, "count": count}, status=201)
 
     def delete(self, request, author_id, entry_id, comment_id):
+        """
+        Handles unliking a comment using the unified Liked model.
+        """
         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
         if not helpers.can_view_entry(request.user, entry):
             return HttpResponseForbidden("no access")
 
         comment = get_object_or_404(Comment, id=comment_id, entry=entry)
-        CommentLike.objects.filter(user=request.user, comment=comment).delete()
-        count = CommentLike.objects.filter(comment=comment).count()
+
+        # 1. Delete the like
+        deleted, _ = Liked.objects.filter(user=request.user, comment=comment).delete()
+
+        if deleted:
+            # Optional: decrement comment like count (never below 0)
+            comment.like_count = max(comment.like_count - 1, 0)
+            comment.save(update_fields=["like_count"])
+
+        # 2. Return the updated count
+        count = Liked.objects.filter(comment=comment).count()
         return JsonResponse({"ok": True, "liked": False, "count": count}, status=200)
 
 

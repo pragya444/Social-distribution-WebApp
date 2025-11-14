@@ -529,6 +529,22 @@ class CommentListCreateView(APIView):
         return Response(helpers.comment_to_json(comment, request), status=201)
 
 class EntryLikesView(APIView):
+    '''
+    This view handles:
+    - GET /api/authors/{author_id}/entries/{entry_id}/likes
+        returns a paginated list of likes for the specified entry. (likes object)
+        
+    - GET /api/entries/{entry_fqid}/likes
+        returns a paginated list of likes for the specified entry by fqid. (likes object)
+        
+    - POST /api/authors/{author_id}/entries/{entry_id}/likes
+        returns the like count and the liked status after liking the entry.
+        
+    - DELETE /api/authors/{author_id}/entries/{entry_id}/likes
+        returns the like count and the liked status after unliking the entry.
+
+    '''
+    
     permission_classes = [IsAuthenticatedOrReadOnly]
     authentication_classes = [SessionAuthentication]
     renderer_classes = [JSONRenderer]
@@ -575,9 +591,7 @@ class EntryLikesView(APIView):
 
         serializer = LikesSerializer(data, context={'request': request})
         return Response(serializer.data, status=200)
-
-    # TODO: I refactored the like/unlike to use Liked model instead of EntryLike.
-    # the html might be tweeking 
+    
     def post(self, request, author_id, entry_id):
         entry = get_object_or_404(
             Entry, id=entry_id, author_id=author_id, is_deleted=False
@@ -648,9 +662,16 @@ class LikedView(APIView):
     """
     Handles:
     - GET /api/authors/{author_id}/liked
+        returns a paginated list of all likes (entries + comments) by the specified author.
+        
     - GET /api/authors/{author_id}/liked/{like_id}
+        returns a single like by this author.
+        
     - GET /api/authors/{author_fqid}/liked
+        returns a paginated list of all likes (entries + comments) by the specified remote author identified by FQID.
+    
     - GET /api/liked/{liked_fqid}
+        returns a single like identified by FQID.
     """
     permission_classes = [IsAuthenticatedOrReadOnly]
     renderer_classes = [JSONRenderer]

@@ -227,7 +227,7 @@ class EntrySerializer(serializers.ModelSerializer):
         return entry
 
 class FollowRequestSerializer(serializers.ModelSerializer):
-    """Serializer for follow request objects"""
+    """Serializer for follow request objects following API spec format"""
     type = serializers.CharField(default="follow", read_only=True)
     summary = serializers.SerializerMethodField()
     actor = AuthorSerializer(source='follower', read_only=True)
@@ -251,9 +251,7 @@ class FollowRequestSerializer(serializers.ModelSerializer):
         fields = ['type', 'summary', 'actor', 'object']
 
     def get_summary(self, obj):
-        follower_name = obj.follower.name or obj.follower.username
-        followee_name = obj.followee.name or obj.followee.username
-        return f"{follower_name} wants to follow {followee_name}"
+        return f"{obj.follower.displayName} wants to follow {obj.followee.displayName}"
 
 class CommentSerializer(serializers.ModelSerializer):
     """Comment serializer following API spec"""
@@ -340,12 +338,6 @@ class FollowersSerializer(serializers.Serializer):
     """Serializer for list of followers following API spec"""
     type = serializers.CharField(default="followers", read_only=True)
     followers = AuthorSerializer(many=True)
-
-
-class FollowingSerializer(serializers.Serializer):
-    """Serializer for list of authors a user is following (Following API)"""
-    type = serializers.CharField(default="following", read_only=True)
-    following = AuthorSerializer(many=True)
 
 class LikeSerializer(serializers.ModelSerializer):
     """Base serializer for likes following API spec"""

@@ -46,8 +46,7 @@ urlpatterns = [
     path('authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/', views.CommentLikesView.as_view(), name='comment-likes'), # Local access
     
     # Liked routes
-    
-    # TODO: Check with postman if these work as intended
+
     path('authors/<str:author_id>/liked', views.LikedView.as_view(), name='liked-entries'),
     path('authors/<str:author_id>/liked/<str:like_id>', views.LikedView.as_view(), name='liked-entry-detail'),
     path('authors/<path:author_fqid>/liked', views.LikedView.as_view(), name='liked-entries-fqid'),  # for FQID

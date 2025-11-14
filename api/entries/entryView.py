@@ -4,11 +4,11 @@ from django.core.paginator import Paginator
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authentication import SessionAuthentication
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.conf import settings
 from ..serializers import EntrySerializer
-from ..models import Entry, EntryLike, Comment, CommentLike  
+from ..models import Entry, EntryLike, Comment, CommentLike, User
 from ..utils import helpers, images
 
 from django.views.decorators.csrf import csrf_exempt
@@ -259,24 +259,118 @@ class SingleEntryView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class EntryView(APIView):
+    """
+    GET [local, remote] get the recent entries from author AUTHOR_SERIAL (paginated)
+    POST [local] create a new entry but generate a new ID
+    
+    URL: ://service/api/authors/{AUTHOR_SERIAL}/entries/
+    
+    GET Returns:
+        - 200: Entries object with pagination
+        {
+            "type": "entries",
+            "page_number": 1,
+            "size": 10,
+            "count": 100,
+            "src": [/* array of entry objects */]
+        }
+    
+    GET Authentication:
+        - Not authenticated: only public entries
+        - Authenticated locally as author: all entries
+        - Authenticated locally as follower of author: public + unlisted entries
+        - Authenticated locally as friend of author: all entries
+    
+    POST Returns:
+        - 201: Entry object (created)
+        - 400: Invalid data
+        - 403: Not authorized (must be the author)
+    
+    POST Authentication:
+        - Must be authenticated locally as the author
+    
+    When first creating the entry, there's no likes or comments since it doesn't exist yet.
+    """
     renderer_classes = [JSONRenderer, TemplateHTMLRenderer]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    authentication_classes = [SessionAuthentication] 
+    authentication_classes = [BasicAuthentication, SessionAuthentication]
 
     def get(self, request, author_id):
         page_num = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('size', 10))
         
-        if str(request.user.id) == str(author_id):
-            qs = Entry.objects.filter(author_id=author_id, is_deleted=False).order_by('-updated')
+        author = get_object_or_404(User, id=author_id)
+        
+        # Determine what entries the requester can see
+        if not request.user.is_authenticated:
+            # Not authenticated: only public entries
+            qs = Entry.objects.filter(
+                author_id=author_id, 
+                visibility="PUBLIC", 
+                is_deleted=False
+            ).order_by('-updated')
+        elif str(request.user.id) == str(author_id):
+            # Authenticated as author: all entries
+            qs = Entry.objects.filter(
+                author_id=author_id, 
+                is_deleted=False
+            ).order_by('-updated')
         else:
-            qs = Entry.objects.filter(author_id=author_id, visibility="PUBLIC", is_deleted=False).order_by('-updated')
+            # Authenticated as someone else: check relationship using helpers
+            friends = helpers.friends_of(request.user)
+            is_friend = author in friends
+            
+            followers = helpers.users_i_follow(request.user)
+            is_follower = author in followers
+            
+            if is_friend:
+                # Friend: all entries
+                qs = Entry.objects.filter(
+                    author_id=author_id,
+                    is_deleted=False
+                ).order_by('-updated')
+            elif is_follower:
+                # Follower: public + unlisted entries
+                qs = Entry.objects.filter(
+                    author_id=author_id,
+                    visibility__in=["PUBLIC", "UNLISTED"],
+                    is_deleted=False
+                ).order_by('-updated')
+            else:
+                # Not following: only public entries
+                qs = Entry.objects.filter(
+                    author_id=author_id,
+                    visibility="PUBLIC",
+                    is_deleted=False
+                ).order_by('-updated')
+        
         paginator = Paginator(qs, page_size)
         page_obj = paginator.get_page(page_num)
+        
+        # For HTML rendering, set user_liked attribute
+        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            # Get liked entry IDs for the current user
+            liked_ids = set()
+            if request.user.is_authenticated and page_obj.object_list:
+                liked_ids = set(EntryLike.objects.filter(
+                    user=request.user, 
+                    entry__in=page_obj.object_list
+                ).values_list('entry_id', flat=True))
+            
+            # Set user_liked and render content for each entry
+            for e in page_obj.object_list:
+                e.user_liked = e.id in liked_ids
+                e.rendered = helpers.render_entry(e)
+            
+            return Response({
+                'author': author,
+                'entries': page_obj.object_list,
+                'tab': 'all',
+            }, template_name='author_all_entries.html')
+        
+        # JSON response
         data = entries_page_obj(request, page_obj.object_list, page_obj, page_size)
-
         return Response(data, status=200)
-    
     
     def post(self, request, author_id):
         if str(request.user.id) != str(author_id):
@@ -304,3 +398,78 @@ class EntryView(APIView):
                 status=400
             )
         return Response({"errors": serializer.errors}, status=400)
+
+class EntryByFQIDView(APIView):
+    """
+    GET [local] get the public entry whose URL is ENTRY_FQID
+    
+    URL: ://service/api/entries/{ENTRY_FQID}
+    
+    Example: GET /api/entries/http://localhost:8000/api/authors/123/entries/456/
+    
+    The ENTRY_FQID is the full URL of the entry (the 'url' field in the entry object).
+    
+    Returns:
+        - 200: Entry object
+        - 400: Invalid FQID format
+        - 403: Not authorized to view friends-only entry
+        - 404: Entry not found
+    
+    Authentication:
+        - Public/unlisted entries: no authentication required
+        - Friends-only entries: must be authenticated
+    """
+    renderer_classes = [JSONRenderer]
+    parser_classes = [JSONParser]
+
+    def get(self, request, entry_fqid):
+        try:
+            # The FQID might have a trailing slash or not, normalize it
+            fqid_normalized = entry_fqid.rstrip('/')
+            
+            # Try exact match first on the url field
+            entry = Entry.objects.filter(
+                url=entry_fqid, 
+                is_deleted=False
+            ).first()
+            
+            # If not found, try without trailing slash
+            if not entry:
+                entry = Entry.objects.filter(
+                    url=fqid_normalized,
+                    is_deleted=False
+                ).first()
+            
+            # If still not found, try with trailing slash added
+            if not entry:
+                entry = Entry.objects.filter(
+                    url=fqid_normalized + '/',
+                    is_deleted=False
+                ).first()
+            
+            if not entry:
+                return Response(
+                    {"error": "Entry not found with the given FQID"},
+                    status=404
+                )
+                
+        except Exception as e:
+            return Response(
+                {"error": f"Invalid FQID: {str(e)}"},
+                status=400
+            )
+        
+        # Check visibility permissions
+        if entry.visibility not in ['PUBLIC', 'UNLISTED']:
+            if not request.user.is_authenticated:
+                return Response(
+                    {"error": "Authentication required for friends-only entries"},
+                    status=401
+                )
+            if not helpers.can_view_entry(request.user, entry):
+                return Response(
+                    {"error": "Not authorized to view this entry"},
+                    status=403
+                )
+        
+        return Response(entry_obj(request, entry), status=200)

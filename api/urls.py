@@ -18,6 +18,7 @@ urlpatterns = [
     path('authors/<str:author_id>/stream/', views.AuthorStreamView.as_view(), name='author-all-entries'),
 
     # Entry routes
+    path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),
     # pages: simple create form
     path('authors/<str:author_id>/entries/new/', views.EntryCreateView.as_view(), name='entry-create-page'),
     # edit page for a specific entry

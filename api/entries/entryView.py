@@ -304,3 +304,78 @@ class EntryView(APIView):
                 status=400
             )
         return Response({"errors": serializer.errors}, status=400)
+
+class EntryByFQIDView(APIView):
+    """
+    GET [local] get the public entry whose URL is ENTRY_FQID
+    
+    URL: ://service/api/entries/{ENTRY_FQID}
+    
+    Example: GET /api/entries/http://localhost:8000/api/authors/123/entries/456/
+    
+    The ENTRY_FQID is the full URL of the entry (the 'url' field in the entry object).
+    
+    Returns:
+        - 200: Entry object
+        - 400: Invalid FQID format
+        - 403: Not authorized to view friends-only entry
+        - 404: Entry not found
+    
+    Authentication:
+        - Public/unlisted entries: no authentication required
+        - Friends-only entries: must be authenticated
+    """
+    renderer_classes = [JSONRenderer]
+    parser_classes = [JSONParser]
+
+    def get(self, request, entry_fqid):
+        try:
+            # The FQID might have a trailing slash or not, normalize it
+            fqid_normalized = entry_fqid.rstrip('/')
+            
+            # Try exact match first on the url field
+            entry = Entry.objects.filter(
+                url=entry_fqid, 
+                is_deleted=False
+            ).first()
+            
+            # If not found, try without trailing slash
+            if not entry:
+                entry = Entry.objects.filter(
+                    url=fqid_normalized,
+                    is_deleted=False
+                ).first()
+            
+            # If still not found, try with trailing slash added
+            if not entry:
+                entry = Entry.objects.filter(
+                    url=fqid_normalized + '/',
+                    is_deleted=False
+                ).first()
+            
+            if not entry:
+                return Response(
+                    {"error": "Entry not found with the given FQID"},
+                    status=404
+                )
+                
+        except Exception as e:
+            return Response(
+                {"error": f"Invalid FQID: {str(e)}"},
+                status=400
+            )
+        
+        # Check visibility permissions
+        if entry.visibility not in ['PUBLIC', 'UNLISTED']:
+            if not request.user.is_authenticated:
+                return Response(
+                    {"error": "Authentication required for friends-only entries"},
+                    status=401
+                )
+            if not helpers.can_view_entry(request.user, entry):
+                return Response(
+                    {"error": "Not authorized to view this entry"},
+                    status=403
+                )
+        
+        return Response(entry_obj(request, entry), status=200)

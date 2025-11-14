@@ -228,8 +228,7 @@ class AuthorStreamView(APIView):
         if request.user.is_authenticated and entries:
             liked_ids = set(EntryLike.objects.filter(user=request.user, entry__in=entries).values_list('entry_id', flat=True))
         
-        # TODO: Got a Like toggle display issue (The like button doesn't show correctly after refreshing the page)
-        # I guess it is related to the entry.user_liked attribute setting here.
+        print(liked_ids)
         
         for e in entries:
             e.user_liked = e.id in liked_ids
@@ -243,7 +242,7 @@ class AuthorStreamView(APIView):
             }, template_name='author_all_entries.html')
 
         serializer = EntrySerializer(entries, many=True, context={"request": request})
-        return Response(serializer.data)
+        return Response(serializer.data, status=200)
 
 
 class EntryCreateView(APIView):
@@ -551,8 +550,8 @@ class EntryLikesView(APIView):
         
         page_number = int(request.GET.get("page", 1))  # default to page 1
         size = int(request.GET.get("size", 50)) # default to 50 items per page
-        likes = EntryLike.objects.filter(entry=entry).order_by("-created")
-        paginator = Paginator(likes, size)
+        liked = EntryLike.objects.filter(entry=entry).order_by("-created")
+        paginator = Paginator(liked, size)
         page = paginator.get_page(page_number)
 
         # Use an object, not a dict to avoid DRF treating 'src' as a field
@@ -569,7 +568,7 @@ class EntryLikesView(APIView):
             author=entry.author,
             id=entry.id,
             page_number=page_number,
-            size=len(likes),
+            size=len(liked),
             count=paginator.count,
             src=page.object_list
         )
@@ -580,53 +579,71 @@ class EntryLikesView(APIView):
     # TODO: I refactored the like/unlike to use Liked model instead of EntryLike.
     # the html might be tweeking 
     def post(self, request, author_id, entry_id):
-        """
-        Handles liking an entry:
-        - Creates a new Liked object if not already liked.
-        - Increments the entry's like_count.
-        """
-        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+        entry = get_object_or_404(
+            Entry, id=entry_id, author_id=author_id, is_deleted=False
+        )
 
         if not helpers.can_view_entry(request.user, entry):
             return HttpResponseForbidden("no access")
 
-        # Get or create the like record
-        like, created = Liked.objects.get_or_create(user=request.user, entry=entry, defaults={"comment": None})
+        # 1. Create EntryLike (primary like model)
+        entry_like, created = EntryLike.objects.get_or_create(
+            user=request.user,
+            entry=entry
+        )
 
         if created:
-            # Increment like_count if it's a new like
+            # 2. Add to Liked table for user-liked list
+            Liked.objects.get_or_create(
+                user=request.user,
+                entry=entry,
+                defaults={"comment": None}
+            )
+
+            # 3. Increment entry like_count
             Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
-            entry.refresh_from_db(fields=['like_count'])
-            print(f"User {request.user.id} liked Entry {entry.id} likecount: {entry.like_count}")
-            return JsonResponse({"ok": True, "liked": True, "count": entry.like_count}, status=201)
-        else:
-            # Already liked
-            entry.refresh_from_db(fields=['like_count'])
-            print(f"User {request.user.id} already liked Entry {entry.id} likecount: {entry.like_count}")
-            return JsonResponse({"ok": True, "liked": True, "count": entry.like_count}, status=200)
+
+        entry.refresh_from_db(fields=['like_count'])
+
+        return JsonResponse({
+            "ok": True,
+            "liked": True,
+            "count": entry.like_count
+        }, status=200 if not created else 201)
 
     def delete(self, request, author_id, entry_id):
-        """
-        Handles unliking an entry:
-        - Deletes the Liked object.
-        - Decrements the entry's like_count.
-        """
-        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+        entry = get_object_or_404(
+            Entry, id=entry_id, author_id=author_id, is_deleted=False
+        )
 
         if not helpers.can_view_entry(request.user, entry):
             return HttpResponseForbidden("no access")
 
-        deleted, _ = Liked.objects.filter(user=request.user, entry=entry).delete()
+        # 1. Remove EntryLike
+        deleted, _ = EntryLike.objects.filter(
+            user=request.user,
+            entry=entry
+        ).delete()
 
         if deleted:
+            # 2. Remove from Liked model
+            Liked.objects.filter(
+                user=request.user,
+                entry=entry
+            ).delete()
+
+            # 3. Decrement like_count
             entry.like_count = max(entry.like_count - 1, 0)
             entry.save(update_fields=['like_count'])
-        
-        # test message
-        print(f"User {request.user.id} unliked Entry {entry.id} likecount: {entry.like_count}")
 
         entry.refresh_from_db(fields=['like_count'])
-        
+
+        return JsonResponse({
+            "ok": True,
+            "liked": False,
+            "count": entry.like_count
+        })
+
 class LikedView(APIView):
     """
     Handles:

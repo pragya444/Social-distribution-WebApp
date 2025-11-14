@@ -136,6 +136,7 @@
       <div class="time">{{ e.updated }}</div>
     </div>
 
+
     <div class="card-foot">
       <div class="action">
         <!-- Like -->
@@ -145,6 +146,10 @@
           aria-pressed="{{ e.user_liked|yesno:'true,false' }}"
           data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
         >
+
+        <script>
+            console.log("Entry {{ e.id }} - user_liked =", "{{ e.user_liked }}");
+        </script>
           <!-- Heart icon -->
           <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -172,7 +177,7 @@
 
         
 
-      
+
 
         <div class="action">
           <!-- Replaced share emoji with heroicon -->
@@ -210,7 +215,6 @@
     <button class="confirm" onclick="closeShareModal()">OK</button>
   </div>
 </div>
-
 
 
 <script>

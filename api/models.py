@@ -229,6 +229,11 @@ class CommentLike(models.Model):
         unique_together = ("user", "comment")
         
 class Liked(models.Model):
+    '''
+    The Liked model represents a "like" action performed by a user on either an Entry or a Comment.
+    Each like is associated with a user and can reference either an Entry or a Comment, but not both.
+    The model includes a timestamp for when the like was created and a fully qualified ID (FQID) for federated systems.
+    '''
     id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="liked_entries")
     entry = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name="liked_by")

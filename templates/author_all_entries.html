@@ -66,8 +66,8 @@
   <article class="card">
     <div class="card-head">
       <div class="author">
-        {% if author.profile_picture %}
-          <img class="avatar" src="{{ author.profile_picture }}" alt="{{ e.author.name }}'s profile picture" />
+        {% if e.author.profile_picture %}
+          <img class="avatar" src="{{ e.author.profile_picture }}" alt="{{ e.author.name }}'s profile picture" />
         {% else %}
           <a class="avatar" href="{% url 'profile' author_id=e.author.id %}" aria-label="View profile">👤</a>
         {% endif %}
@@ -102,13 +102,9 @@
             <button type="button" class="link danger" onclick="openDeleteModal('{{ e.id }}')">Delete</button>
 
             {# MODAL FORM (hidden) #}
-            <form id="deleteForm-{{ e.id }}" method="post" action="{% url 'entry-retrieve-update' author_id=author.id entry_id=e.id %}" style="display:none;">
+            <form id="deleteForm-{{ e.id }}" method="POST" action="{% url 'entry-retrieve-update' author_id=author.id entry_id=e.id %}">
               {% csrf_token %}
               <input type="hidden" name="_method" value="DELETE">
-              <button type="submit" class="link danger"
-                      onclick="return confirm('Delete this entry?');">
-                Delete
-              </button>               
             </form>
           </div>
         </div>
@@ -140,6 +136,7 @@
       <div class="time">{{ e.updated }}</div>
     </div>
 
+
     <div class="card-foot">
       <div class="action">
         <!-- Like -->
@@ -149,6 +146,10 @@
           aria-pressed="{{ e.user_liked|yesno:'true,false' }}"
           data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
         >
+
+        <script>
+            console.log("Entry {{ e.id }} - user_liked =", "{{ e.user_liked }}");
+        </script>
           <!-- Heart icon -->
           <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -164,7 +165,7 @@
           type="button"
           class="action-icon comment-trigger"
           aria-label="Comments"
-          data-comments-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/comments"
+          data-comments-url="{% url 'comments-list-create' author_id=e.author.id entry_id=e.id %}"
         >
           <svg class="icon icon-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round"
@@ -176,7 +177,7 @@
 
         
 
-      
+
 
         <div class="action">
           <!-- Replaced share emoji with heroicon -->
@@ -216,7 +217,6 @@
 </div>
 
 
-
 <script>
   /* Developed with assistance from ChatGPT (GPT-5), October 2025 */
 
@@ -235,7 +235,8 @@
 
   function confirmDelete() {
     if (currentDeleteId) {
-      document.getElementById(`deleteForm-${currentDeleteId}`).submit();
+      const form = document.getElementById(`deleteForm-${currentDeleteId}`);
+      form.submit();
     }
   }
   document.getElementById('deleteModal').addEventListener('click', function(e) {

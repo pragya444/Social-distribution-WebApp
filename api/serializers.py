@@ -7,13 +7,13 @@ User = get_user_model()
 import base64
 
 class AuthorSerializer(serializers.ModelSerializer):
-    type = serializers.CharField(default="author", read_only=True)
-    id = serializers.SerializerMethodField()
+    type = serializers.SerializerMethodField()
+    id = serializers.CharField(source="url", read_only=True)
     host = serializers.CharField(read_only=True)
     displayName = serializers.CharField(source='name', allow_blank=False, required=False)
     description = serializers.CharField(allow_blank=True, required=False)
     github = serializers.CharField(allow_blank=True, required=False)
-    profileImage = serializers.CharField(allow_blank=True, required=False)
+    profileImage = serializers.CharField(source='profile_picture', allow_blank=True, required=False)
     web = serializers.SerializerMethodField()
     #followers = serializers.SerializerMethodField()
     #following = serializers.SerializerMethodField()
@@ -21,16 +21,16 @@ class AuthorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["type", "id","host","displayName","description","github","profileImage","web"]
+        fields = ["type","id","host","displayName","description","github","profileImage","web"]
         read_only_fields = ["type","id","host", "web"] #"created","followers","following","friends"]
-
-    def get_id(self, obj):
-        request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.id}"
 
     def get_web(self, obj):
         request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/authors/{obj.username}"
+        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.id}"
+    
+    def get_type(self, obj):
+        return "author"
+
 
     def validate(self, attrs):
         """

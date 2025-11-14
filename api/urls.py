@@ -12,8 +12,8 @@ urlpatterns = [
 
     # Author routes
     path('authors/', views.AuthorListView.as_view(), name='author-list'),  # paginated list of authors
-    path('authors/<str:author_id>/', views.ProfileView.as_view(), name="profile"),
-    path("authors/<str:author_id>/edit/", views.ProfileEditView.as_view(), name="profile_edit"),
+    path('authors/<str:author_id>/', views.ProfileView.as_view(), name="profile"), #endpoint to get and update author profile
+    path("authors/<str:author_id>/edit/", views.ProfileEditView.as_view(), name="profile_edit"), #endpoint to get edit page
 
     # author stream, show public entries for a given author
     path('authors/<str:author_id>/stream/', views.AuthorStreamView.as_view(), name='author-all-entries'),

@@ -66,8 +66,8 @@
   <article class="card">
     <div class="card-head">
       <div class="author">
-        {% if author.profile_picture %}
-          <img class="avatar" src="{{ author.profile_picture }}" alt="{{ e.author.name }}'s profile picture" />
+        {% if e.author.profile_picture %}
+          <img class="avatar" src="{{ e.author.profile_picture }}" alt="{{ e.author.name }}'s profile picture" />
         {% else %}
           <a class="avatar" href="{% url 'profile' author_id=e.author.id %}" aria-label="View profile">👤</a>
         {% endif %}

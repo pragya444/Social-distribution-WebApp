@@ -108,12 +108,12 @@ class ProfileView(APIView):
             )
 
         #  JSON shape if you keep the API path
-        serializer = AuthorSerializer(user)
+        serializer = AuthorSerializer(user, context={"request": request})
 
-        entries_data = EntrySerializer(entries, many=True).data
+        entries_data = EntrySerializer(entries, many=True, context={"request": request}).data
         return Response(
             {
-                "user": serializer.data,
+                **serializer.data,
                 "entries": entries_data,
                 "posts_count": posts_count,
                 "followers_count": followers_count,
@@ -124,6 +124,26 @@ class ProfileView(APIView):
             },
             status=200,
         )
+    
+    def post(self, request, author_id):
+        return self.put(request, author_id)
+    
+    def put(self, request, author_id):
+        if request.user.id != author_id:
+            if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+                return redirect('home')
+            return Response({"errors": "Only the author can edit their profile"}, status=403)
+
+        serializer = AuthorSerializer(request.user, data=request.data, partial=True, context={"request": request})
+        if not serializer.is_valid():
+            if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+                return Response({"errors": serializer.errors, "user": request.user}, template_name="author/profileEdit.html", status=400)
+            return Response({"errors": serializer.errors}, status=400)
+
+        user = serializer.save()
+        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            return redirect('profile', author_id=user.id)
+        return Response({ **serializer.data }, status=200)
 
 
 class ProfileEditView(APIView):
@@ -136,22 +156,6 @@ class ProfileEditView(APIView):
         else:
             return redirect('home')
 
-    def post(self, request, author_id):
-        if request.user.id != author_id:
-            if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-                return redirect('home')
-            return Response({"errors": "Only the author can edit their profile"}, status=403)
-
-        serializer = AuthorSerializer(request.user, data=request.data, partial=True)
-        if not serializer.is_valid():
-            if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-                return Response({"errors": serializer.errors, "user": request.user}, template_name="author/profileEdit.html", status=400)
-            return Response({"errors": serializer.errors}, status=400)
-
-        user = serializer.save()
-        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-            return redirect('profile', author_id=user.id)
-        return Response({"user": serializer.data}, status=200)
 
 
 class AuthorListView(APIView):
@@ -237,7 +241,7 @@ class AuthorStreamView(APIView):
                 'tab': tab,
             }, template_name='author_all_entries.html')
 
-        serializer = EntrySerializer(entries, many=True)
+        serializer = EntrySerializer(entries, many=True, context={"request": request})
         return Response(serializer.data)
 
 

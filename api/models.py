@@ -99,7 +99,7 @@ class Entry(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='entries')
     title = models.CharField(max_length=255)
     description = models.CharField(max_length=500, blank=True, default="")
-    url = models.CharField(max_length=255, default="", db_index=True, unique=True)
+
     content = models.TextField(blank=True, default="")
     content_type = models.CharField(max_length=60, blank=True, default="")
 
@@ -128,12 +128,6 @@ class Entry(models.Model):
 
     def __str__(self):
         return self.title
-    
-    def save(self, *args, **kwargs):
-        # Generate the FQID URL for this entry
-        if not self.url:  # Only set if empty
-            self.url = get_url() + f"api/authors/{self.author_id}/entries/{self.id}"
-        return super(Entry, self).save(*args, **kwargs)
 
 
 

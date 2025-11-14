@@ -195,8 +195,10 @@ html, body {
     min-width: 1ch; text-align: left;
   }
 
-
-
+  /* Active (liked) state */
+  .like-toggle.liked {
+    color: #ef4444;  /* tailwind-ish red-500 */
+  }
   .like-toggle.liked svg {
     fill: currentColor;  /* filled heart when liked */
   }
@@ -355,4 +357,7 @@ html, body {
   stroke: #ff4d4d;
   transform: scale(1.12);
 }
+
+
+
 

@@ -7,7 +7,7 @@ import secrets
 import uuid
 from django.utils import timezone
 
-# TODO: Use get_url for fqid generation
+
 
 def generate_id():
     return secrets.token_urlsafe(16)
@@ -56,7 +56,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     profile_picture = models.CharField(max_length=255, blank=True, default="")
     description = models.CharField(max_length=500, blank=True, default="")
     url = models.CharField(max_length=255, default="", db_index=True, unique=True)
-    host = models.CharField(max_length=255, default="")
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
@@ -65,22 +64,15 @@ class User(AbstractBaseUser, PermissionsMixin):
     latest_github_event_id = models.CharField(blank=True, default="")
     
     USERNAME_FIELD = 'username'
-    
-    fqid = models.URLField(unique=True, blank=True, null=True)  # Fully Qualified ID for federated users
     objects = UserManager()
-    
-
 
     def __str__(self):
         return self.username
     
     def save(self, *args, **kwargs):
-        base = get_url().rstrip("/")
-        self.url = f"{base}/api/authors/{self.id}"
-        self.host = f"{base}/api/"
-        self.fqid = self.url  # fqid should match the canonical API URL for this author
-        super().save(*args, **kwargs)
-        
+        self.url = get_url() + "api/authors/" + self.id  # Creates a fixed URL for each user
+        return super(User, self).save(*args, **kwargs)
+    
 
 
 '''
@@ -94,6 +86,7 @@ class Entry(models.Model):
     The visibility can be set to 'PUBLIC', 'FRIENDS', 'PRIVATE', or 'UNLISTED'.
     The foreign key relationship to the User model indicates which author created the entry.
     """
+
     VISIBILITY_CHOICES = [
         ('PUBLIC', 'Public'),
         ('FRIENDS', 'Friends'),
@@ -104,10 +97,9 @@ class Entry(models.Model):
     id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='entries')
     title = models.CharField(max_length=255)
-    description = models.CharField(max_length=500, blank=True, default="")
 
-    content = models.TextField(blank=True, default="")
-    content_type = models.CharField(max_length=60, blank=True, default="")
+    content = models.TextField(blank=True, default="")  #stores text OR base64 image data
+    content_type = models.CharField(max_length=60, blank=True, default="")  # e.g. text/markdown,  image/png;base64
 
     visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='PUBLIC')
     is_deleted = models.BooleanField(default=False)
@@ -116,22 +108,8 @@ class Entry(models.Model):
     share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     comment_count = models.IntegerField(default=0)
     like_count = models.IntegerField(default=0)
-    
-    fqid = models.URLField(unique=True, blank=True, null=True)  # Fully Qualified ID for federated entries
-    
-    def save(self, *args, **kwargs):
-        # Save first (to ensure ID exists)
-        super().save(*args, **kwargs)
-        if not self.fqid:
-            # Build FQID after we know the ID
-            host = get_url()  # or your domain
-            self.fqid = f"{host}/api/authors/{self.author.id}/entries/{self.id}"
-            super().save(update_fields=["fqid"])
 
-    @property
-    def published(self):
-        return self.created
-
+    
     @property
     def is_image(self) -> bool:
         """NEW: True if entry is an image entry encoded as base64 (e.g., image/png;base64)."""
@@ -181,18 +159,6 @@ class Comment(models.Model):
     comment = models.TextField()
     content_type = models.CharField(max_length=60, default="text/plain")
     created = models.DateTimeField(default=timezone.now)
-    fqid = models.URLField(unique=True, blank=True, null=True)  # Fully Qualified ID for federated comments
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        if not self.fqid:
-            host = get_url()  # Replace with your domain in production
-            self.fqid = f"{host}/api/authors/{self.entry.author.id}/entries/{self.entry.id}/comments/{self.id}"
-            super().save(update_fields=["fqid"])
-        
-    @property
-    def published(self):
-        return self.created
 
     class Meta:
         ordering = ["-created"]
@@ -208,59 +174,15 @@ class EntryLike(models.Model):
     entry = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name="likes")
     created = models.DateTimeField(default=timezone.now)
 
-    @property
-    def published(self):
-        return self.created
-
     class Meta:
         unique_together = ("user", "entry")
-
 
 class CommentLike(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="comment_likes")
     comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name="likes")
     created = models.DateTimeField(default=timezone.now)
 
-    @property
-    def published(self):
-        return self.created
-
     class Meta:
         unique_together = ("user", "comment")
+
         
-class Liked(models.Model):
-    '''
-    The Liked model represents a "like" action performed by a user on either an Entry or a Comment.
-    Each like is associated with a user and can reference either an Entry or a Comment, but not both.
-    The model includes a timestamp for when the like was created and a fully qualified ID (FQID) for federated systems.
-    '''
-    id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="liked_entries")
-    entry = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name="liked_by")
-    comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name="liked_by", null=True, blank=True)
-    created = models.DateTimeField(default=timezone.now)
-    
-    fqid = models.URLField(unique=True, blank=True, null=True)  # Fully Qualified ID for federated liked items
-
-    @property
-    def published(self):
-        return self.created
-
-    class Meta:
-        unique_together = ("user", "entry")
-        
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        if not self.fqid:
-            base = get_url()  
-
-            if self.entry:
-                # For entry likes
-                self.fqid = f"{base}/api/authors/{self.user.id}/liked/{self.id}"
-            elif self.comment:
-                # For comment likes
-                self.fqid = f"{base}/api/authors/{self.user.id}/liked/{self.id}"
-
-            super().save(update_fields=["fqid"])
-        
-    

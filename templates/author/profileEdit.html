@@ -132,11 +132,11 @@
         {% endif %}
     </div>
 
-    <form method="POST" action="{% url 'profile' author_id=user.id %}">
+    <form method="POST" action="{% url 'profile_edit' author_id=user.id %}">
         {% csrf_token %}
         <div class="input-div">
             <label for="name">Name</label>
-            <input type="text" id="name" name="displayName" placeholder="Name" value="{{user.name}}">
+            <input type="text" id="name" name="name" placeholder="Name" value="{{user.name}}">
             {% if errors.name %}
                 <div class="err">{{ errors.name.0 }}</div>
             {% endif %}

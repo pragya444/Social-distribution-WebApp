@@ -15,6 +15,7 @@ from django.utils.decorators import method_decorator
 from django.utils.timezone import is_naive
 from django.utils.timezone import make_aware
 from urllib.parse import urljoin
+from api.utils import helpers
 import base64
 
 
@@ -197,33 +198,72 @@ def create_payload(request):
 
 
 class SingleEntryView(APIView):
-    renderer_classes = [JSONRenderer, TemplateHTMLRenderer]  
-    parser_classes = [JSONParser, MultiPartParser, FormParser]  
+
+    # The same view can respond with either JSON or HTML depending on Accept header
+    renderer_classes = [JSONRenderer, TemplateHTMLRenderer]
+
+    # Allow JSON body, form-data (for typical forms), and multipart (for file uploads)
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get(self, request, author_id, entry_id):
-        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-        if entry.visibility not in ['PUBLIC', 'UNLISTED']:
+        """
+        GET /authors/<author_id>/entries/<entry_id>/
+
+        - If the client requests HTML: render a "shared entry" page.
+        - If the client requests JSON: return serialized entry data.
+        """
+
+        # Look up the entry or return 404 if it doesn't exist
+        entry = get_object_or_404(
+            Entry,
+            id=entry_id,
+            author_id=author_id,
+            is_deleted=False,  # soft-delete flag
+        )
+
+        # Only PUBLIC / UNLISTED entries are shareable to everyone.
+        # For other visibility types, enforce permission checks.
+        if entry.visibility not in ["PUBLIC", "UNLISTED"]:
+            # helpers.can_view_entry encapsulates all permission logic
+            # (ownership, friends-only, private, etc.)
             if not helpers.can_view_entry(request.user, entry):
-                return Response({"error": "This entry is not shareable."}, status=403)
-        
+                return Response(
+                    {"error": "This entry is not shareable."},
+                    status=403,
+                )
+
+        # If the client wants HTML, render the shared entry page
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            entry.rendered = helpers.render_entry(entry)
+
+            # Default: not liked
             like = False
+
+            # If the user is logged in, check whether they have liked this entry
             if request.user.is_authenticated:
                 like = EntryLike.objects.filter(
-                    entry=entry, 
-                    user=request.user
+                    entry=entry,
+                    user=request.user,
                 ).exists()
-            
+
+            # Render the HTML template with extra context:
+            # - entry: the current entry object
+            # - author_id: used in the template / links
+            # - like: whether the current user has liked this entry
             return Response(
                 {
-                    "entry": entry, 
+                    "entry": entry,
                     "author_id": author_id,
-                    "like": like
+                    "like": like,
                 },
-                template_name="entry/entry_shared.html" 
+                template_name="entry/entry_shared.html",
             )
-        
+
+        # If the client expects JSON (e.g., a frontend SPA or mobile app),
+        # return the serialized representation of this entry.
+        # `entry_obj` should be a helper that converts the model to a dict.
         return Response(entry_obj(request, entry), status=200)
+
     
     
     def put(self, request, author_id, entry_id):

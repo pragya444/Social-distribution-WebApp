@@ -27,10 +27,11 @@ urlpatterns = [
     path('authors/<str:author_id>/entries/', entryView.EntryView.as_view(), name='entries-list-create'),
     # get and update a single entry by id
     path('authors/<str:author_id>/entries/<str:entry_id>/', entryView.SingleEntryView.as_view(), name='entry-retrieve-update'),
+   
     path('authors/<str:author_id>/entries/<str:entry_id>/image/', views.EntryImageView.as_view(), name='entry-image'),
     
     #/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image
-    path("authors/<uuid:author_id>/entries/<uuid:entry_id>/image",EntryImageView.as_view(),name="entry-image-api",),
+    path("authors/<str:author_id>/entries/<str:entry_id>/image",EntryImageView.as_view(),name="entry-image-api",),
     #/entries/{ENTRY_FQID}/image
     path("entries/<path:entry_fqid>/image",EntryImageFQIDView.as_view(),name="entry-image-fqid",),
 

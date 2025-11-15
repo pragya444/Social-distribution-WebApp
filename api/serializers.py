@@ -96,13 +96,13 @@ class AuthorsSerializer(serializers.Serializer):
     size = serializers.IntegerField(min_value=1)
     count = serializers.IntegerField(min_value=0)
     authors = AuthorSerializer(many=True)
-
+'''
 class PaginatedSerializer(serializers.Serializer):
     """Base pagination serializer"""
     page_number = serializers.IntegerField(min_value=1)
     size = serializers.IntegerField(min_value=1)
     count = serializers.IntegerField(min_value=0)
-
+'''
 class EntrySerializer(serializers.ModelSerializer):
     contentType = serializers.CharField(source='content_type', required=False)
     author = AuthorSerializer(read_only=True)
@@ -342,18 +342,25 @@ class FollowersSerializer(serializers.Serializer):
 class LikeSerializer(serializers.ModelSerializer):
     """Base serializer for likes following API spec"""
     type = serializers.CharField(default="Like", read_only=True)
-    author = AuthorSerializer(read_only=True)
+    author = AuthorSerializer(read_only=True , source='user')
     published = serializers.DateTimeField(source='created', read_only=True)
     id = serializers.SerializerMethodField()
     object = serializers.SerializerMethodField()
-
+    
     class Meta:
-        abstract = True
+        model = EntryLike   # default
         fields = ['type', 'author', 'published', 'id', 'object']
+
+    @classmethod
+    def for_model(cls, amodel):
+        class _DynamicLikeSerializer(cls):
+            class Meta(cls.Meta):
+                model = amodel
+        return _DynamicLikeSerializer
 
     def get_id(self, obj):
         request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.author.id}/liked/{obj.id}"
+        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.user.id}/liked/{obj.id}"
     
     def get_object(self, obj):
         request = self.context.get('request')
@@ -379,6 +386,7 @@ class LikesSerializer(serializers.Serializer):
 
     def get_web(self, obj):
         # For comment likes
+        request = self.context.get('request')
         if hasattr(obj, 'comment'):
             return f"{request.scheme}://{request.get_host()}/authors/{obj.comment.author.username}/comments/{obj.comment.id}/likes"
         # For entry likes

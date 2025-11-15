@@ -574,14 +574,6 @@
           const url = btn.dataset.likesUrl;
           const cnt = btn.querySelector("[data-like-count]");
 
-          // initial GET populates liked + count
-          const g = await j(url);
-          if (g.ok) {
-            btn.classList.toggle("liked", !!g.data.liked);
-            btn.setAttribute("aria-pressed", g.data.liked ? "true" : "false");
-            if (cnt) cnt.textContent = g.data.count ?? 0;
-          }
-
           btn.addEventListener("click", async () => {
             const liked = btn.classList.contains("liked");
             const method = liked ? "DELETE" : "POST";

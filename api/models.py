@@ -17,7 +17,7 @@ def get_url():
         if settings.DJANGO_ENV == 'development':
             return "http://127.0.0.1:8000/"
         elif settings.DJANGO_ENV == 'production':
-            return ""   # Have to replace with actual production URL
+            return settings.URL   # Have to replace with actual production URL
     return "http://127.0.0.1:8000/"
 
 

@@ -9,8 +9,12 @@ from rest_framework.authentication import SessionAuthentication
 import urllib.parse
 from api.models import Follow  
 from api.utils import helpers
-
-
+from django.conf import settings          
+import logging                           
+import requests   
+import json
+import urllib.request
+from django.views.decorators.csrf import csrf_exempt  
 
 from api.serializers import (
     FollowRequestSerializer,
@@ -20,6 +24,21 @@ from api.serializers import (
 )
 
 User = get_user_model()
+
+
+
+# helper function
+def is_local_user(user):
+    """
+    Return True if this user belongs to *our* node,
+    by comparing their host to our LOCAL_API_BASE setting.
+    """
+    local_base = getattr(settings, "LOCAL_API_BASE", "").rstrip("/")  # e.g. "http://127.0.0.1:8000/api"
+    user_host = (getattr(user, "host", "") or "").rstrip("/")
+    return local_base and user_host == local_base
+
+
+
 
 
 class FollowRequestActionView(APIView):
@@ -407,12 +426,64 @@ class FollowingDetailView(APIView):
             data = AuthorSerializer(foreign_user, context={"request": request}).data
             return Response(data, status=200)
 
-        # TODO send to remote inbox here
-        # build the "follow" object
-        # POST it to foreign_user.inbox URL
+        # send follow object to foreign_user's inbox
+        try:
+            # Build actor & object author objects as in the spec
+            actor_data = AuthorSerializer(actor, context={"request": request}).data
+            object_data = AuthorSerializer(foreign_user, context={"request": request}).data
+
+            follow_payload = {
+                "type": "follow",
+                "summary": f"{actor_data.get('displayName', actor.username)} wants to follow {object_data.get('displayName', foreign_user.username)}",
+                "actor": actor_data,
+                "object": object_data,
+            }
+
+            # send follow object to foreign_user's inbox
+            inbox_url = foreign_user.url.rstrip("/") + "/inbox"
+
+            req = urllib.request.Request(
+                inbox_url,
+                data=json.dumps(follow_payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            # if it fails, we just log or ignore for now
+            try:
+                urllib.request.urlopen(req, timeout=5)
+            except Exception:
+                
+                pass
+
+        except Exception:
+            # If anything goes wrong building/sending the remote request,
+            # we still consider the local Follow row created.
+            pass
 
         data = AuthorSerializer(foreign_user, context={"request": request}).data
-        return Response(data, status=200)
+        return Response(data, status=200)             
+
+
+
+
+
+
+        # if not created and follow.status == Follow.Status.APPROVED:
+        #     # Already following
+        #     data = AuthorSerializer(foreign_user, context={"request": request}).data
+        #     return Response(data, status=200)
+
+        # if not created and follow.status == Follow.Status.PENDING:
+        #     # Follow request already pending
+        #     data = AuthorSerializer(foreign_user, context={"request": request}).data
+        #     return Response(data, status=200)
+
+        # # TODO send to remote inbox here
+        # # build the "follow" object
+        # # POST it to foreign_user.inbox URL
+
+        # data = AuthorSerializer(foreign_user, context={"request": request}).data
+        # return Response(data, status=200)
 
     def delete(self, request, author_id, foreign_author_fqid):
         """

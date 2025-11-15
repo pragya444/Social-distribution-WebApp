@@ -18,6 +18,11 @@ urlpatterns = [
     # author stream, show public entries for a given author
     path('authors/<str:author_id>/stream/', views.AuthorStreamView.as_view(), name='author-all-entries'),
 
+
+    #/entries/{ENTRY_FQID}/image
+    path("entries/<path:entry_fqid>/image",EntryImageFQIDView.as_view(),name="entry-image-fqid",),
+
+
     # Entry routes
     path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),
     # pages: simple create form
@@ -33,8 +38,6 @@ urlpatterns = [
     
     #/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image
     path("authors/<str:author_id>/entries/<str:entry_id>/image",EntryImageView.as_view(),name="entry-image-api",),
-    #/entries/{ENTRY_FQID}/image
-    path("entries/<path:entry_fqid>/image",EntryImageFQIDView.as_view(),name="entry-image-fqid",),
 
 
 

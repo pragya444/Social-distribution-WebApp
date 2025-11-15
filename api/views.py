@@ -320,47 +320,57 @@ class EntryImageView(APIView):
         return entryView._serve_entry_image(request, entry)
 
 
+
+
 class EntryImageFQIDView(APIView):
     """
     GET /api/entries/{ENTRY_FQID}/image
 
-    ENTRY_FQID is the full URL of the entry (usually percent-encoded).
-    Steps:
-      1. Decode the FQID.
-      2. Parse its path to extract authors/{author_id}/entries/{entry_id}.
-      3. Fetch the local Entry and serve it as an image.
+    {ENTRY_FQID} is the *full* URL of an entry, for example:
+
+        http://127.0.0.1:8000/api/authors/<AUTHOR_ID>/entries/<ENTRY_ID>
+
+    This view only handles local entries. It parses the FQID to get
+    author_id and entry_id, then reuses the same image-serving helper
+    used by the /authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image endpoint.
     """
     permission_classes = [AllowAny]
 
     def get(self, request, entry_fqid):
-        # 1) Decode percent-encoding (e.g. http%3A%2F%2F... -> http://...)
-        decoded = unquote(entry_fqid)
+        # Parse the FQID into its components
+        parsed = urlparse(entry_fqid)
 
-        # 2) Parse URL and get the path, e.g. "/api/authors/222/entries/249"
-        parsed = urlparse(decoded)
-        path = parsed.path
-
-        parts = path.strip("/").split("/")  # e.g. ["api", "authors", "222", "entries", "249"]
+        # Expected local path format:
+        #   /api/authors/<author_id>/entries/<entry_id>
+        path_parts = parsed.path.strip("/").split("/")
 
         try:
-            # Find "authors" and "entries" segments and read the IDs after them
-            idx_auth = parts.index("authors")
-            author_id = parts[idx_auth + 1]
+            # Example path_parts:
+            # ['api', 'authors', '<author_id>', 'entries', '<entry_id>']
+            api_index = path_parts.index("api")
+            authors_index = path_parts.index("authors", api_index + 1)
+            entries_index = path_parts.index("entries", authors_index + 1)
 
-            idx_entry = parts.index("entries")
-            entry_id = parts[idx_entry + 1]
+            author_id = path_parts[authors_index + 1]
+            entry_id = path_parts[entries_index + 1]
         except (ValueError, IndexError):
-            # Path does not look like .../authors/{id}/entries/{id}
-            raise Http404("invalid entry FQID format")
+            # FQID doesn't look like a valid local entry URL
+            return Response(
+                {"error": "Invalid FQID format for local entry"},
+                status=400,
+            )
 
-        # 3) Fetch the entry and reuse the same image-serving helper
+        # Look up the Entry using the parsed IDs
         entry = get_object_or_404(
             Entry,
             id=entry_id,
             author_id=author_id,
             is_deleted=False,
         )
-        return _serve_entry_image(request, entry)
+
+        # Reuse the existing helper to serve the image bytes
+        return entryView._serve_entry_image(request, entry)
+
 
 
 

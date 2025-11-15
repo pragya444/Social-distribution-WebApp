@@ -135,25 +135,30 @@ def _serve_entry_image(request, entry):
     """
     Serve an Entry whose content is an image (base64) as a binary HTTP response.
     """
-    # 1) Permission check: does the current user have access to this entry
-    #    (PUBLIC / FRIENDS etc. logic is handled in helpers)
+    # First check if the current user has permission to view this entry
     if not helpers.can_view_entry(request.user, entry):
+        # If not allowed, return 403 instead of leaking whether it is an image
         return Response({"error": "no access to this image"}, status=403)
 
-    # 2) Ensure this is a base64-encoded image type, e.g. image/png;base64
+    # Normalize / read the content_type, default to empty string if missing
     ct = (getattr(entry, "content_type", "") or "").lower()
+
+    # Only handle entries where content_type looks like "image/*;base64"
     if not (ct.startswith("image/") and ct.endswith(";base64")):
+        # If it's not an image entry, respond with 404 to match the spec
         raise Http404("not an image entry")
 
-    # 3) Decode the base64 string stored in the content field into raw bytes
     try:
+        # Decode the base64-encoded image data from entry.content
         raw_bytes = base64.b64decode(entry.content or "")
     except Exception:
+        # If decoding fails, treat it as invalid image data and return 404
         raise Http404("invalid image data")
 
-    # 4) Strip the trailing ;base64 to get the actual MIME type,
-    #    then return a binary image response
+    # Remove the ";base64" suffix to get the real MIME type, e.g. "image/png"
     mime_type = ct.replace(";base64", "")
+
+    # Return the raw bytes as an HTTP response with the correct content type
     return HttpResponse(raw_bytes, content_type=mime_type)
 
 

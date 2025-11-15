@@ -977,29 +977,78 @@ class FriendsListView(APIView):
 
 
 class InboxView(APIView):
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [SessionAuthentication]
+  
+    permission_classes = [AllowAny]  
+    authentication_classes = [] 
 
+    @csrf_exempt  
     def post(self, request, author_id):
-        if str(request.user.id) != str(author_id):
-            return Response({"error": "Not authorized"}, status=403)
+        """
+        Inbox receives objects from other nodes:
 
+        """
         data = request.data
-        item_type = data.get('type', '').lower()
+        item_type = (data.get("type") or "").lower()
 
-        if item_type == 'entry':
-            serializer = EntrySerializer(data=data)
-        elif item_type == 'follow':
-            serializer = FollowRequestSerializer(data=data)
-        elif item_type == 'like':
-            serializer = LikeSerializer(data=data)
-        elif item_type == 'comment':
-            serializer = CommentSerializer(data=data)
-        else:
-            return Response({"error": f"Invalid item type: {item_type}"}, status=400)
+        # handle FOLLOW objects
+        if item_type == "follow":
+            actor_obj = data.get("actor") or {}
+            object_obj = data.get("object") or {}
 
-        if serializer.is_valid():
-            obj = serializer.save()
-            return Response(serializer.data, status=201)
+            actor_id_fqid = actor_obj.get("id")
+            object_id_fqid = object_obj.get("id")
 
-        return Response(serializer.errors, status=400)
+            if not actor_id_fqid or not object_id_fqid:
+                return Response(
+                    {"error": "actor.id and object.id are required for follow"},
+                    status=400,
+                )
+
+            # object.id should be the FQID of the *local* author whose inbox this is
+        
+            cleaned_object = object_id_fqid.rstrip("/")
+            cleaned_actor = actor_id_fqid.rstrip("/")
+
+            try:
+                # local followee (the author whose inbox we're addressing)
+                followee = User.objects.get(url__in=[cleaned_object, cleaned_object + "/"])
+            except User.DoesNotExist:
+                return Response(
+                    {"error": f"Unknown local author for object.id: {object_id_fqid}"},
+                    status=404,
+                )
+
+            try:
+                # follower (may be remote or local, but must already exist in our DB as a User with url)
+                follower = User.objects.get(url__in=[cleaned_actor, cleaned_actor + "/"])
+            except User.DoesNotExist:
+                # we require the remote actor
+                # to have a User row already.
+                return Response(
+                    {"error": f"Unknown follower for actor.id: {actor_id_fqid}"},
+                    status=404,
+                )
+
+            follow, created = Follow.objects.get_or_create(
+                follower=follower,
+                followee=followee,
+                defaults={"status": Follow.Status.PENDING},
+            )
+
+            # Represent it back in the standard follow-request shape
+            resp_data = FollowRequestSerializer(
+                follow, context={"request": request}
+            ).data
+            return Response(resp_data, status=201 if created else 200)
+
+        # (optional) minimal stubs for other types, so you don't crash
+        if item_type == "entry":
+            return Response({"error": "Inbox handling for entries not implemented yet"}, status=501)
+
+        if item_type == "like":
+            return Response({"error": "Inbox handling for likes not implemented yet"}, status=501)
+
+        if item_type == "comment":
+            return Response({"error": "Inbox handling for comments not implemented yet"}, status=501)
+
+        return Response({"error": f"Invalid or unsupported item type: {item_type}"}, status=400)

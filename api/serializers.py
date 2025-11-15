@@ -251,7 +251,26 @@ class FollowRequestSerializer(serializers.ModelSerializer):
         fields = ['type', 'summary', 'actor', 'object']
 
     def get_summary(self, obj):
-        return f"{obj.follower.displayName} wants to follow {obj.followee.displayName}"
+        # get display names from your User model
+        follower = obj.follower
+        followee = obj.followee
+
+        # Try common fields; fall back to username
+        follower_name = (
+            getattr(follower, "displayName", None)
+            or getattr(follower, "name", None)
+            or getattr(follower, "username", None)
+            or str(follower)
+        )
+
+        followee_name = (
+            getattr(followee, "displayName", None)
+            or getattr(followee, "name", None)
+            or getattr(followee, "username", None)
+            or str(followee)
+        )
+
+        return f"{follower_name} wants to follow {followee_name}"
 
 class CommentSerializer(serializers.ModelSerializer):
     """Comment serializer following API spec"""

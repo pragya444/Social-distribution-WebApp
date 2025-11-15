@@ -80,6 +80,9 @@ class InboxView(APIView):
                 follow, context={"request": request}
             ).data
             return Response(resp_data, status=201 if created else 200)
+
+
+            
         elif item_type == 'like':
             return self.handle_like(request, author_id, data, is_local)
         elif item_type == 'comment':

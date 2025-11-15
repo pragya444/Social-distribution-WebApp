@@ -227,7 +227,7 @@ class EntrySerializer(serializers.ModelSerializer):
         return entry
 
 class FollowRequestSerializer(serializers.ModelSerializer):
-    """Serializer for follow request objects following API spec format"""
+    """Serializer for follow request objects"""
     type = serializers.CharField(default="follow", read_only=True)
     summary = serializers.SerializerMethodField()
     actor = AuthorSerializer(source='follower', read_only=True)
@@ -357,6 +357,12 @@ class FollowersSerializer(serializers.Serializer):
     """Serializer for list of followers following API spec"""
     type = serializers.CharField(default="followers", read_only=True)
     followers = AuthorSerializer(many=True)
+
+class FollowingSerializer(serializers.Serializer):
+    """Serializer for list of authors a user is following (Following API)"""
+    type = serializers.CharField(default="following", read_only=True)
+    following = AuthorSerializer(many=True)
+
 
 class LikeSerializer(serializers.ModelSerializer):
     """Base serializer for likes following API spec"""

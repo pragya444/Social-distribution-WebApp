@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from .auth import authViews
 from .entries import entryView
+from .views import EntryImageView, EntryImageFQIDView
 
 urlpatterns = [
     # Auth routes
@@ -17,6 +18,11 @@ urlpatterns = [
     # author stream, show public entries for a given author
     path('authors/<str:author_id>/stream/', views.AuthorStreamView.as_view(), name='author-all-entries'),
 
+
+    #/entries/{ENTRY_FQID}/image
+    path("entries/<path:entry_fqid>/image",EntryImageFQIDView.as_view(),name="entry-image-fqid",),
+
+
     # Entry routes
     path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),
     # pages: simple create form
@@ -27,7 +33,14 @@ urlpatterns = [
     path('authors/<str:author_id>/entries/', entryView.EntryView.as_view(), name='entries-list-create'),
     # get and update a single entry by id
     path('authors/<str:author_id>/entries/<str:entry_id>/', entryView.SingleEntryView.as_view(), name='entry-retrieve-update'),
+   
     path('authors/<str:author_id>/entries/<str:entry_id>/image/', views.EntryImageView.as_view(), name='entry-image'),
+    
+    #/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image
+    path("authors/<str:author_id>/entries/<str:entry_id>/image",EntryImageView.as_view(),name="entry-image-api",),
+
+
+
 
     # Comment routes
     path('authors/<str:author_id>/entries/<str:entry_id>/comments', views.CommentListCreateView.as_view(), name='comments-list-create'),

@@ -19,6 +19,9 @@ from django.db import IntegrityError, transaction
 from django.core.paginator import Paginator
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 import base64
+from urllib.parse import urlparse, unquote
+from .entries import entryView
+
 
 User = get_user_model()
 
@@ -301,46 +304,76 @@ class EntryEditView(APIView):
         serializer = EntrySerializer(entry)
         return Response(serializer.data)
 
-    def put(self, request, author_id, entry_id):
-        if str(request.user.id) != str(author_id):
-            return Response({"error": "Not authorized"}, status=403)
-
-        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-        serializer = EntrySerializer(entry, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            if request.accepted_renderer.format == 'html':
-                return redirect('author-stream', author_id=author_id)
-            return Response(serializer.data)
-
-        if request.accepted_renderer.format == 'html':
-            return Response({
-                'author_id': author_id,
-                'entry': entry,
-                'contentType': getattr(entry, 'content_type', '') or 'text/markdown',
-            }, template_name='entry/entry_edit.html')
-        return Response(serializer.errors, status=400)
 
 
 class EntryImageView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, author_id, entry_id):
-        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-        if not helpers.can_view_entry(request.user, entry):
-            return Response({"error": "no access to this image"}, status=403)
+        # Fetch the entry by author and id, ensure it is not deleted
+        entry = get_object_or_404(
+            Entry,
+            id=entry_id,
+            author_id=author_id,
+            is_deleted=False,
+        )
+        return entryView._serve_entry_image(request, entry)
 
-        ct = (getattr(entry, 'content_type', '') or '').lower()
-        if not (ct.startswith('image/') and ct.endswith(';base64')):
-            raise Http404('not an image entry')
+
+
+
+class EntryImageFQIDView(APIView):
+    """
+    GET /api/entries/{ENTRY_FQID}/image
+
+    {ENTRY_FQID} is the *full* URL of an entry, for example:
+
+        http://127.0.0.1:8000/api/authors/<AUTHOR_ID>/entries/<ENTRY_ID>
+
+    This view only handles local entries. It parses the FQID to get
+    author_id and entry_id, then reuses the same image-serving helper
+    used by the /authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image endpoint.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, entry_fqid):
+        # Parse the FQID into its components
+        parsed = urlparse(entry_fqid)
+
+        # Expected local path format:
+        #   /api/authors/<author_id>/entries/<entry_id>
+        path_parts = parsed.path.strip("/").split("/")
 
         try:
-            raw_bytes = base64.b64decode(entry.content or '')
-        except Exception:
-            raise Http404('invalid image data')
+            # Example path_parts:
+            # ['api', 'authors', '<author_id>', 'entries', '<entry_id>']
+            api_index = path_parts.index("api")
+            authors_index = path_parts.index("authors", api_index + 1)
+            entries_index = path_parts.index("entries", authors_index + 1)
 
-        mime_type = ct.replace(';base64', '')
-        return HttpResponse(raw_bytes, content_type=mime_type)
+            author_id = path_parts[authors_index + 1]
+            entry_id = path_parts[entries_index + 1]
+        except (ValueError, IndexError):
+            # FQID doesn't look like a valid local entry URL
+            return Response(
+                {"error": "Invalid FQID format for local entry"},
+                status=400,
+            )
+
+        # Look up the Entry using the parsed IDs
+        entry = get_object_or_404(
+            Entry,
+            id=entry_id,
+            author_id=author_id,
+            is_deleted=False,
+        )
+
+        # Reuse the existing helper to serve the image bytes
+        return entryView._serve_entry_image(request, entry)
+
+
+
+
 
 
 class FollowRequestActionView(APIView):

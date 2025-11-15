@@ -10,14 +10,16 @@ from django.conf import settings
 from ..serializers import EntrySerializer
 from ..models import Entry, EntryLike, Comment, CommentLike, User
 from ..utils import helpers, images
-
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils.timezone import is_naive
 from django.utils.timezone import make_aware
 from urllib.parse import urljoin
+from api.utils import helpers
+import base64
 
 
+# Developed with assistance from ChatGPT (GPT-5), November 2025
 
 def _site_root(request):
     # Ensures trailing slash
@@ -128,6 +130,39 @@ def entries_page_obj(request, entries, page_obj, size):
         "src": [entry_obj(request, e) for e in entries],
     }
 
+
+def _serve_entry_image(request, entry):
+    """
+    Serve an Entry whose content is an image (base64) as a binary HTTP response.
+    """
+    # First check if the current user has permission to view this entry
+    if not helpers.can_view_entry(request.user, entry):
+        # If not allowed, return 403 instead of leaking whether it is an image
+        return Response({"error": "no access to this image"}, status=403)
+
+    # Normalize / read the content_type, default to empty string if missing
+    ct = (getattr(entry, "content_type", "") or "").lower()
+
+    # Only handle entries where content_type looks like "image/*;base64"
+    if not (ct.startswith("image/") and ct.endswith(";base64")):
+        # If it's not an image entry, respond with 404 to match the spec
+        raise Http404("not an image entry")
+
+    try:
+        # Decode the base64-encoded image data from entry.content
+        raw_bytes = base64.b64decode(entry.content or "")
+    except Exception:
+        # If decoding fails, treat it as invalid image data and return 404
+        raise Http404("invalid image data")
+
+    # Remove the ";base64" suffix to get the real MIME type, e.g. "image/png"
+    mime_type = ct.replace(";base64", "")
+
+    # Return the raw bytes as an HTTP response with the correct content type
+    return HttpResponse(raw_bytes, content_type=mime_type)
+
+
+
 def create_payload(request):
     data = request.data
     payload = {}
@@ -168,67 +203,113 @@ def create_payload(request):
 
 
 class SingleEntryView(APIView):
-    renderer_classes = [JSONRenderer, TemplateHTMLRenderer]  
-    parser_classes = [JSONParser, MultiPartParser, FormParser]  
+
+    # The same view can respond with either JSON or HTML depending on Accept header
+    renderer_classes = [JSONRenderer, TemplateHTMLRenderer]
+
+    # Allow JSON body, form-data (for typical forms), and multipart (for file uploads)
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get(self, request, author_id, entry_id):
-        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-        if entry.visibility not in ['PUBLIC', 'UNLISTED']:
+        """
+        GET /authors/<author_id>/entries/<entry_id>/
+
+        - If the client requests HTML: render a "shared entry" page.
+        - If the client requests JSON: return serialized entry data.
+        """
+
+        # Look up the entry or return 404 if it doesn't exist
+        entry = get_object_or_404(
+            Entry,
+            id=entry_id,
+            author_id=author_id,
+            is_deleted=False,  # soft-delete flag
+        )
+
+        # Only PUBLIC / UNLISTED entries are shareable to everyone.
+        # For other visibility types, enforce permission checks.
+        if entry.visibility not in ["PUBLIC", "UNLISTED"]:
+            # helpers.can_view_entry encapsulates all permission logic
+            # (ownership, friends-only, private, etc.)
             if not helpers.can_view_entry(request.user, entry):
-                return Response({"error": "This entry is not shareable."}, status=403)
-        
+                return Response(
+                    {"error": "This entry is not shareable."},
+                    status=403,
+                )
+
+        # If the client wants HTML, render the shared entry page
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
+            entry.rendered = helpers.render_entry(entry)
+
+            # Default: not liked
             like = False
+
+            # If the user is logged in, check whether they have liked this entry
             if request.user.is_authenticated:
                 like = EntryLike.objects.filter(
-                    entry=entry, 
-                    user=request.user
+                    entry=entry,
+                    user=request.user,
                 ).exists()
-            
+
+            # Render the HTML template with extra context:
+            # - entry: the current entry object
+            # - author_id: used in the template / links
+            # - like: whether the current user has liked this entry
             return Response(
                 {
-                    "entry": entry, 
+                    "entry": entry,
                     "author_id": author_id,
-                    "like": like
+                    "like": like,
                 },
-                template_name="entry/entry_shared.html" 
+                template_name="entry/entry_shared.html",
             )
-        
+
+        # If the client expects JSON (e.g., a frontend SPA or mobile app),
+        # return the serialized representation of this entry.
+        # `entry_obj` should be a helper that converts the model to a dict.
         return Response(entry_obj(request, entry), status=200)
+
     
     
     def put(self, request, author_id, entry_id):
+        # Only the owner (author_id) can update this entry
         if not request.user or str(request.user.id) != str(author_id):
             if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
                 return HttpResponseForbidden("Only the author can edit this entry.")
-            return Response({"error" : "Only the author can edit this entry"}, status=403)
-        
+            return Response({"error": "Only the author can edit this entry"}, status=403)
+
+        # Fetch the target entry (must not be deleted)
         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+
+        # Normalize incoming data (text vs image, contentType, base64, etc.)
         payload = create_payload(request)
 
-        serializer = EntrySerializer(entry, data=payload, partial=True)
+        serializer = EntrySerializer(entry, data=payload, partial=True, context={"request": request})
 
         if not serializer.is_valid():
+            # HTML: re-render edit page with errors; JSON: return 400 with errors
             if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
                 return Response(
                     {
                         "author_id": author_id,
                         "entry": entry,
                         "errors": serializer.errors,
+                        "contentType": getattr(entry, "content_type", "") or "text/markdown",
                     },
                     template_name="entry/entry_edit.html",
                     status=400,
                 )
-
             return Response({"errors": serializer.errors}, status=400)
-        
+
         updated_entry = serializer.save()
-        
-        # Redirect on success for browser
+
+        # HTML: redirect back to entries list; JSON: return updated entry object
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-            return redirect('author-all-entries', author_id=author_id)
-        
+            return redirect("author-all-entries", author_id=author_id)
+
         return Response(entry_obj(request, updated_entry), status=200)
+
+
 
 
     def post(self, request, author_id, entry_id):

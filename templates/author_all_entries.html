@@ -118,7 +118,14 @@
 
 
         {# image entries: show via binary endpoint #}
-        {% if e.rendered %}
+        {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
+          <img
+            src="{% url 'entry-image' author_id=e.author.id entry_id=e.id %}"
+            alt="{{ e.title|default:'image' }}"
+            style="max-width:100%;height:auto;border-radius:8px;"
+          />
+        {% else %}
+          {# text/markdown or plain text: backend already pre-rendered to HTML #}
           {{ e.rendered|safe }}
         {% endif %}
       </div>
@@ -134,7 +141,10 @@
           class="action like-toggle {% if e.user_liked %}liked{% endif %}"
           aria-pressed="{{ e.user_liked|yesno:'true,false' }}"
           data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
+          data-inbox-url="/api/authors/{{ e.author_id }}/inbox/"
+          data-object-fqid="{{ e.url }}"
         >
+        <!-- data-likes-url="{{e.author.host}}authors/{{ e.author_id }}/inbox/" -->
 
         <script>
             console.log("Entry {{ e.id }} - user_liked =", "{{ e.user_liked }}");

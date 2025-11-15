@@ -370,6 +370,30 @@ class LikeSerializer(serializers.ModelSerializer):
             return f"{request.scheme}://{request.get_host()}/api/authors/{obj.comment.author.id}/commented/{obj.comment.id}"
 
 
+
+class EntryLikeSerializer(serializers.ModelSerializer):
+    """Serializer for entry likes following API spec"""
+    type = serializers.CharField(default="like", read_only=True)
+    author = AuthorSerializer(source='user', read_only=True)
+    published = serializers.DateTimeField(source='created', read_only=True)
+    id = serializers.SerializerMethodField()
+    object = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EntryLike
+        fields = ['type', 'author', 'published', 'id', 'object']
+
+    def get_id(self, obj):
+        request = self.context.get('request')
+        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.user.id}/liked/{obj.id}"
+
+    def get_object(self, obj):
+        request = self.context.get('request')
+        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.entry.author.id}/entries/{obj.entry.id}"
+    
+
+
+
 class LikesSerializer(serializers.Serializer):
     """Likes list serializer matching API spec"""
     type = serializers.CharField(default="likes", read_only=True) 

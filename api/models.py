@@ -76,9 +76,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def save(self, *args, **kwargs):
         base = get_url().rstrip("/")
-        self.url = f"{base}/api/authors/{self.id}"
-        self.host = f"{base}/api/"
-        self.fqid = self.url  # fqid should match the canonical API URL for this author
+
+        if not self.fqid:
+            self.url = f"{base}/api/authors/{self.id}"
+            self.host = f"{base}/api/"
+            self.fqid = self.url  # fqid should match the canonical API URL for this author
+        else:
+            self.url = f"{base}/api/authors/{self.id}"
+
         super().save(*args, **kwargs)
         
 

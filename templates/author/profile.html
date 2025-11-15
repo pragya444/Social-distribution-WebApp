@@ -357,6 +357,8 @@
             class="action like-toggle {% if e.user_liked %}liked{% endif %}"
             aria-pressed="{{ e.user_liked|yesno:'true,false' }}"
             data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
+            data-inbox-url="/api/authors/{{ e.author_id }}/inbox/"
+            data-object-fqid="{{ e.url }}"
           >
             <!-- Heart icon -->
             <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"

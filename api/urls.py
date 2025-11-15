@@ -3,6 +3,8 @@ from . import views
 from .auth import authViews
 from .entries import entryView
 from .views import EntryImageView, EntryImageFQIDView
+from .inbox import inboxView
+from .authors import authorView
 
 urlpatterns = [
     # Auth routes
@@ -11,33 +13,29 @@ urlpatterns = [
     path('auth/logout/', authViews.LogoutView.as_view(), name='logout'),
 
     # Author routes
-    path('authors/', views.AuthorListView.as_view(), name='author-list'),  # paginated list of authors
-    path('authors/<str:author_id>/', views.ProfileView.as_view(), name="profile"), #endpoint to get and update author profile
-    path("authors/<str:author_id>/edit/", views.ProfileEditView.as_view(), name="profile_edit"), #endpoint to get edit page
+    path('authors/', authorView.AuthorListView.as_view(), name='author-list'),  # paginated list of authors
+    path('authors/<str:author_id>/', authorView.ProfileView.as_view(), name="profile"), #endpoint to get and update author profile
+    path("authors/<str:author_id>/edit/", authorView.ProfileEditView.as_view(), name="profile_edit"), #endpoint to get edit page
 
     # author stream, show public entries for a given author
     path('authors/<str:author_id>/stream/', views.AuthorStreamView.as_view(), name='author-all-entries'),
 
 
-    #/entries/{ENTRY_FQID}/image
-    path("entries/<path:entry_fqid>/image",EntryImageFQIDView.as_view(),name="entry-image-fqid",),
+    
+    path("entries/<path:entry_fqid>/image",EntryImageFQIDView.as_view(),name="entry-image-fqid",), #/entries/{ENTRY_FQID}/image
+    path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),# Entry FQID routes
 
-
-    # Entry routes
-    path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),
-    # pages: simple create form
-    path('authors/<str:author_id>/entries/new/', views.EntryCreateView.as_view(), name='entry-create-page'),
-    # edit page for a specific entry
-    path('authors/<str:author_id>/entries/<str:entry_id>/edit/', views.EntryEditView.as_view(), name='entry-edit-page'),
-    # list author entries and create a new entry 
-    path('authors/<str:author_id>/entries/', entryView.EntryView.as_view(), name='entries-list-create'),
-    # get and update a single entry by id
-    path('authors/<str:author_id>/entries/<str:entry_id>/', entryView.SingleEntryView.as_view(), name='entry-retrieve-update'),
-   
+    
+    
+    
+    path('authors/<str:author_id>/entries/new/', views.EntryCreateView.as_view(), name='entry-create-page'), # pages: simple create form   
+    path('authors/<str:author_id>/entries/<str:entry_id>/edit/', views.EntryEditView.as_view(), name='entry-edit-page'), # edit page for a specific entry    
+    path('authors/<str:author_id>/entries/', entryView.EntryView.as_view(), name='entries-list-create'), # list author entries and create a new entry 
+    path('authors/<str:author_id>/entries/<str:entry_id>/', entryView.SingleEntryView.as_view(), name='entry-retrieve-update'), # get and update a single entry by id 
     path('authors/<str:author_id>/entries/<str:entry_id>/image/', views.EntryImageView.as_view(), name='entry-image'),
     
-    #/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image
-    path("authors/<str:author_id>/entries/<str:entry_id>/image",EntryImageView.as_view(),name="entry-image-api",),
+    # #/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image
+    # path("authors/<str:author_id>/entries/<str:entry_id>/image", EntryImageView.as_view(),name="entry-image-api",),
 
 
 
@@ -49,7 +47,7 @@ urlpatterns = [
 
     # Like routes
 
-    # TODO: URL: ://service/api/authors/{AUTHOR_SERIAL}/inbox 
+
     path('authors/<str:author_id>/entries/<str:entry_id>/likes', views.EntryLikesView.as_view(), name='entry-likes'), # Local access
     path('entries/<path:entry_fqid>/likes', views.EntryLikesView.as_view(), name='entry-likes-fqid'),  # for FQID
     # TODO: The comment Section
@@ -60,7 +58,6 @@ urlpatterns = [
     path('authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/', views.CommentLikesView.as_view(), name='comment-likes'), # Local access
     
     # Liked routes
-
     path('authors/<str:author_id>/liked', views.LikedView.as_view(), name='liked-entries'),
     path('authors/<str:author_id>/liked/<str:like_id>', views.LikedView.as_view(), name='liked-entry-detail'),
     path('authors/<path:author_fqid>/liked', views.LikedView.as_view(), name='liked-entries-fqid'),  # for FQID
@@ -92,5 +89,5 @@ urlpatterns = [
     path('authors/<str:author_id>/follow_requests/send/', views.FollowRequestCreateView.as_view(), name='follow-request-create'),
 
     # New inbox endpoint
-    path('authors/<str:author_id>/inbox/', views.InboxView.as_view(), name='inbox'),
+    path('authors/<str:author_id>/inbox/', inboxView.InboxView.as_view(), name='inbox'),
 ]

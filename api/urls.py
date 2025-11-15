@@ -70,7 +70,7 @@ urlpatterns = [
     path("authors/<str:author_id>/follow", followViews.FollowRequestActionView.as_view(), name="follow-send"),
     path("authors/<str:author_id>/unfollow", followViews.UnfollowView.as_view(), name="follow-unfollow"),
 
-        # Follow requests page (list incoming)
+    # Follow requests page (list incoming)
     path("authors/<str:author_id>/requests", followViews.FollowRequestsPageView.as_view(), name="follow-requests-page"),
     # Approve / Deny follow requests (POST)
     path("authors/<str:author_id>/requests/<str:follower_id>/approve", followViews.ApproveFollowRequestView.as_view(), name="follow-approve"),

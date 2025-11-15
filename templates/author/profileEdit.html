@@ -144,7 +144,7 @@
 
         <div class="input-div">
             <label for="profile_picture">Profile Picture</label>
-            <input type="text" id="profile_picture" name="profile_picture" placeholder="Profile Picture URL" value="{{user.profile_picture}}">
+            <input type="text" id="profile_picture" name="profileImage" placeholder="Profile Picture URL" value="{{user.profile_picture}}">
             {% if errors.profile_picture %}
                 <div class="err">{{ errors.profile_picture.0 }}</div>
             {% endif %}

@@ -1,21 +1,19 @@
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.db.models import F, Q
-from .models import User, Entry, Comment, EntryLike, CommentLike, Follow 
+from .models import User, Entry, Comment, EntryLike, CommentLike, Follow, Liked
 from django.contrib.auth import get_user_model
-from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
-from django.views.decorators.http import require_POST, require_http_methods
-from django.views.decorators.csrf import csrf_exempt, csrf_protect
-from django.contrib.auth.decorators import login_required
-import base64
+from django.http import JsonResponse, HttpResponseForbidden
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
-from .serializers import UserSerializer, EntrySerializer
+from .serializers import EntrySerializer, AuthorsSerializer, FollowRequestSerializer, FollowersSerializer, LikeSerializer,LikesSerializer
 from .utils import helpers
-from django.db import IntegrityError, transaction
-
-
+from django.core.paginator import Paginator
+from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
+from urllib.parse import urlparse, unquote
+from .entries import entryView
 
 
 User = get_user_model()
@@ -38,597 +36,903 @@ except Exception:
 
 
 
-
-
-class ProfileView(APIView):
+class AuthorStreamView(APIView):
     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
-    
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, author_id):
-        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-            if not request.user.is_authenticated:
-                return redirect('login')
-        else:
-            if not request.user.is_authenticated:
-                return Response({"Message": "Forbidden"}, status=403)
+        tab = request.GET.get('tab', 'all')
+        me = request.user
+        if str(me.id) != str(author_id):
+            author_id = me.id
 
-
-        if (request.user.id != author_id):
-            user = get_object_or_404(User, id=author_id)
-            entries = Entry.objects.filter(author_id=author_id, visibility='PUBLIC', is_deleted=False).order_by('-updated')
-        else:
-            user = request.user
-            entries = Entry.objects.filter(author_id=author_id, is_deleted=False).order_by('-updated')
-
-# ======================================================================
-# Developed with assistance from ChatGPT (GPT-5), October 2025
-# ======================================================================
-
-
-        # -------- counts + relationship status -------------------------
-        # counts
-        posts_count = Entry.objects.filter(author=user, is_deleted=False).count()
-        from .models import Follow  # (safe if already imported above)
-        followers_count = Follow.objects.filter(followee=user, status=Follow.Status.APPROVED).count()
-        following_count = Follow.objects.filter(follower=user, status=Follow.Status.APPROVED).count()
-        friends_count = len(helpers.friends_of(user))
-        # relationship (viewer -> viewed)
-        rel_status = "self"  # self / none / pending / approved / rejected
-        can_approve = False  # whether viewed user has requested to follow me
-        if request.user.is_authenticated and request.user.id != user.id:
-            rel = Follow.objects.filter(follower=request.user, followee=user).first()
-            rel_status = (rel.status if rel else "none")
-            # incoming pending (user -> me): lets me show approve/deny if you want it here
-            can_approve = Follow.objects.filter(
-                follower=user, followee=request.user, status=Follow.Status.PENDING
-            ).exists()
-        # --------------------------------------------------------------------
-
-        # Pre-render HTML for template
-        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-            for e in entries:
-                e.rendered = helpers.render_entry(e)
-
-            return Response(
-                {
-                    "user": user,
-                    "entries": entries,
-                  
-                    "posts_count": posts_count,
-                    "followers_count": followers_count,
-                    "following_count": following_count,
-                    "friends_count": friends_count,
-                    "rel_status": rel_status,
-                    "can_approve": can_approve,
-                },
-                template_name="author/profile.html",
+        if tab == 'following':
+            followed_users = helpers.users_i_follow(me)
+            friends = helpers.friends_of(me)
+            following_nonfriends = followed_users.exclude(pk__in=friends.values("pk"))
+            entries = (
+                Entry.objects.filter(is_deleted=False)
+                .exclude(author=me)
+                .filter(
+                    Q(author__in=friends, visibility__in=["FRIENDS", "PUBLIC", "UNLISTED"]) |
+                    Q(author__in=following_nonfriends, visibility__in=["PUBLIC", "UNLISTED"])
+                )
+                .order_by("-updated")
             )
+        elif tab == 'private':
+            entries = Entry.objects.filter(author=request.user, is_deleted=False).order_by('-updated')
+        elif tab == 'friends':
+            friends = helpers.friends_of(me)
+            entries = (
+                Entry.objects
+                .filter(author__in=friends, visibility__in=['FRIENDS', 'PUBLIC', 'UNLISTED'], is_deleted=False)
+                .exclude(author=me)
+                .order_by('-updated')
+            )
+        else:  # all tab
+            followed_users = helpers.users_i_follow(me)
+            friend_users = helpers.friends_of(me)
+            public_entries = Entry.objects.filter(visibility='PUBLIC', is_deleted=False)
+            my_entries = Entry.objects.filter(author=me, is_deleted=False)
+            unlisted_from_followed = Entry.objects.filter(author__in=followed_users, visibility='UNLISTED', is_deleted=False)
+            friends_only_from_friends = Entry.objects.filter(author__in=friend_users, visibility='FRIENDS', is_deleted=False)
+            entries = (public_entries | my_entries | unlisted_from_followed | friends_only_from_friends).order_by('-updated')
 
-        #  JSON shape if you keep the API path
-        serializer = UserSerializer(user)
+        liked_ids = set()
+        if request.user.is_authenticated and entries:
+            liked_ids = set(EntryLike.objects.filter(user=request.user, entry__in=entries).values_list('entry_id', flat=True))
+        
+        print(liked_ids)
+        
+        for e in entries:
+            e.user_liked = e.id in liked_ids
+            e.rendered = helpers.render_entry(e)
 
-        entries_data = EntrySerializer(entries, many=True).data
-        return Response(
-            {
-                "user": serializer.data,
-                "entries": entries_data,
-                "posts_count": posts_count,
-                "followers_count": followers_count,
-                "following_count": following_count,
-                "friends_count": friends_count,
-                "rel_status": rel_status,
-                "can_approve": can_approve,
-            },
-            status=200,
-        )
+        if request.accepted_renderer.format == 'html':
+            return Response({
+                'author': request.user,
+                'entries': entries,
+                'tab': tab,
+            }, template_name='author_all_entries.html')
+
+        serializer = EntrySerializer(entries, many=True, context={"request": request})
+        return Response(serializer.data, status=200)
 
 
-class ProfileEditView(APIView):
+class EntryCreateView(APIView):
     permission_classes = [IsAuthenticated]
     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    authentication_classes = [SessionAuthentication]  # Enforces CSRF for HTML forms
 
     def get(self, request, author_id):
-        if getattr(request, "user", None) and request.user.is_authenticated and request.user.id == author_id:
-            return Response({"user": request.user }, template_name="author/profileEdit.html")
-        else:
-            return redirect('home')
+        if str(request.user.id) != str(author_id):
+            if request.accepted_renderer.format == 'html':
+                return HttpResponseForbidden("only the author can create entries here.")
+            return Response({"error": "Not authorized"}, status=403)
+
+        if request.accepted_renderer.format == 'html':
+            return Response({'author_id': author_id}, template_name='entry/entry_create.html')
+        return Response({"type": "entry", "author_id": author_id})
 
     def post(self, request, author_id):
-        if request.user.id != author_id:
-            if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-                return redirect('home')
-            return Response({"errors": "Only the author can edit their profile"}, status=403)
-        
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if str(request.user.id) != str(author_id):
+            return Response({"error": "Not authorized"}, status=403)
 
-        if not serializer.is_valid():
-            if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-                return Response({"errors": serializer.errors, "user": request.user}, template_name="author/profileEdit.html", status=400)
-            return Response({"errors": serializer.errors}, status=400)
+        serializer = EntrySerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            entry = serializer.save(author=request.user)
+            if request.accepted_renderer.format == 'html':
+                return redirect('author-all-entries', author_id=author_id)
+            return Response(serializer.data, status=201)
 
-        user = serializer.save()
-        if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-            return redirect('profile', author_id=user.id)
-        return Response({"user": serializer.data}, status=200)
+        if request.accepted_renderer.format == 'html':
+            return Response({
+                'author_id': author_id,
+                'errors': serializer.errors
+            }, template_name='entry/entry_create.html')
+        return Response(serializer.errors, status=400)
 
 
-@login_required
-def author_stream(request, author_id):
-    # determine the selected tab (default to all)
-    tab = request.GET.get('tab', 'all')
-    me = request.user
+class EntryEditView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+    authentication_classes = [SessionAuthentication]
 
-    # If someone opens another author's stream URL, show their own stream
-    if str(me.id) != str(author_id):
-        author_id = me.id
+    def get(self, request, author_id, entry_id):
+        if str(request.user.id) != str(author_id):
+            if request.accepted_renderer.format == 'html':
+                return HttpResponseForbidden("only the author can edit this entry.")
+            return Response({"error": "Not authorized"}, status=403)
 
-    if tab == 'following':
-        # fetch entries from authors the user follows, excluding the user's own entries
-        followed_users = helpers.users_i_follow(me)
-        friends = helpers.friends_of(me)
+        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+        if request.accepted_renderer.format == 'html':
+            return Response({
+                'author_id': author_id,
+                'entry': entry,
+                'contentType': getattr(entry, 'content_type', '') or 'text/markdown',
+            }, template_name='entry/entry_edit.html')
+        serializer = EntrySerializer(entry)
+        return Response(serializer.data)
 
-        # authors I follow who are NOT friends
-        following_nonfriends = followed_users.exclude(pk__in=friends.values("pk"))
 
-        entries = (
-        Entry.objects.filter(is_deleted=False)
-        .exclude(author=me)
-        .filter(
-            # friends: can see FRIENDS + PUBLIC + UNLISTED
-            Q(author__in=friends, visibility__in=["FRIENDS", "PUBLIC", "UNLISTED"])
-            |
-            # followed but not friends: PUBLIC + UNLISTED only
-            Q(author__in=following_nonfriends, visibility__in=["PUBLIC", "UNLISTED"])
+
+class EntryImageView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, author_id, entry_id):
+        # Fetch the entry by author and id, ensure it is not deleted
+        entry = get_object_or_404(
+            Entry,
+            id=entry_id,
+            author_id=author_id,
+            is_deleted=False,
         )
-        .order_by("-updated")
-    )
-        
-    elif tab == 'private':
-        # fetch only the user's own private entries
-        entries = Entry.objects.filter(
-            author=request.user,
-            is_deleted=False
-        ).order_by('-updated')
-       
-    
-    elif tab == 'friends':
-        friends = helpers.friends_of(me)
-        allowed_visibility = ['FRIENDS', 'PUBLIC', 'UNLISTED']
+        return entryView._serve_entry_image(request, entry)
 
-        entries = (
-            Entry.objects
-            .filter(author__in=friends, visibility__in=allowed_visibility, is_deleted=False)
-            .exclude(author=me)
-            .order_by('-updated')
-        )
-    else: #all tab
-        
-        followed_users = helpers.users_i_follow(me)
-        friend_users   = helpers.friends_of(me)
-           
-        public_entries = Entry.objects.filter(
-          visibility='PUBLIC', is_deleted=False)
 
-        my_entries = Entry.objects.filter(
-          author=me, is_deleted=False)
-        
-        unlisted_from_followed = Entry.objects.filter(
-        author__in=followed_users, visibility='UNLISTED', is_deleted=False
-    )
-        friends_only_from_friends = Entry.objects.filter(
-            author__in=friend_users, visibility='FRIENDS', is_deleted=False
-        )
-        entries = (
-            public_entries
-            | my_entries
-            | unlisted_from_followed
-            | friends_only_from_friends
-        ).order_by('-updated')
-    
-    liked_ids = set()
-    if request.user.is_authenticated and entries:
-        liked_ids = set(
-            EntryLike.objects
-            .filter(user=request.user, entry__in=entries)
-            .values_list('entry_id', flat=True)
+
+
+class EntryImageFQIDView(APIView):
+    """
+    GET /api/entries/{ENTRY_FQID}/image
+
+    {ENTRY_FQID} is the *full* URL of an entry, for example:
+
+        http://127.0.0.1:8000/api/authors/<AUTHOR_ID>/entries/<ENTRY_ID>
+
+    This view only handles local entries. It parses the FQID to get
+    author_id and entry_id, then reuses the same image-serving helper
+    used by the /authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image endpoint.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, entry_fqid):
+        # Parse the FQID into its components
+        parsed = urlparse(entry_fqid)
+
+        # Expected local path format:
+        #   /api/authors/<author_id>/entries/<entry_id>
+        path_parts = parsed.path.strip("/").split("/")
+
+        try:
+            # Example path_parts:
+            # ['api', 'authors', '<author_id>', 'entries', '<entry_id>']
+            api_index = path_parts.index("api")
+            authors_index = path_parts.index("authors", api_index + 1)
+            entries_index = path_parts.index("entries", authors_index + 1)
+
+            author_id = path_parts[authors_index + 1]
+            entry_id = path_parts[entries_index + 1]
+        except (ValueError, IndexError):
+            # FQID doesn't look like a valid local entry URL
+            return Response(
+                {"error": "Invalid FQID format for local entry"},
+                status=400,
+            )
+
+        # Look up the Entry using the parsed IDs
+        entry = get_object_or_404(
+            Entry,
+            id=entry_id,
+            author_id=author_id,
+            is_deleted=False,
         )
 
-    # pre-rendered HTML for template
-    for e in entries:
-        e.user_liked = e.id in liked_ids
-        
-        e.rendered = helpers.render_entry(e)
-
-    # render with author ID and the selected tab
-    return render(request, 'author_all_entries.html', {
-        'author': request.user,
-        'entries': entries,
-        'tab': tab,
-    })
-
-
-# -------- pages: create (server-rendered form) --------------------------------
-@login_required
-@csrf_protect
-def entry_create_page(request, author_id):
-    #ToDO:Handle image being too large error
-    # only the owner can open and submit this form
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("only the author can create entries here.")
-
-    # GET -> render empty form
-    if request.method == 'GET':
-        return render(request, 'entry/entry_create.html', {'author_id': author_id})
-
-
-#part2 update
-# -------- pages: edit (server-rendered form) ----------------------------------
-@login_required   # must be logged in
-@csrf_protect     # protect post with csrf
-def entry_edit_page(request, author_id, entry_id):
-    """
-    Renders + updates a single Entry for the logged-in owner.
-    """
-
-    # --- auth guard: only the owner can edit ---
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("only the author can edit this entry.")
-
-    # --- load entry (must exist, must belong to this author, must not be deleted) ---
-    e = get_object_or_404(
-        Entry,
-        id=entry_id,
-        author_id=author_id,
-        is_deleted=False
-    )
-
-    # --- GET: render form pre-filled ---
-    if request.method == 'GET':
-        ctx = {
-            'author_id': author_id,
-            'entry': e,
-            # used by template to highlight the correct tab initially
-            'contentType': getattr(e, 'content_type', '') or 'text/markdown',
-        }
-        return render(request, 'entry/entry_edit.html', ctx)
-
-
-#part2 update
-@require_http_methods(['GET'])
-def entry_image_binary(request, author_id, entry_id):
-    """
-    serve raw binary bytes for an image entry.
-    this lets markdown posts embed images like:
-        ![](/api/authors/<author_id>/entries/<entry_id>/image)
-   
-    only return the image if the viewer is allowed to see this entry,
-      using helpers.can_view_entry(request.user, entry)
-      so visibility rules (PUBLIC / UNLISTED / FRIENDS / DELETED) are respected.
-
-    if the entry is not an image entry (e.g. it's text/markdown),
-        return 404 as required by the spec.
-    """
-
-    #find the entry. it must exist, belong to author_id, and not be hard-deleted.
-    e = get_object_or_404(
-        Entry,
-        id=entry_id,
-        author_id=author_id,
-        is_deleted=False,
-    )
-
-    #check visibility access first.
-    #    this reuses the same logic the rest of the project already uses
-    #    for comments/likes/etc. so text posts and image posts follow
-    #    the exact same visibility rules.
-    if not helpers.can_view_entry(request.user, e):
-        return HttpResponseForbidden("no access to this image")
-
-    #confirm it is actually an image post.
-    #    by convention: e.content_type like "image/png;base64" or "image/jpeg;base64"
-    ct = (getattr(e, 'content_type', '') or '').lower()
-    if not (ct.startswith('image/') and ct.endswith(';base64')):
-        # not an image entry, so spec says this endpoint should 404
-        raise Http404('not an image entry')
-
-    #decode the stored base64 string into raw bytes
-    try:
-        raw_bytes = base64.b64decode(e.content or '')
-    except Exception:
-        # data is corrupted / not valid base64
-        raise Http404('invalid image data')
-
-    #build the real mime type for the response:
-    #    turn "image/png;base64" -> "image/png"
-    mime_type = ct.replace(';base64', '')
-
-    #return the binary data so <img src="..."> works in browsers
-    return HttpResponse(raw_bytes, content_type=mime_type)
+        # Reuse the existing helper to serve the image bytes
+        return entryView._serve_entry_image(request, entry)
 
 
 
-# @require_POST
-# @login_required
-# @csrf_protect
-# def entry_delete(request, author_id, entry_id):
-#     # only the author can delete
-#     if str(request.user.id) != str(author_id):
-#         return HttpResponseForbidden("Only the author can delete this entry.")
-
-#     # soft delete the entry because it says to delete my own entries locally
-#     e = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-#     e.is_deleted = True
-#     e.updated = now()
-#     e.save(update_fields=['is_deleted', 'updated'])
-#     return redirect('author-all-entries', author_id=author_id)
 
 
-@login_required
-@require_POST
-def send_follow_request(request, author_id):
-    # author_id == the viewer (me) sending request
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Not your account")
-    target_id = request.POST.get("target_id")
-    target = get_object_or_404(User, id=target_id)
-    if target == request.user:
-        return JsonResponse({"error":"cannot follow yourself"}, status=400)
 
-    fr, created = Follow.objects.get_or_create(
-        follower=request.user, followee=target,
-        defaults={"status": Follow.Status.PENDING}
-    )
-    if not created and fr.status == Follow.Status.REJECTED:
-        fr.status = Follow.Status.PENDING
+class FollowRequestActionView(APIView):
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [SessionAuthentication]
+
+    def post(self, request, author_id):
+        if str(request.user.id) != str(author_id):
+            return HttpResponseForbidden("Not your account")
+
+        target_id = request.POST.get("target_id")
+        target = get_object_or_404(User, id=target_id)
+        if target == request.user:
+            return JsonResponse({"error": "cannot follow yourself"}, status=400)
+
+        fr, created = Follow.objects.get_or_create(
+            follower=request.user, followee=target,
+            defaults={"status": Follow.Status.PENDING}
+        )
+        if not created and fr.status == Follow.Status.REJECTED:
+            fr.status = Follow.Status.PENDING
+            fr.save(update_fields=["status"])
+
+        return redirect("profile", author_id=target.id)
+
+
+class UnfollowView(APIView):
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [SessionAuthentication]
+
+    def post(self, request, author_id):
+        if str(request.user.id) != str(author_id):
+            return HttpResponseForbidden("Not your account")
+
+        target_id = request.POST.get("target_id")
+        target = get_object_or_404(User, id=target_id)
+        Follow.objects.filter(follower=request.user, followee=target).delete()
+        return redirect("profile", author_id=target.id)
+
+
+class FollowRequestsPageView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer]
+
+    def get(self, request, author_id):
+        if str(request.user.id) != str(author_id):
+            return HttpResponseForbidden("Not your account")
+
+        pendings = Follow.objects.filter(followee=request.user, status=Follow.Status.PENDING) \
+            .select_related("follower").order_by("-created_at")
+        return Response({"requests": pendings}, template_name="follow_requests.html")
+
+
+class ApproveFollowRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [SessionAuthentication]
+
+    def post(self, request, author_id, follower_id):
+        if str(request.user.id) != str(author_id):
+            return HttpResponseForbidden("Not your account")
+
+        fr = get_object_or_404(Follow, follower_id=follower_id, followee=request.user)
+        fr.status = Follow.Status.APPROVED
         fr.save(update_fields=["status"])
-    return redirect("profile", author_id=target.id)
+        return redirect("follow-requests-page", author_id=author_id)
 
 
-@login_required
-@require_POST
-def unfollow_post(request, author_id):
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Not your account")
-    target_id = request.POST.get("target_id")
-    target = get_object_or_404(User, id=target_id)
-    Follow.objects.filter(follower=request.user, followee=target).delete()
-    return redirect("profile", author_id=target.id)
+class DenyFollowRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [SessionAuthentication]
+
+    def post(self, request, author_id, follower_id):
+        if str(request.user.id) != str(author_id):
+            return HttpResponseForbidden("Not your account")
+
+        Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
+        return redirect("follow-requests-page", author_id=author_id)
 
 
-@login_required
-def follow_requests_page(request, author_id):
-    # show incoming pending requests to ME
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Not your account")
-    pendings = Follow.objects.filter(followee=request.user, status=Follow.Status.PENDING).select_related("follower").order_by("-created_at")
-    return render(request, "follow_requests.html", {"requests": pendings})
+class CommentDetailView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
+    def get(self, request, author_id, entry_id, comment_id):
+        comment = get_object_or_404(Comment, id=comment_id, entry__id=entry_id, entry__author_id=author_id)
+        return Response(helpers.comment_to_json(comment))
 
-@login_required
-@require_POST
-def approve_follow_request(request, author_id, follower_id):
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Not your account")
-    fr = get_object_or_404(Follow, follower_id=follower_id, followee=request.user)
-    fr.status = Follow.Status.APPROVED
-    fr.save(update_fields=["status"])
-    return redirect("follow-requests-page", author_id=author_id)
+    def put(self, request, author_id, entry_id, comment_id):
+        comment = get_object_or_404(Comment, id=comment_id, author=request.user)
+        data = helpers.json_from_request(request)
+        text = (data.get("comment") or "").strip()
+        if not text:
+            return Response({"error": "comment text is required"}, status=400)
+        comment.comment = text
+        comment.save(update_fields=["comment"])
+        return Response(helpers.comment_to_json(comment))
 
+    def delete(self, request, author_id, entry_id, comment_id):
+        comment = get_object_or_404(Comment, id=comment_id, author=request.user)
+        comment.delete()
+        return Response({"ok": True}, status=204)
 
-@login_required
-@require_POST
-def deny_follow_request(request, author_id, follower_id):
-    if str(request.user.id) != str(author_id):
-        return HttpResponseForbidden("Not your account")
-    Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
-    return redirect("follow-requests-page", author_id=author_id)
+class CommentListCreateView(APIView):
+    renderer_classes = [JSONRenderer]  
+    permission_classes = [AllowAny]
+    authentication_classes = [SessionAuthentication]
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
 
-@login_required
-@csrf_exempt
-@require_http_methods(["GET", "POST"])
-def comments_list_create(request, author_id, entry_id):
-    """
-    GET  /api/authors/<author_id>/entries/<entry_id>/comments
-    POST /api/authors/<author_id>/entries/<entry_id>/comments
-    """
-    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+    def get(self, request, author_id=None, entry_id=None):
+        # Support two patterns:
+        # 1. /authors/<author_id>/entries/<entry_id>/comments
+        # 2. /entries/<path:entry_id>/comments/ - FQID like http://node.com/authors/xyz/entries/123
+        # Resolve entry (local or FQID)
+        if author_id and entry_id:
+            entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+        else:
+            fqid = entry_id or request.path.split('/comments')[0]
+            try:
+                parts = fqid.strip('/').split('/')
+                entry_id_local = parts[-1]
+                author_id_local = parts[-3]
+                entry = get_object_or_404(Entry, id=entry_id_local, author_id=author_id_local, is_deleted=False)
+            except Exception:
+                return Response({"error": "Invalid entry ID format"}, status=400)
 
-    # visibility guard (public/unlisted ok; friends/private need auth/relationship)
-    if not helpers.can_view_entry(request.user, entry):
-        return HttpResponseForbidden("no access to this entry")
+        if not helpers.can_view_entry(request.user, entry):
+            return Response({"error": "You do not have permission to view comments on this entry"}, status=403)
 
-    if request.method == "GET":
-        # simple paging
+        # Paging
         try:
             page = int(request.GET.get("page", 1))
             size = int(request.GET.get("size", 10))
         except ValueError:
             page, size = 1, 10
-        start, end = (page - 1) * size, (page - 1) * size + size
+        start = (page - 1) * size
+        end = start + size
 
         qs = entry.comments.all().order_by("-created")
-        items = [helpers.comment_to_json(c) for c in qs[start:end]]
+        items = [helpers.comment_to_json(c) for c in qs[start:end]]  
 
-        base = entry.author.url.split('/authors/')[0] if entry.author and entry.author.url else ''
-        return JsonResponse({
+        base_url = request.build_absolute_uri('/api/')
+        return Response({
             "type": "comments",
-            "id": f"{base}/api/authors/{author_id}/entries/{entry_id}/comments",
+            "id": f"{base_url}authors/{entry.author.id}/entries/{entry.id}/comments",
             "page_number": page,
             "size": size,
             "count": entry.comment_count,
             "src": items
-        }, status=200)
+        })
 
-    # POST: create a comment (must be logged in)
-    if not request.user.is_authenticated:
-        return HttpResponseForbidden("login required")
+    def post(self, request, author_id=None, entry_id=None):
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=401)
 
-    data = helpers.json_from_request(request)
-    text = (data.get("comment") or "").strip()
-    if not text:
-        return JsonResponse({"error": "comment text is required"}, status=400)
-    ctype = (data.get("contentType") or "text/plain").strip() or "text/plain"
+        # Resolve entry (same as GET)
+        if author_id and entry_id:
+            entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+        else:
+            fqid = entry_id or request.data.get("id", "") or request.POST.get("id", "")
+            try:
+                parts = fqid.strip('/').split('/')
+                entry_id_local = parts[-1]
+                author_id_local = parts[-3]
+                entry = get_object_or_404(Entry, id=entry_id_local, author_id=author_id_local, is_deleted=False)
+            except Exception:
+                return Response({"error": "Invalid entry ID"}, status=400)
 
-    c = Comment.objects.create(entry=entry, author=request.user, comment=text, content_type=ctype)
-    Entry.objects.filter(id=entry.id).update(comment_count=F('comment_count') + 1)
-    entry.refresh_from_db(fields=['comment_count'])
-    return JsonResponse(helpers.comment_to_json(c), status=201)
+        if not helpers.can_view_entry(request.user, entry):
+            return Response({"error": "Cannot comment on this entry"}, status=403)
 
+        text = (request.data.get("comment") or request.POST.get("comment", "")).strip()
+        if not text:
+            return Response({"error": "Comment cannot be empty"}, status=400)
 
-# ======================================================================
-# Developed with assistance from ChatGPT (GPT-5), October 2025
-# ======================================================================
-@login_required
-@csrf_exempt
-@require_http_methods(["GET", "POST", "DELETE"])
-def entry_likes(request, author_id, entry_id):
+        ctype = request.data.get("contentType", "text/plain") or request.POST.get("contentType", "text/plain")
+
+        comment = Comment.objects.create(
+            entry=entry,
+            author=request.user,
+            comment=text,
+            content_type=ctype
+        )
+
+        Entry.objects.filter(id=entry.id).update(comment_count=F('comment_count') + 1)
+        entry.refresh_from_db()
+
+        return Response(helpers.comment_to_json(comment, request), status=201)
+
+class EntryLikesView(APIView):
+    '''
+    This view handles:
+    - GET /api/authors/{author_id}/entries/{entry_id}/likes
+        returns a paginated list of likes for the specified entry. (likes object)
+        
+    - GET /api/entries/{entry_fqid}/likes
+        returns a paginated list of likes for the specified entry by fqid. (likes object)
+        
+    - POST /api/authors/{author_id}/entries/{entry_id}/likes
+        returns the like count and the liked status after liking the entry.
+        
+    - DELETE /api/authors/{author_id}/entries/{entry_id}/likes
+        returns the like count and the liked status after unliking the entry.
+
+    '''
+    
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    authentication_classes = [SessionAuthentication]
+    renderer_classes = [JSONRenderer]
+
+    def get(self, request, entry_fqid=None, author_id=None, entry_id=None):
+        '''
+        This handles a get request to retrieve the list of likes for a specific entry.
+        it returns a paginated list of likes along with metadata about the entry and pagination.
+        '''
+        if author_id:
+            entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+        elif entry_fqid:
+            entry = get_object_or_404(Entry, fqid=entry_fqid, is_deleted=False)
+        else:
+            return Response({"error": "Invalid request"}, status=400)
+
+        if not helpers.can_view_entry(request.user, entry):
+            return HttpResponseForbidden("no access")
+        
+        page_number = int(request.GET.get("page", 1))  # default to page 1
+        size = int(request.GET.get("size", 50)) # default to 50 items per page
+        liked = EntryLike.objects.filter(entry=entry).order_by("-created")
+        paginator = Paginator(liked, size)
+        page = paginator.get_page(page_number)
+
+        # Use an object, not a dict to avoid DRF treating 'src' as a field
+        class LikeListObject:
+            def __init__(self, author, id, page_number, size, count, src):
+                self.author = author
+                self.id = id
+                self.page_number = page_number
+                self.size = size
+                self.count = count
+                self.src = src
+
+        data = LikeListObject(
+            author=entry.author,
+            id=entry.id,
+            page_number=page_number,
+            size=len(liked),
+            count=paginator.count,
+            src=page.object_list
+        )
+
+        serializer = LikesSerializer(data, context={'request': request})
+        return Response(serializer.data, status=200)
+    
+    def post(self, request, author_id, entry_id):
+        entry = get_object_or_404(
+            Entry, id=entry_id, author_id=author_id, is_deleted=False
+        )
+
+        if not helpers.can_view_entry(request.user, entry):
+            return HttpResponseForbidden("no access")
+
+        # 1. Create EntryLike (primary like model)
+        entry_like, created = EntryLike.objects.get_or_create(
+            user=request.user,
+            entry=entry
+        )
+
+        if created:
+            # 2. Add to Liked table for user-liked list
+            Liked.objects.get_or_create(
+                user=request.user,
+                entry=entry,
+                defaults={"comment": None}
+            )
+
+            # 3. Increment entry like_count
+            Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
+
+        entry.refresh_from_db(fields=['like_count'])
+
+        return JsonResponse({
+            "ok": True,
+            "liked": True,
+            "count": entry.like_count
+        }, status=200 if not created else 201)
+
+    def delete(self, request, author_id, entry_id):
+        entry = get_object_or_404(
+            Entry, id=entry_id, author_id=author_id, is_deleted=False
+        )
+
+        if not helpers.can_view_entry(request.user, entry):
+            return HttpResponseForbidden("no access")
+
+        # 1. Remove EntryLike
+        deleted, _ = EntryLike.objects.filter(
+            user=request.user,
+            entry=entry
+        ).delete()
+
+        if deleted:
+            # 2. Remove from Liked model
+            Liked.objects.filter(
+                user=request.user,
+                entry=entry
+            ).delete()
+
+            # 3. Decrement like_count
+            entry.like_count = max(entry.like_count - 1, 0)
+            entry.save(update_fields=['like_count'])
+
+        entry.refresh_from_db(fields=['like_count'])
+
+        return JsonResponse({
+            "ok": True,
+            "liked": False,
+            "count": entry.like_count
+        })
+
+class LikedView(APIView):
     """
-    GET     /api/authors/<author_id>/entries/<entry_id>/likes
-            -> { type:"likes", count:<int>, liked:<bool>, src:[...] }
-    POST    like (idempotent) -> { ok:true, liked:true, count:<int> }
-    DELETE  unlike            -> { ok:true, liked:false, count:<int> }
+    Handles:
+    - GET /api/authors/{author_id}/liked
+        returns a paginated list of all likes (entries + comments) by the specified author.
+        
+    - GET /api/authors/{author_id}/liked/{like_id}
+        returns a single like by this author.
+        
+    - GET /api/authors/{author_fqid}/liked
+        returns a paginated list of all likes (entries + comments) by the specified remote author identified by FQID.
+    
+    - GET /api/liked/{liked_fqid}
+        returns a single like identified by FQID.
     """
-    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-    if not helpers.can_view_entry(request.user, entry):
-        return HttpResponseForbidden("no access")
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    renderer_classes = [JSONRenderer]
 
-    # compute count fast and whether THIS user liked it
-    # count = EntryLike.objects.filter(entry=entry).count()
-    user_liked = False
-    if request.user.is_authenticated:
-        user_liked = EntryLike.objects.filter(entry=entry, user=request.user).exists()
+    def get(self, request, author_id=None, like_id=None, author_fqid=None, liked_fqid=None):
 
-    if request.method == "GET":
+        # Case 1: /authors/{author_id}/liked — all likes (entries + comments)
+        if author_id and not like_id:
+            user = get_object_or_404(User, id=author_id)
+            likes = Liked.objects.filter(user=user).order_by("-created")
+
+            # Pagination
+            page_number = int(request.GET.get("page", 1))
+            size = int(request.GET.get("size", 5))
+            paginator = Paginator(likes, size)
+            page = paginator.get_page(page_number)
+
+            # Wrapper
+            class LikeListObject:
+                def __init__(self, author, id, page_number, size, count, src):
+                    self.author = author
+                    self.id = id
+                    self.page_number = page_number
+                    self.size = size
+                    self.count = count
+                    self.src = src
+
+            data = LikeListObject(
+                author=user,
+                id=user.id,
+                page_number=page_number,
+                size=len(likes),
+                count=paginator.count,
+                src=page.object_list
+            )
+
+            serializer = LikesSerializer(data, context={'request': request})
+            return Response(serializer.data, status=200)
+
+        # Case 2: single like by this author
+        elif author_id and like_id:
+            like = get_object_or_404(Liked, id=like_id, user__id=author_id)
+            serializer = LikeSerializer(like, context={'request': request})
+            return Response(serializer.data, status=200)
+
+        # Case 3: /authors/{author_fqid}/liked — remote author’s likes by FQID
+        elif author_fqid:
+            user = get_object_or_404(User, fqid=author_fqid)
+            likes = Liked.objects.filter(user=user).order_by("-created")
+
+            # Pagination (same logic)
+            page_number = int(request.GET.get("page", 1))
+            size = int(request.GET.get("size", 5))
+            paginator = Paginator(likes, size)
+            page = paginator.get_page(page_number)
+
+            class LikeListObject:
+                def __init__(self, author, id, page_number, size, count, src):
+                    self.author = author
+                    self.id = id
+                    self.page_number = page_number
+                    self.size = size
+                    self.count = count
+                    self.src = src
+
+            data = LikeListObject(
+                author=user,
+                id=user.id,
+                page_number=page_number,
+                size=len(likes),
+                count=paginator.count,
+                src=page.object_list
+            )
+
+            serializer = LikesSerializer(data, context={'request': request})
+            return Response(serializer.data, status=200)
+
+        # Case 4: single like by FQID
+        elif liked_fqid:
+            like = get_object_or_404(Liked, fqid=liked_fqid)
+            serializer = LikeSerializer(like, context={'request': request})
+            return Response(serializer.data, status=200)
+
+        else:
+            return Response({"error": "Invalid request"}, status=400)
+
+
+class CommentLikesView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    authentication_classes = [SessionAuthentication]
+    renderer_classes = [JSONRenderer]
+
+    def get(self, request, author_id, entry_id, comment_id):
+        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+        if not helpers.can_view_entry(request.user, entry):
+            return HttpResponseForbidden("no access")
+
+        comment = get_object_or_404(Comment, id=comment_id, entry=entry)
+        user_liked = request.user.is_authenticated and CommentLike.objects.filter(user=request.user, comment=comment).exists()
         data = [{
             "type": "author",
             "id": like.user.url,
             "displayName": like.user.username,
             "web": f"/authors/{like.user.id}",
-        } for like in EntryLike.objects.select_related("user").filter(entry=entry)]
-        return JsonResponse(
-            {"type": "likes", "count": entry.like_count, "liked": user_liked, "src": data},
-            status=200
-        )
+        } for like in comment.likes.select_related("user").all()]
 
-    if not request.user.is_authenticated:
-        return HttpResponseForbidden("login required")
+        return JsonResponse({
+            "type": "likes",
+            "count": len(data),
+            "liked": user_liked,
+            "src": data,
+        }, status=200)
 
-    if request.method == "POST":
-        like, created = EntryLike.objects.get_or_create(user=request.user, entry=entry)
+    def post(self, request, author_id, entry_id, comment_id):
+        """
+        Handles liking a comment using the unified Liked model.
+        """
+        # 1. Validate the entry and comment
+        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+        if not helpers.can_view_entry(request.user, entry):
+            return HttpResponseForbidden("no access")
+
+        comment = get_object_or_404(Comment, id=comment_id, entry=entry)
+
+        # 2. Create (or reuse) the like
+        like, created = Liked.objects.get_or_create(user=request.user, comment=comment, defaults={"entry": entry})
+
         if created:
-            Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
-        entry.refresh_from_db(fields=['like_count'])
-        return JsonResponse({"ok": True, "liked": True, "count": entry.like_count}, status=201)
+            # Optional: update comment like count if you track it
+            Comment.objects.filter(id=comment.id).update(like_count=F('like_count') + 1)
 
-    # DELETE (unlike)
-    deleted, _ = EntryLike.objects.filter(user=request.user, entry=entry).delete()
-    if deleted:
-        entry.like_count = max(entry.like_count - 1, 0)
-        entry.save(update_fields=['like_count'])
-    entry.refresh_from_db(fields=['like_count'])
-    return JsonResponse({"ok": True, "liked": False, "count": entry.like_count}, status=200)
-
-
-@csrf_exempt
-@require_http_methods(["GET", "POST", "DELETE"])
-# the comment likes function
-def comment_likes(request, author_id, entry_id, comment_id):
-    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-    if not helpers.can_view_entry(request.user, entry):
-        return HttpResponseForbidden("no access")
-
-    comment = get_object_or_404(Comment, id=comment_id, entry=entry)
-
-    user_liked = request.user.is_authenticated and CommentLike.objects.filter(
-        user=request.user, comment=comment
-    ).exists()
-    # get if the user liked the comment or not for GET
-    if request.method == "GET":
-        data = [
-            {
-                "type": "author",
-                "id": like.user.url,
-                "displayName": like.user.username,
-                "web": f"/authors/{like.user.id}",
-            }
-            for like in comment.likes.select_related("user").all()
-        ]
-        return JsonResponse(
-            {
-                "type": "likes",
-                "count": len(data),
-                "liked": user_liked,
-                "src": data,
-            },
-            status=200,
-        )
-
-    if not request.user.is_authenticated:
-        return HttpResponseForbidden("login required")
-
-    if request.method == "POST":
-        CommentLike.objects.get_or_create(user=request.user, comment=comment)
-        count = CommentLike.objects.filter(comment=comment).count()
+        # 3. Return the total count
+        count = Liked.objects.filter(comment=comment).count()
         return JsonResponse({"ok": True, "liked": True, "count": count}, status=201)
 
-    # DELETE
-    CommentLike.objects.filter(user=request.user, comment=comment).delete()
-    count = CommentLike.objects.filter(comment=comment).count()
-    return JsonResponse({"ok": True, "liked": False, "count": count}, status=200)
+    def delete(self, request, author_id, entry_id, comment_id):
+        """
+        Handles unliking a comment using the unified Liked model.
+        """
+        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+        if not helpers.can_view_entry(request.user, entry):
+            return HttpResponseForbidden("no access")
+
+        comment = get_object_or_404(Comment, id=comment_id, entry=entry)
+
+        # 1. Delete the like
+        deleted, _ = Liked.objects.filter(user=request.user, comment=comment).delete()
+
+        if deleted:
+            # Optional: decrement comment like count (never below 0)
+            comment.like_count = max(comment.like_count - 1, 0)
+            comment.save(update_fields=["like_count"])
+
+        # 2. Return the updated count
+        count = Liked.objects.filter(comment=comment).count()
+        return JsonResponse({"ok": True, "liked": False, "count": count}, status=200)
 
 
+class FollowersPageView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer]
+
+    def get(self, request, author_id):
+        owner = get_object_or_404(User, id=author_id)
+        qs = helpers.followers_of(owner).order_by("name", "username")
+        return Response({
+            "title": f"Followers of {owner.username}",
+            "owner": owner,
+            "users": qs,
+        }, template_name="author/user_list.html")
 
 
-@login_required
-def followers_page(request, author_id):
-    owner = get_object_or_404(User, id=author_id)
-    qs = helpers.followers_of(owner).order_by("name", "username")
-    return render(request, "author/user_list.html", {
-        "title": f"Followers of {owner.username}",
-        "owner": owner,
-        "users": qs,
-    })
+class FollowingPageView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer]
 
-@login_required
-def following_page(request, author_id):
-    owner = get_object_or_404(User, id=author_id)
-    qs = helpers.users_i_follow(owner).order_by("name", "username")
-    return render(request, "author/user_list.html", {
-        "title": f"{owner.username} is Following",
-        "owner": owner,
-        "users": qs,
-    })
-
-@login_required
-def friends_page(request, author_id):
-    owner = get_object_or_404(User, id=author_id)
-    qs = helpers.friends_of(owner).order_by("name", "username")
-    return render(request, "author/user_list.html", {
-        "title": f"Friends of {owner.username}",
-        "owner": owner,
-        "users": qs,
-    })
+    def get(self, request, author_id):
+        owner = get_object_or_404(User, id=author_id)
+        qs = helpers.users_i_follow(owner).order_by("name", "username")
+        return Response({
+            "title": f"{owner.username} is Following",
+            "owner": owner,
+            "users": qs,
+        }, template_name="author/user_list.html")
 
 
-# --- People lists (JSON) 
-from django.http import JsonResponse
+class FriendsPageView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer]
 
-@login_required  # switch to AllowAny if you truly want public JSON
-def followers_api(request, author_id):
-    owner = get_object_or_404(User, id=author_id)
-    data = [{"id": u.id, "username": u.username, "name": u.name, "url": u.url} 
-            for u in helpers.followers_of(owner)]
-    return JsonResponse({"count": len(data), "results": data}, status=200)
+    def get(self, request, author_id):
+        owner = get_object_or_404(User, id=author_id)
+        qs = helpers.friends_of(owner).order_by("name", "username")
+        return Response({
+            "title": f"Friends of {owner.username}",
+            "owner": owner,
+            "users": qs,
+        }, template_name="author/user_list.html")
 
-@login_required
-def following_api(request, author_id):
-    owner = get_object_or_404(User, id=author_id)
-    data = [{"id": u.id, "username": u.username, "name": u.name, "url": u.url} 
-            for u in helpers.users_i_follow(owner)]
-    return JsonResponse({"count": len(data), "results": data}, status=200)
 
-@login_required
-def friends_api(request, author_id):
-    owner = get_object_or_404(User, id=author_id)
-    data = [{"id": u.id, "username": u.username, "name": u.name, "url": u.url} 
-            for u in helpers.friends_of(owner)]
-    return JsonResponse({"count": len(data), "results": data}, status=200)   
+class FollowRequestListView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+
+    def get(self, request, author_id):
+        if str(request.user.id) != str(author_id):
+            return Response({"error": "Not authorized"}, status=403)
+
+        pendings = Follow.objects.filter(followee=request.user, status=Follow.Status.PENDING) \
+            .select_related("follower").order_by("-created_at")
+
+        if request.accepted_renderer.format == 'html':
+            return Response({"requests": pendings}, template_name="follow_requests.html")
+
+        serializer = FollowRequestSerializer(pendings, many=True)
+        return Response(serializer.data)
+
+
+class FollowRequestCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+    authentication_classes = [SessionAuthentication]
+
+    def post(self, request, author_id):
+        if str(request.user.id) != str(author_id):
+            return Response({"error": "Not authorized"}, status=403)
+
+        target = get_object_or_404(User, id=request.data.get("target_id"))
+        if target == request.user:
+            return Response({"error": "Cannot follow yourself"}, status=400)
+
+        follow, created = Follow.objects.get_or_create(
+            follower=request.user,
+            followee=target,
+            defaults={"status": Follow.Status.PENDING}
+        )
+        if not created and follow.status == Follow.Status.REJECTED:
+            follow.status = Follow.Status.PENDING
+            follow.save()
+
+        if request.accepted_renderer.format == 'html':
+            return redirect('profile', author_id=target.id)
+
+        serializer = FollowRequestSerializer(follow)
+        return Response(serializer.data, status=201)
+
+
+class FollowersListView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+
+    def get(self, request, author_id):
+        owner = get_object_or_404(User, id=author_id)
+        followers = helpers.followers_of(owner).order_by("name", "username")
+
+        if request.accepted_renderer.format == 'html':
+            return Response({
+                "title": f"Followers of {owner.username}",
+                "owner": owner,
+                "users": followers,
+            }, template_name="author/user_list.html")
+
+        serializer = FollowersSerializer({"type": "followers", "followers": followers})
+        return Response(serializer.data)
+
+
+class FollowingListView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+
+    def get(self, request, author_id):
+        owner = get_object_or_404(User, id=author_id)
+        following = helpers.users_i_follow(owner).order_by("name", "username")
+
+        if request.accepted_renderer.format == 'html':
+            return Response({
+                "title": f"{owner.username} is Following",
+                "owner": owner,
+                "users": following,
+            }, template_name="author/user_list.html")
+
+        serializer = AuthorsSerializer({"type": "authors", "authors": following})
+        return Response(serializer.data)
+
+
+class FriendsListView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
+
+    def get(self, request, author_id):
+        owner = get_object_or_404(User, id=author_id)
+        friends = helpers.friends_of(owner).order_by("name", "username")
+
+        if request.accepted_renderer.format == 'html':
+            return Response({
+                "title": f"Friends of {owner.username}",
+                "owner": owner,
+                "users": friends,
+            }, template_name="author/user_list.html")
+
+        serializer = AuthorsSerializer({"type": "authors", "authors": friends})
+        return Response(serializer.data)
+
+
+# class InboxView(APIView):
+  
+#     permission_classes = [AllowAny]  
+#     authentication_classes = [] 
+
+#     @csrf_exempt  
+#     def post(self, request, author_id):
+#         """
+#         Inbox receives objects from other nodes:
+
+#         """
+#         data = request.data
+#         item_type = (data.get("type") or "").lower()
+
+#         # handle FOLLOW objects
+#         if item_type == "follow":
+#             actor_obj = data.get("actor") or {}
+#             object_obj = data.get("object") or {}
+
+#             actor_id_fqid = actor_obj.get("id")
+#             object_id_fqid = object_obj.get("id")
+
+#             if not actor_id_fqid or not object_id_fqid:
+#                 return Response(
+#                     {"error": "actor.id and object.id are required for follow"},
+#                     status=400,
+#                 )
+
+#             # object.id should be the FQID of the *local* author whose inbox this is
+        
+#             cleaned_object = object_id_fqid.rstrip("/")
+#             cleaned_actor = actor_id_fqid.rstrip("/")
+
+#             try:
+#                 # local followee (the author whose inbox we're addressing)
+#                 followee = User.objects.get(url__in=[cleaned_object, cleaned_object + "/"])
+#             except User.DoesNotExist:
+#                 return Response(
+#                     {"error": f"Unknown local author for object.id: {object_id_fqid}"},
+#                     status=404,
+#                 )
+
+#             try:
+#                 # follower (may be remote or local, but must already exist in our DB as a User with url)
+#                 follower = User.objects.get(url__in=[cleaned_actor, cleaned_actor + "/"])
+#             except User.DoesNotExist:
+#                 # we require the remote actor
+#                 # to have a User row already.
+#                 return Response(
+#                     {"error": f"Unknown follower for actor.id: {actor_id_fqid}"},
+#                     status=404,
+#                 )
+
+#             follow, created = Follow.objects.get_or_create(
+#                 follower=follower,
+#                 followee=followee,
+#                 defaults={"status": Follow.Status.PENDING},
+#             )
+
+#             # Represent it back in the standard follow-request shape
+#             resp_data = FollowRequestSerializer(
+#                 follow, context={"request": request}
+#             ).data
+#             return Response(resp_data, status=201 if created else 200)
+
+#         # (optional) minimal stubs for other types, so you don't crash
+#         if item_type == "entry":
+#             return Response({"error": "Inbox handling for entries not implemented yet"}, status=501)
+
+#         if item_type == "like":
+#             return Response({"error": "Inbox handling for likes not implemented yet"}, status=501)
+
+#         if item_type == "comment":
+#             return Response({"error": "Inbox handling for comments not implemented yet"}, status=501)
+
+#         return Response({"error": f"Invalid or unsupported item type: {item_type}"}, status=400)

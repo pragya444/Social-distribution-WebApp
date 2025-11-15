@@ -3,6 +3,9 @@ import base64
 from io import BytesIO
 from PIL import Image, UnidentifiedImageError, ImageOps
 
+
+# Developed with assistance from ChatGPT (GPT-5), October 2025
+
 ALLOWED_FORMATS = {
     "PNG": "image/png;base64",
     "JPEG": "image/jpeg;base64",
@@ -33,7 +36,7 @@ def handle_uploaded_image(file_obj):
             # fully decode now so we fail fast on broken/corrupt files
             im.load()
 
-            # fix common camera rotations via exif (no effect if there’s no exif)
+            # fix common camera rotations via exif
             im = ImageOps.exif_transpose(im)
 
             # pillow’s best guess of original format, e.g. "PNG", "JPEG"

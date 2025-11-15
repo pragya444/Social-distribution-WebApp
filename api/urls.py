@@ -76,14 +76,22 @@ urlpatterns = [
     path("authors/<str:author_id>/requests/<str:follower_id>/approve", followViews.ApproveFollowRequestView.as_view(), name="follow-approve"),
     path("authors/<str:author_id>/requests/<str:follower_id>/deny", followViews.DenyFollowRequestView.as_view(), name="follow-deny"),
 
+
+
+    # Followers JSON endpoint (both versions)
+    path("authors/<str:author_id>/followers", followViews.FollowersListView.as_view(), name="followers-api"),
+    path("authors/<str:author_id>/followers/", followViews.FollowersListView.as_view(), name="followers-api-slash"),
+
+    # Following JSON endpoint (both versions)
+    path("authors/<str:author_id>/following", followViews.FollowingListView.as_view(), name="following-api"),
+    path("authors/<str:author_id>/following/", followViews.FollowingListView.as_view(), name="following-api-slash"),
+
+
     # Follow / Following / Friends **HTML pages**
-    path("authors/<str:author_id>/followers/", followViews.FollowersPageView.as_view(), name="followers-page"),
-    path("authors/<str:author_id>/following/", followViews.FollowingPageView.as_view(), name="following-page"),
+    path("authors/<str:author_id>/followers/page/", followViews.FollowersPageView.as_view(), name="followers-page"),    
+    path("authors/<str:author_id>/following/page", followViews.FollowingPageView.as_view(), name="following-page"),
     path("authors/<str:author_id>/friends/", followViews.FriendsPageView.as_view(), name="friends-page"),
 
-    # JSON API endpoints (no trailing slash)
-    path("authors/<str:author_id>/followers", followViews.FollowersListView.as_view(), name="followers-api"),
-    path("authors/<str:author_id>/following", followViews.FollowingListView.as_view(), name="following-api"),
 
 
     # New follower detail (percent-encoded foreign author FQID)
@@ -99,5 +107,6 @@ urlpatterns = [
     path('authors/<str:author_id>/follow_requests/send/', followViews.FollowRequestCreateView.as_view(), name='follow-request-create'),
 
     # New inbox endpoint
+    path('authors/<str:author_id>/inbox', inboxView.InboxView.as_view(), name='inbox-api'),
     path('authors/<str:author_id>/inbox/', inboxView.InboxView.as_view(), name='inbox'),
 ]

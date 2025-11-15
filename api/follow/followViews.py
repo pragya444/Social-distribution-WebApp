@@ -437,4 +437,3 @@ class FollowingDetailView(APIView):
         follow.delete()
         return Response(status=204)
 
-

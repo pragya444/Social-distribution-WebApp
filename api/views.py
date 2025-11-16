@@ -38,6 +38,171 @@ except Exception:
 
 
 
+class EntryCommentsByFQIDView(APIView):
+    permission_classes = [AllowAny]
+    renderer_classes = [JSONRenderer]
+
+    def get(self, request, entry_fqid):
+        entry = Entry.objects.get(url= entry_fqid, is_deleted=False)
+        comments = Comment.objects.filter(entry=entry).order_by("created")
+
+        items = [helpers.comment_to_json(c) for c in comments]
+        data = {
+            "type": "comments",
+            "id": request.build_absolute_uri(),  # URL for this list
+            "page_number": 1,
+            "size": len(items),
+            "count": len(items),
+            "src": items,
+        }
+        return Response(data, status=200)
+
+
+
+
+class CommentedDetailView(APIView):
+    """
+    GET /api/authors/{AUTHOR_SERIAL}/commented/{COMMENT_SERIAL}
+    """
+    renderer_classes = [JSONRenderer]
+    permission_classes = [AllowAny]
+
+    def get(self, request, author_id, comment_id):
+        comment = get_object_or_404(
+            Comment,
+            id=comment_id,
+            author_id=author_id,
+        )
+        return Response(helpers.comment_to_json(comment), status=200)
+
+
+class CommentedByFQIDView(APIView):
+    """
+    GET /api/commented/{COMMENT_FQID}
+    where COMMENT_FQID is URL-encoded, e.g.
+      http%3A%2F%2Fnodeaaaa%2Fapi%2Fauthors%2F111%2Fcommented%2F130
+    """
+    renderer_classes = [JSONRenderer]
+    permission_classes = [AllowAny]
+
+    def get(self, request, comment_fqid):
+        comment = _resolve_local_comment_from_fqid(comment_fqid)
+        data = helpers.comment_to_json(comment)
+        return Response(data, status=200)
+        
+
+class CommentedListView(APIView):
+    permission_classes = [AllowAny]
+    renderer_classes = [JSONRenderer]
+
+    def get(self, request, author_id):
+        local_author_id = _normalize_local_id(author_id)
+        author = get_object_or_404(User, id=local_author_id)
+
+        qs = Comment.objects.filter(author=author).select_related("entry", "entry__author").order_by("created")
+
+        items = [helpers.comment_to_json(c) for c in qs]
+        data = {
+            "type": "comments",
+            "id": request.build_absolute_uri(),
+            "page_number": 1,
+            "size": len(items),
+            "count": qs.count(),
+            "src": items,
+        }
+        return Response(data, status=200)
+
+    def post(self, request, author_id):
+        # Local author POSTs a comment object here
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=401)
+        if str(request.user.id) != str(author_id):
+            return Response({"error": "Cannot post comments as another author"}, status=403)
+
+        data = request.data
+        if (data.get("type") or "").lower() != "comment":
+            return Response({"error": "Payload 'type' must be 'comment'"}, status=400)
+
+        entry_fqid = data.get("entry")
+        if not entry_fqid:
+            return Response({"error": "Missing 'entry' field"}, status=400)
+
+        try:
+            entry = _resolve_local_entry_from_fqid(entry_fqid)
+        except Http404:
+            return Response({"error": "Unknown entry FQID"}, status=404)
+
+        if not helpers.can_view_entry(request.user, entry):
+            return Response({"error": "Cannot comment on this entry"}, status=403)
+
+        text = (data.get("comment") or "").strip()
+        if not text:
+            return Response({"error": "Comment cannot be empty"}, status=400)
+
+        ctype = (
+            data.get("contentType")
+            or data.get("content_type")
+            or "text/plain"
+        )
+
+        comment = Comment.objects.create(
+            entry=entry,
+            author=request.user,
+            comment=text,
+            content_type=ctype,
+        )
+
+        Entry.objects.filter(id=entry.id).update(comment_count=F("comment_count") + 1)
+        entry.refresh_from_db(fields=["comment_count"])
+
+        out = helpers.comment_to_json(comment)
+        out["comment_count"] = entry.comment_count
+        return Response(out, status=201)
+
+
+
+
+
+
+class EntryCommentByFQIDView(APIView):
+    """
+    GET /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/comment/{REMOTE_COMMENT_FQID}
+
+    REMOTE_COMMENT_FQID is URL-encoded. For local comments we support:
+      - the encoded FQID of this node's comment
+      - or just the local numeric id.
+    """
+    renderer_classes = [JSONRenderer]
+    permission_classes = [AllowAny]
+
+    def get(self, request, author_id, entry_id, remote_comment_fqid):
+        # make sure the entry itself exists and is visible
+        entry = get_object_or_404(
+            Entry,
+            id=entry_id,
+            author_id=author_id,
+            is_deleted=False,
+        )
+        if not helpers.can_view_entry(request.user, entry):
+            return Response({"error": "no access"}, status=403)
+
+        decoded = unquote(str(remote_comment_fqid))
+
+        # Try local id 
+        comment = Comment.objects.filter(fqid=remote_comment_fqid, entry=entry).first()
+        if not comment:
+            # Try resolving as our own FQID form
+            try:
+                comment = _resolve_local_comment_from_fqid(decoded)
+            except Http404:
+                comment = None
+
+        if not comment or comment.entry_id != entry.id:
+            raise Http404("comment not found")
+
+        return Response(helpers.comment_to_json(comment), status=200)
+
+
 class AuthorStreamView(APIView):
     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
     permission_classes = [IsAuthenticated]
@@ -645,75 +810,240 @@ class LikedView(APIView):
             return Response({"error": "Invalid request"}, status=400)
 
 
+# class CommentLikesView(APIView):
+#     permission_classes = [IsAuthenticatedOrReadOnly]
+#     authentication_classes = [SessionAuthentication]
+#     renderer_classes = [JSONRenderer]
+
+#     def get(self, request, author_id, entry_id, comment_id):
+#         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+#         if not helpers.can_view_entry(request.user, entry):
+#             return HttpResponseForbidden("no access")
+
+#         comment = get_object_or_404(Comment, id=comment_id, entry=entry)
+#         user_liked = request.user.is_authenticated and CommentLike.objects.filter(user=request.user, comment=comment).exists()
+#         data = [{
+#             "type": "author",
+#             "id": like.user.url,
+#             "displayName": like.user.username,
+#             "web": f"/authors/{like.user.id}",
+#         } for like in comment.likes.select_related("user").all()]
+
+#         return JsonResponse({
+#             "type": "likes",
+#             "count": len(data),
+#             "liked": user_liked,
+#             "src": data,
+#         }, status=200)
+
+#     def post(self, request, author_id, entry_id, comment_id):
+#         """
+#         Handles liking a comment using the unified Liked model.
+#         """
+#         # 1. Validate the entry and comment
+#         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+#         if not helpers.can_view_entry(request.user, entry):
+#             return HttpResponseForbidden("no access")
+
+#         comment = get_object_or_404(Comment, id=comment_id, entry=entry)
+
+#         # 2. Create (or reuse) the like
+#         like, created = Liked.objects.get_or_create(user=request.user, comment=comment, defaults={"entry": entry})
+
+#         if created:
+#             # Optional: update comment like count if you track it
+#             Comment.objects.filter(id=comment.id).update(like_count=F('like_count') + 1)
+
+#         # 3. Return the total count
+#         count = Liked.objects.filter(comment=comment).count()
+#         return JsonResponse({"ok": True, "liked": True, "count": count}, status=201)
+
+#     def delete(self, request, author_id, entry_id, comment_id):
+#         """
+#         Handles unliking a comment using the unified Liked model.
+#         """
+#         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+#         if not helpers.can_view_entry(request.user, entry):
+#             return HttpResponseForbidden("no access")
+
+#         comment = get_object_or_404(Comment, id=comment_id, entry=entry)
+
+#         # 1. Delete the like
+#         deleted, _ = Liked.objects.filter(user=request.user, comment=comment).delete()
+
+#         if deleted:
+#             # Optional: decrement comment like count (never below 0)
+#             comment.like_count = max(comment.like_count - 1, 0)
+#             comment.save(update_fields=["like_count"])
+
+#         # 2. Return the updated count
+#         count = Liked.objects.filter(comment=comment).count()
+#         return JsonResponse({"ok": True, "liked": False, "count": count}, status=200)
+
+
+
+
+from urllib.parse import unquote
+from django.shortcuts import get_object_or_404
+from django.http import JsonResponse
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.renderers import JSONRenderer
+from rest_framework.views import APIView
+from django.db import IntegrityError
+
+# assumes you already have:
+# - helpers.can_view_entry(user, entry)
+# - _normalize_local_id(s)
+# - models: Entry, Comment, CommentLike
+
 class CommentLikesView(APIView):
+    """
+    Supports BOTH:
+      /api/authors/<author_id>/entries/<entry_id>/comments/<str:comment_id>/likes
+      /api/authors/<author_id>/entries/<entry_id>/comments/<path:comment_fqid>/likes
+    """
     permission_classes = [IsAuthenticatedOrReadOnly]
-    authentication_classes = [SessionAuthentication]
+
     renderer_classes = [JSONRenderer]
 
-    def get(self, request, author_id, entry_id, comment_id):
+    def _get_entry(self, author_id, entry_id, user):
         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-        if not helpers.can_view_entry(request.user, entry):
-            return HttpResponseForbidden("no access")
 
-        comment = get_object_or_404(Comment, id=comment_id, entry=entry)
-        user_liked = request.user.is_authenticated and CommentLike.objects.filter(user=request.user, comment=comment).exists()
-        data = [{
-            "type": "author",
-            "id": like.user.url,
-            "displayName": like.user.username,
-            "web": f"/authors/{like.user.id}",
-        } for like in comment.likes.select_related("user").all()]
 
-        return JsonResponse({
-            "type": "likes",
-            "count": len(data),
-            "liked": user_liked,
-            "src": data,
-        }, status=200)
 
-    def post(self, request, author_id, entry_id, comment_id):
-        """
-        Handles liking a comment using the unified Liked model.
-        """
-        # 1. Validate the entry and comment
-        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-        if not helpers.can_view_entry(request.user, entry):
-            return HttpResponseForbidden("no access")
 
-        comment = get_object_or_404(Comment, id=comment_id, entry=entry)
 
-        # 2. Create (or reuse) the like
-        like, created = Liked.objects.get_or_create(user=request.user, comment=comment, defaults={"entry": entry})
+        if not helpers.can_view_entry(user, entry):
+            return None, JsonResponse({"error": "no access"}, status=403)
+        return entry, None
 
-        if created:
-            # Optional: update comment like count if you track it
-            Comment.objects.filter(id=comment.id).update(like_count=F('like_count') + 1)
 
-        # 3. Return the total count
-        count = Liked.objects.filter(comment=comment).count()
-        return JsonResponse({"ok": True, "liked": True, "count": count}, status=201)
+    def _resolve_comment(self, entry, comment_ref):
 
-    def delete(self, request, author_id, entry_id, comment_id):
-        """
-        Handles unliking a comment using the unified Liked model.
-        """
-        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
-        if not helpers.can_view_entry(request.user, entry):
-            return HttpResponseForbidden("no access")
+  
+        if not comment_ref:
+            return None
 
-        comment = get_object_or_404(Comment, id=comment_id, entry=entry)
+        # 1) exact local id
+        c = Comment.objects.filter(id=comment_ref, entry=entry).first()
+        if c:
+            return c
 
-        # 1. Delete the like
-        deleted, _ = Liked.objects.filter(user=request.user, comment=comment).delete()
+        # 2) decoded + last segment
+        decoded = unquote(str(comment_ref)).strip()
+        last = _normalize_local_id(decoded)
 
-        if deleted:
-            # Optional: decrement comment like count (never below 0)
-            comment.like_count = max(comment.like_count - 1, 0)
-            comment.save(update_fields=["like_count"])
+        c = Comment.objects.filter(id=last, entry=entry).first()
+        if c:
+            return c
 
-        # 2. Return the updated count
-        count = Liked.objects.filter(comment=comment).count()
+        # 3) exact fqid
+        if hasattr(Comment, "fqid"):
+            c = Comment.objects.filter(fqid=decoded, entry=entry).first()
+            if c:
+                return c
+            # 4) endswith '/<id>'
+            c = Comment.objects.filter(fqid__endswith="/" + last, entry=entry).first()
+            if c:
+                return c
+
+        return None
+
+    def get(self, request, author_id, entry_id, **kwargs):
+        
+        comment_ref = kwargs.get("comment_id") or kwargs.get("comment_fqid")
+
+        entry, err = self._get_entry(author_id, entry_id, request.user)
+        if err:
+            return err
+
+        comment = self._resolve_comment(entry, comment_ref)
+        if not comment:
+            return JsonResponse({"error": "comment not found"}, status=404)
+
+        user_liked = (
+            request.user.is_authenticated
+            and CommentLike.objects.filter(user=request.user, comment=comment).exists()
+        )
+
+        src = [
+            {
+                "type": "author",
+                "id": like.user.url,
+                "displayName": like.user.username,
+                "web": f"/authors/{like.user.id}",
+            }
+            for like in comment.likes.select_related("user").all()
+        ]
+
+        return JsonResponse({"type": "likes", "count": len(src), "liked": user_liked, "src": src}, status=200)
+
+
+
+
+
+
+
+
+
+    def post(self, request, author_id, entry_id, **kwargs):
+
+
+
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "login required"}, status=403)
+
+        comment_ref = kwargs.get("comment_id") or kwargs.get("comment_fqid")
+
+        entry, err = self._get_entry(author_id, entry_id, request.user)
+        if err:
+            return err
+
+        comment = self._resolve_comment(entry, comment_ref)
+        if not comment:
+            return JsonResponse({"error": "comment not found"}, status=404)
+
+        try:
+            _, created = CommentLike.objects.get_or_create(user=request.user, comment=comment)
+
+
+
+        except IntegrityError:
+
+            created = False
+
+        count = CommentLike.objects.filter(comment=comment).count()
+        return JsonResponse({"ok": True, "liked": True, "count": count}, status=201 if created else 200)
+
+    def delete(self, request, author_id, entry_id, **kwargs):
+
+
+
+
+
+
+
+
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "login required"}, status=403)
+
+        comment_ref = kwargs.get("comment_id") or kwargs.get("comment_fqid")
+
+        entry, err = self._get_entry(author_id, entry_id, request.user)
+        if err:
+            return err
+
+
+        comment = self._resolve_comment(entry, comment_ref)
+        if not comment:
+            return JsonResponse({"error": "comment not found"}, status=404)
+
+        CommentLike.objects.filter(user=request.user, comment=comment).delete()
+        count = CommentLike.objects.filter(comment=comment).count()
         return JsonResponse({"ok": True, "liked": False, "count": count}, status=200)
+
+
+        
 
 
 # class FollowersPageView(APIView):

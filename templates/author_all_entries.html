@@ -120,11 +120,7 @@
         {# image entries: show via binary endpoint #}
         {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
           <img
-            {% if e.url %}
-                src="{{ e.url }}"
-            {% else %}
-                src="{% url 'entry-image' author_id=e.author.id entry_id=e.id %}"
-            {% endif %}
+            src="{% url 'entry-image' author_id=e.author.id entry_id=e.id %}"
             alt="{{ e.title|default:'image' }}"
             style="max-width:100%;height:auto;border-radius:8px;"
           />
@@ -136,6 +132,7 @@
       <div class="time">{{ e.updated }}</div>
     </div>
 
+
     <div class="card-foot">
       <div class="action">
         <!-- Like -->
@@ -144,7 +141,15 @@
           class="action like-toggle {% if e.user_liked %}liked{% endif %}"
           aria-pressed="{{ e.user_liked|yesno:'true,false' }}"
           data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
+          data-inbox-url="/api/authors/{{ e.author_id }}/inbox/"
+          data-object-fqid="{{ e.url }}"
+          data-remote-inbox-url="{% if e.author.username|slice:':7' == 'remote_' %}{{ e.author.host }}authors/{{ e.author_id }}/inbox/{% endif %}"
         >
+        <!-- data-likes-url="{{e.author.host}}authors/{{ e.author_id }}/inbox/" -->
+
+        <script>
+            console.log("Entry {{ e.id }} - user_liked =", "{{ e.user_liked }}");
+        </script>
           <!-- Heart icon -->
           <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -172,7 +177,7 @@
 
         
 
-      
+
 
         <div class="action">
           <!-- Replaced share emoji with heroicon -->
@@ -210,7 +215,6 @@
     <button class="confirm" onclick="closeShareModal()">OK</button>
   </div>
 </div>
-
 
 
 <script>

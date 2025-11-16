@@ -37,7 +37,7 @@ class AuthorSerializer(serializers.ModelSerializer):
         With partial=True, a field not present is ignored.
         But if the client *sent* `name` and it's empty/whitespace, raise an error.
         """
-        raw_name = self.initial_data.get("name", None)
+        raw_name = self.initial_data.get("displayName", None)
         if raw_name is not None and raw_name.strip() == "":
             raise serializers.ValidationError({"name": "Name cannot be blank."})
         return attrs
@@ -96,13 +96,13 @@ class AuthorsSerializer(serializers.Serializer):
     size = serializers.IntegerField(min_value=1)
     count = serializers.IntegerField(min_value=0)
     authors = AuthorSerializer(many=True)
-
+'''
 class PaginatedSerializer(serializers.Serializer):
     """Base pagination serializer"""
     page_number = serializers.IntegerField(min_value=1)
     size = serializers.IntegerField(min_value=1)
     count = serializers.IntegerField(min_value=0)
-
+'''
 class EntrySerializer(serializers.ModelSerializer):
     contentType = serializers.CharField(source='content_type', required=False)
     author = AuthorSerializer(read_only=True)
@@ -251,8 +251,25 @@ class FollowRequestSerializer(serializers.ModelSerializer):
         fields = ['type', 'summary', 'actor', 'object']
 
     def get_summary(self, obj):
-        follower_name = obj.follower.name or obj.follower.username
-        followee_name = obj.followee.name or obj.followee.username
+        # get display names from your User model
+        follower = obj.follower
+        followee = obj.followee
+
+        # Try common fields; fall back to username
+        follower_name = (
+            getattr(follower, "displayName", None)
+            or getattr(follower, "name", None)
+            or getattr(follower, "username", None)
+            or str(follower)
+        )
+
+        followee_name = (
+            getattr(followee, "displayName", None)
+            or getattr(followee, "name", None)
+            or getattr(followee, "username", None)
+            or str(followee)
+        )
+
         return f"{follower_name} wants to follow {followee_name}"
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -341,27 +358,34 @@ class FollowersSerializer(serializers.Serializer):
     type = serializers.CharField(default="followers", read_only=True)
     followers = AuthorSerializer(many=True)
 
-
 class FollowingSerializer(serializers.Serializer):
     """Serializer for list of authors a user is following (Following API)"""
     type = serializers.CharField(default="following", read_only=True)
     following = AuthorSerializer(many=True)
 
+
 class LikeSerializer(serializers.ModelSerializer):
     """Base serializer for likes following API spec"""
     type = serializers.CharField(default="Like", read_only=True)
-    author = AuthorSerializer(read_only=True)
+    author = AuthorSerializer(read_only=True , source='user')
     published = serializers.DateTimeField(source='created', read_only=True)
     id = serializers.SerializerMethodField()
     object = serializers.SerializerMethodField()
-
+    
     class Meta:
-        abstract = True
+        model = EntryLike   # default
         fields = ['type', 'author', 'published', 'id', 'object']
+
+    @classmethod
+    def for_model(cls, amodel):
+        class _DynamicLikeSerializer(cls):
+            class Meta(cls.Meta):
+                model = amodel
+        return _DynamicLikeSerializer
 
     def get_id(self, obj):
         request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.author.id}/liked/{obj.id}"
+        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.user.id}/liked/{obj.id}"
     
     def get_object(self, obj):
         request = self.context.get('request')
@@ -369,6 +393,30 @@ class LikeSerializer(serializers.ModelSerializer):
             return f"{request.scheme}://{request.get_host()}/api/authors/{obj.entry.author.id}/entries/{obj.entry.id}"
         else:
             return f"{request.scheme}://{request.get_host()}/api/authors/{obj.comment.author.id}/commented/{obj.comment.id}"
+
+
+
+class EntryLikeSerializer(serializers.ModelSerializer):
+    """Serializer for entry likes following API spec"""
+    type = serializers.CharField(default="like", read_only=True)
+    author = AuthorSerializer(source='user', read_only=True)
+    published = serializers.DateTimeField(source='created', read_only=True)
+    id = serializers.SerializerMethodField()
+    object = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EntryLike
+        fields = ['type', 'author', 'published', 'id', 'object']
+
+    def get_id(self, obj):
+        request = self.context.get('request')
+        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.user.id}/liked/{obj.id}"
+
+    def get_object(self, obj):
+        request = self.context.get('request')
+        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.entry.author.id}/entries/{obj.entry.id}"
+    
+
 
 
 class LikesSerializer(serializers.Serializer):
@@ -387,6 +435,7 @@ class LikesSerializer(serializers.Serializer):
 
     def get_web(self, obj):
         # For comment likes
+        request = self.context.get('request')
         if hasattr(obj, 'comment'):
             return f"{request.scheme}://{request.get_host()}/authors/{obj.comment.author.username}/comments/{obj.comment.id}/likes"
         # For entry likes

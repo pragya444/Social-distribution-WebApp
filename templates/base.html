@@ -371,7 +371,7 @@
         }
         async function loadComments(url) {
           list.innerHTML = '<p class="muted">Loading…</p>';
-          
+
           const r = await window.__j(url);
           if (!r.ok) {
             list.innerHTML = '<p class="muted">Failed to load comments.</p>';
@@ -384,7 +384,9 @@
           const d = r.data;
           if (Array.isArray(d)) items = d;
           else items = d.src || d.items || d.comments || d.results || [];
-          const m = String(url).match(/authors\/([^/]+)\/entries\/([^/]+)\/comments/);
+          const m = String(url).match(
+            /authors\/([^/]+)\/entries\/([^/]+)\/comments/
+          );
           const entryAuthorId = m?.[1];
           const entryId = m?.[2];
 
@@ -393,19 +395,30 @@
             return;
           }
 
-          const esc = s => String(s ?? "").replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-          list.innerHTML = items.map(c => {
-            const display = c.author?.displayName ?? c.author?.username ?? c.author?.name ?? "Anonymous";
-            let commentId = c.id || c.comment_id || c.uuid || "";
+          const esc = (s) =>
+            String(s ?? "").replace(
+              /[&<>]/g,
+              (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])
+            );
+          list.innerHTML = items
+            .map((c) => {
+              const display =
+                c.author?.displayName ??
+                c.author?.username ??
+                c.author?.name ??
+                "Anonymous";
+              let commentId = c.id || c.comment_id || c.uuid || "";
 
-            // If c.id is a full URL, grab the tail after "/comments/"
-            const mId = String(commentId).match(/\/comments\/([^/]+)\/?$/);
-            if (mId) commentId = mId[1];
+              // If c.id is a full URL, grab the tail after "/comments/"
+              const mId = String(commentId).match(/\/comments\/([^/]+)\/?$/);
+              if (mId) commentId = mId[1];
 
-            const likeUrl = `/api/authors/${entryAuthorId}/entries/${entryId}/comments/${commentId}/likes/`;
-            return `
+              const likeUrl = `/api/authors/${entryAuthorId}/entries/${entryId}/comments/${commentId}/likes/`;
+              return `
               <div class="cmt-row" data-like-url="${likeUrl}">
-                <div class="cmt-text"><b>${esc(display)}</b>: ${esc(c.comment ?? c.text ?? "")}</div>
+                <div class="cmt-text"><b>${esc(display)}</b>: ${esc(
+                c.comment ?? c.text ?? ""
+              )}</div>
                 <div class="cmt-actions">
                   <svg class="icon small-heart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
                       fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -416,7 +429,8 @@
                 </div>
               </div>
             `;
-          }).join("");
+            })
+            .join("");
 
           // wire up hearts
           const rows = list.querySelectorAll(".cmt-row");
@@ -424,19 +438,19 @@
             const likeUrl = row.getAttribute("data-like-url");
             const heart = row.querySelector(".small-heart");
             const cnt = row.querySelector("[data-comment-like-count]");
-            
-            // initial GET to populate count + liked state, initialize like button
-          const g = await likeFetchWithFallback(likeUrl, {});
-          if (g.ok && typeof g.data?.count === "number") {
-            cnt.textContent = g.data.count;
-            if (g.data.liked) {
-              heart.classList.add("liked");   //  red initially
-            } else {
-              heart.classList.remove("liked");
-            }
-          }
 
-          const rows = list.querySelectorAll(".cmt-row");
+            // initial GET to populate count + liked state, initialize like button
+            const g = await likeFetchWithFallback(likeUrl, {});
+            if (g.ok && typeof g.data?.count === "number") {
+              cnt.textContent = g.data.count;
+              if (g.data.liked) {
+                heart.classList.add("liked"); //  red initially
+              } else {
+                heart.classList.remove("liked");
+              }
+            }
+
+            const rows = list.querySelectorAll(".cmt-row");
             for (const row of rows) {
               const likeUrl = row.getAttribute("data-like-url");
               const heart = row.querySelector(".small-heart");
@@ -447,36 +461,40 @@
               if (g.ok) {
                 cnt.textContent = g.data.count ?? 0;
                 heart.classList.toggle("liked", !!g.data.liked);
-                heart.setAttribute("aria-pressed", g.data.liked ? "true" : "false");
+                heart.setAttribute(
+                  "aria-pressed",
+                  g.data.liked ? "true" : "false"
+                );
               }
-
 
               heart.addEventListener("click", async (e) => {
-              e.preventDefault();
-              const liked = heart.classList.contains("liked");
-              // POST = like, DELETE = unlike
-              const method = liked ? "DELETE" : "POST";
-              const r = await likeFetchWithFallback(likeUrl, { method });
-              //Update visual + state based on response
-              if (r.ok) {
-                
-                // Flip the red heart on/off
-                heart.classList.toggle("liked", r.data.liked === true);
-                //store state for screen readers
-                heart.setAttribute("aria-pressed", r.data.liked ? "true" : "false");
-                //Update like count
-                if (typeof r.data.count === "number") cnt.textContent = r.data.count;
-              } else if (r.status === 403) {
-                alert("Please log in to like.");
-              } else {
-                alert("Error toggling like.");
-                console.error("Toggle like failed", likeUrl, r);
-              }
-            });
+                e.preventDefault();
+                const liked = heart.classList.contains("liked");
+                // POST = like, DELETE = unlike
+                const method = liked ? "DELETE" : "POST";
+                const r = await likeFetchWithFallback(likeUrl, { method });
+                //Update visual + state based on response
+                if (r.ok) {
+                  // Flip the red heart on/off
+                  heart.classList.toggle("liked", r.data.liked === true);
+                  //store state for screen readers
+                  heart.setAttribute(
+                    "aria-pressed",
+                    r.data.liked ? "true" : "false"
+                  );
+                  //Update like count
+                  if (typeof r.data.count === "number")
+                    cnt.textContent = r.data.count;
+                } else if (r.status === 403) {
+                  alert("Please log in to like.");
+                } else {
+                  alert("Error toggling like.");
+                  console.error("Toggle like failed", likeUrl, r);
+                }
+              });
             }
           }
         }
-
 
         // refresh counts
         async function refreshCount(url, el) {
@@ -489,7 +507,6 @@
           }
         }
 
-
         // toggles like/unlike behavior on heart click
         document.addEventListener("click", async (e) => {
           const btn = e.target.closest(".comment-trigger");
@@ -500,7 +517,6 @@
           await loadComments(activeUrl);
           await refreshCount(activeUrl, activeCountEl);
         });
-
 
         // Post a comment
         form.addEventListener("submit", async (e) => {
@@ -517,7 +533,6 @@
           });
 
           if (r.ok) {
-
             form.reset();
             await loadComments(activeUrl);
             await refreshCount(activeUrl, activeCountEl); // instant count update
@@ -571,28 +586,63 @@
 
         // ---- Likes: init + toggle ----
         async function initLike(btn) {
-          const url = btn.dataset.likesUrl;
-          const cnt = btn.querySelector("[data-like-count]");
+          const likesUrl = btn.dataset.likesUrl;
+          const inboxUrl = btn.dataset.inboxUrl;
+          const objectFQID = btn.dataset.objectFqid;
+          const remoteInboxUrl = btn.dataset.remoteInboxUrl;
 
-          // initial GET populates liked + count
-          const g = await j(url);
-          if (g.ok) {
-            btn.classList.toggle("liked", !!g.data.liked);
-            btn.setAttribute("aria-pressed", g.data.liked ? "true" : "false");
-            if (cnt) cnt.textContent = g.data.count ?? 0;
+          if (!inboxUrl || !objectFQID) {
+            console.warn(
+              "Skipping like button, missing inboxUrl or objectFQID",
+              btn
+            );
+            return;
           }
 
-          btn.addEventListener("click", async () => {
-            const liked = btn.classList.contains("liked");
-            const method = liked ? "DELETE" : "POST";
-            const r = await j(url, { method });
+          const cnt = btn.querySelector("[data-like-count]");
+
+          btn.addEventListener("click", async (event) => {
+            const isAuthenticated =
+              "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
+            if (!isAuthenticated) {
+              alert("Please log in to like this post.");
+              return;
+            }
+            event.preventDefault();
+            const payload = {
+              type: "like",
+              object: objectFQID,
+            };
+            console.log("Sending like payload to inbox:", payload);
+            console.log("Inbox URL:", inboxUrl);
+            const r = await j(inboxUrl, {
+              method: "POST",
+              body: JSON.stringify(payload),
+            });
+
             if (r.ok) {
+              console.log("Like toggled successfully", r.data);
               btn.classList.toggle("liked", r.data.liked === true);
               btn.setAttribute("aria-pressed", r.data.liked ? "true" : "false");
               if (cnt && typeof r.data.count === "number")
                 cnt.textContent = r.data.count;
-            } else if (r.status === 403) {
-              alert("Please log in to like.");
+            } else {
+              console.error("Failed to send like to inbox", r.data);
+              return;
+            }
+
+            // 2) If this entry is remote, also notify the remote node
+            if (remoteInboxUrl) {
+              console.log("Also sending like to remote inbox:", remoteInboxUrl);
+              try {
+                await j(remoteInboxUrl, {
+                  method: "POST",
+                  body: JSON.stringify(payload),
+                });
+              } catch (e) {
+                console.error("Failed to send like to remote inbox", e);
+                // you can choose to ignore this failure for UI purposes
+              }
             }
           });
         }
@@ -643,7 +693,5 @@
         };
       })();
     </script>
-        
-
   </body>
 </html>

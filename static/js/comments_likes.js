@@ -14,20 +14,36 @@
 
   // ---- Entry likes ----
   async function loadLikes(row) {
-    const url = row.dataset.likesUrl;
+    const likesurl = row.dataset.likesUrl;
+    const inboxUrl = row.dataset.inboxUrl;
+    const objectFQID = row.dataset.objectFqid;
+    const url = likesurl; // You can modify this if needed to include inboxUrl or objectFQID
+
     const cnt = row.querySelector("[data-like-count]");
-    const { ok, data } = await j(url);
+    const btn = row.querySelector(".like-toggle");
+
+    const { ok, data } = await j(likesurl);
     if (ok && cnt) cnt.textContent = data.count ?? 0;
-    row.querySelector("[data-like-btn]")?.addEventListener("click", async (e) => {
-      e.preventDefault();
-      await j(url, { method: "POST" });
-      loadLikes(row);
-    });
-    row.querySelector("[data-unlike-btn]")?.addEventListener("click", async (e) => {
-      e.preventDefault();
-      await j(url, { method: "DELETE" });
-      loadLikes(row);
-    });
+
+
+    // row.querySelector("[data-like-btn]")?.addEventListener("click", async (e) => {
+    //   e.preventDefault();
+    //   const payload = {
+    //     type: "like",
+    //     object: objectFQID,
+    //   }
+    //   const r = await j(inboxUrl, {
+    //     method: "POST",
+    //     body: JSON.stringify(payload),
+    //   });
+
+    //   if (!r.ok) {
+    //     console.error("Failed to send like to inbox", r.data);
+    //     return;
+    //   }
+
+    //   loadLikes(row);
+    // });
   }
 
   // ---- comment likes ----

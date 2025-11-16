@@ -24,7 +24,7 @@ LOCAL_API_BASE = "http://127.0.0.1:8000/api/"
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-)1h3aett_s&hw9dp@#=k%)wpdn*puxjhp_^8h9fl6li#pz37_+'
+SECRET_KEY = os.environ["SECRET_KEY"]
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True

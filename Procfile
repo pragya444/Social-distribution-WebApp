@@ -1,2 +1,2 @@
-web: gunicorn f25_project_crimson.wsgi
+web: gunicorn server.wsgi
 poller: python3 -u manage.py poll_github

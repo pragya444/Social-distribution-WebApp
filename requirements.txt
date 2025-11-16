@@ -8,9 +8,11 @@ django-cors-headers==4.9.0
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
 dotenv==0.9.9
+gunicorn==23.0.0
 honcho==2.0.0
 idna==3.11
 Markdown==3.9
+packaging==25.0
 pillow==11.3.0
 PyJWT==2.10.1
 python-dotenv==1.1.1

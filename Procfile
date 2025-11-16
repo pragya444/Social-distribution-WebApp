@@ -1,2 +1,2 @@
-web: python3 -u manage.py runserver
+web: gunicorn server.wsgi
 poller: python3 -u manage.py poll_github

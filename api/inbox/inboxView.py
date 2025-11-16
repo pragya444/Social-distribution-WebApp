@@ -7,6 +7,7 @@ from api.models import Entry, EntryLike, Follow, Comment
 from django.contrib.auth import get_user_model
 from django.utils.text import slugify
 from django.db.models import F
+from django.utils.dateparse import parse_datetime
 
 
 
@@ -30,7 +31,8 @@ class InboxView(APIView):
         item_type = data.get('type', '').lower()
 
         if item_type == 'entry':
-            serializer = EntrySerializer(data=data)
+            return self.handle_entry(is_local, request, data)
+
         elif item_type == 'follow':
             actor_obj = data.get("actor") or {}
             object_obj = data.get("object") or {}
@@ -152,4 +154,91 @@ class InboxView(APIView):
         entry.refresh_from_db(fields=['like_count'])
         serializer = EntryLikeSerializer(like, context={'request': request})
         return Response({**serializer.data, "liked": True, "count": entry.like_count}, status=201)
+    
+    def handle_entry(self, is_local, request, data):
+        if is_local:
+            return
+        else:
+            remote_entry_id = data.get('id', '')
+            author_data = data.get('author', {})
 
+            if not remote_entry_id:
+                return Response({"error": "Remote entry 'id' (fqid) is required"}, status=400)
+
+            if not author_data.get("id"):
+                return Response({"error": "Remote author 'id' is required"}, status=400)
+
+            remote_author = self.get_or_create_remote_user(author_data)
+            visibility = data.get('visibility', 'PUBLIC').upper()
+            if visibility == "DELETED":
+                is_deleted = True
+                visibility = "PUBLIC"
+            else:
+                is_deleted = False
+            
+            published    = None
+            if data.get("published"):
+                published = parse_datetime(data["published"])  # safely parses ISO string; returns None if invalid
+            
+
+            defaults = {
+                "author": remote_author,
+                "title": data.get("title", ""),
+                "description": data.get("description", ""),
+                "content": data.get("content", ""),
+                "content_type": data.get("contentType", "text/plain"),
+                "visibility": visibility,
+                "is_deleted": is_deleted,
+                "like_count": data.get("likes", {}).get("count", 0),
+                "comment_count": data.get("comments", {}).get("count", 0),
+            }
+
+            if published:
+                defaults["created"] = published
+                defaults["updated"] = published
+            
+            entry, created = Entry.objects.update_or_create(
+                url=remote_entry_id,
+                defaults=defaults,
+            )
+
+            likes = data.get("likes", {}).get("src", [])
+            comments = data.get("comments", {}).get("src", [])
+
+
+            for like_data in likes:
+                self.create_like(like_data, entry)
+            
+            for comment_data in comments:
+                self.create_comment(comment_data, entry)
+
+            serializer = EntrySerializer(entry, context={"request": request})
+            status_code = 201 if created else 200
+            return Response(serializer.data, status=status_code)
+        
+    def create_like(self, like, entry):
+        author_data = like.get('author', {})
+        if not author_data.get('id'):
+        # Can't attribute this like → skip
+            return
+        user = self.get_or_create_remote_user(author_data)
+        EntryLike.objects.get_or_create(user=user, entry=entry)
+    
+    def create_comment(self, comment_data, entry):
+        author_data = comment_data.get('author', {})
+        if not author_data.get('id'):
+            return  # skip bad comment
+        user = self.get_or_create_remote_user(author_data)
+        published = comment_data.get('published', None)
+        if published:
+            published = parse_datetime(published)
+        Comment.objects.get_or_create(
+            fqid=comment_data.get('id', ''),
+            defaults = {
+                "entry": entry,
+                "author": user,
+                "comment": comment_data.get('comment', ''),
+                "content_type": comment_data.get('contentType', 'text/plain'),
+                "created": published,
+            }
+        )

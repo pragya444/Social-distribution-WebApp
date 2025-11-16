@@ -359,6 +359,7 @@
             data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
             data-inbox-url="/api/authors/{{ e.author_id }}/inbox/"
             data-object-fqid="{{ e.url }}"
+            data-remote-inbox-url="{% if e.author.username|slice:':7' == 'remote_' %}{{ e.author.host }}authors/{{ e.author_id }}/inbox/{% endif %}"
           >
             <!-- Heart icon -->
             <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"

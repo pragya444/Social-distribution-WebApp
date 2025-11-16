@@ -589,6 +589,7 @@
           const likesUrl = btn.dataset.likesUrl;
           const inboxUrl = btn.dataset.inboxUrl;
           const objectFQID = btn.dataset.objectFqid;
+          const remoteInboxUrl = btn.dataset.remoteInboxUrl;
 
           if (!inboxUrl || !objectFQID) {
             console.warn(
@@ -628,6 +629,20 @@
             } else {
               console.error("Failed to send like to inbox", r.data);
               return;
+            }
+
+            // 2) If this entry is remote, also notify the remote node
+            if (remoteInboxUrl) {
+              console.log("Also sending like to remote inbox:", remoteInboxUrl);
+              try {
+                await j(remoteInboxUrl, {
+                  method: "POST",
+                  body: JSON.stringify(payload),
+                });
+              } catch (e) {
+                console.error("Failed to send like to remote inbox", e);
+                // you can choose to ignore this failure for UI purposes
+              }
             }
           });
         }

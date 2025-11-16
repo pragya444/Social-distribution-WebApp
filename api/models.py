@@ -82,7 +82,7 @@ class User(AbstractBaseUser, PermissionsMixin):
             self.host = f"{base}/api/"
             self.fqid = self.url  # fqid should match the canonical API URL for this author
         else:
-            self.url = f"{base}/api/authors/{self.id}"
+            self.url = self.fqid
 
         super().save(*args, **kwargs)
         
@@ -306,3 +306,9 @@ class Liked(models.Model):
             super().save(update_fields=["fqid"])
         
     
+
+class Nodes(models.Model):
+    id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
+    host = models.CharField(max_length=255, unique=True)
+    token = models.CharField(max_length=255, default="")
+    is_connected = models.BooleanField()

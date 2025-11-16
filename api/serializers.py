@@ -37,7 +37,7 @@ class AuthorSerializer(serializers.ModelSerializer):
         With partial=True, a field not present is ignored.
         But if the client *sent* `name` and it's empty/whitespace, raise an error.
         """
-        raw_name = self.initial_data.get("name", None)
+        raw_name = self.initial_data.get("displayName", None)
         if raw_name is not None and raw_name.strip() == "":
             raise serializers.ValidationError({"name": "Name cannot be blank."})
         return attrs

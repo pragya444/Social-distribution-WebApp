@@ -8,7 +8,7 @@ from rest_framework.authentication import SessionAuthentication, BasicAuthentica
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.conf import settings
 from ..serializers import EntrySerializer
-from ..models import Entry, EntryLike, Comment, CommentLike, User
+from ..models import Entry, EntryLike, Comment, CommentLike, User, Nodes
 from ..utils import helpers, images
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -302,6 +302,11 @@ class SingleEntryView(APIView):
             return Response({"errors": serializer.errors}, status=400)
 
         updated_entry = serializer.save()
+        entry_data = entry_obj(request, updated_entry)
+        connected_nodes = Nodes.objects.filter(is_connected=True)
+        if connected_nodes.exists():
+            for node in connected_nodes:
+                send_entry_to_node(node, entry_data)
 
         # HTML: redirect back to entries list; JSON: return updated entry object
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
@@ -328,6 +333,12 @@ class SingleEntryView(APIView):
         entry = get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
         entry.is_deleted = True
         entry.save()
+        entry_data = entry_obj(request, entry)
+        entry_data['visibility'] = 'DELETED'  # Indicate deletion in the data sent to nodes
+        connected_nodes = Nodes.objects.filter(is_connected=True)
+        if connected_nodes.exists():
+            for node in connected_nodes:
+                send_entry_to_node(node, entry_data)
 
         # Redirect on delete for browser
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
@@ -461,24 +472,31 @@ class EntryView(APIView):
         payload['author'] = author_id
         serializer = EntrySerializer(data=payload, context={'request': request})
         
-        if serializer.is_valid():
-            entry = serializer.save()
-            
-            # Redirect for browser/HTML requests
+        if not serializer.is_valid():
             if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-                return redirect('author-all-entries', author_id=author_id)
-            
-            # JSON response for API clients
-            return Response(entry_obj(request, entry), status=201)
+                return Response(
+                    {"errors": serializer.errors, "author_id": author_id},
+                    template_name="entry/entry_create.html",
+                    status=400
+                )
+            return Response({"errors": serializer.errors}, status=400)
+
+        entry = serializer.save()
+        entry_data = entry_obj(request, entry)
+        connected_nodes = Nodes.objects.filter(is_connected=True)
+        if connected_nodes.exists():
+            for node in connected_nodes:
+                send_entry_to_node(node, entry_data)
         
-        # Handle validation errors
+        # Redirect for browser/HTML requests
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
-            return Response(
-                {"errors": serializer.errors, "author_id": author_id},
-                template_name="entry/entry_create.html",
-                status=400
-            )
-        return Response({"errors": serializer.errors}, status=400)
+            return redirect('author-all-entries', author_id=author_id)
+        
+        # JSON response for API clients
+        return Response(entry_data, status=201)
+        
+
+
 
 class EntryByFQIDView(APIView):
     """
@@ -554,3 +572,46 @@ class EntryByFQIDView(APIView):
                 )
         
         return Response(entry_obj(request, entry), status=200)
+    
+
+
+def send_entry_to_node(node, entry_data):
+    import requests
+    headers = {
+        "Authorization": f"{node.token}",
+        "Content-Type": "application/json",
+    }
+
+    base = node.host.rstrip('/')
+
+    try:
+        authors_response = requests.get(
+            url=f"{base}/api/authors/",
+            headers=headers,
+            timeout=10,
+        )
+        if authors_response.status_code != 200:
+            print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")
+            return
+        
+        data = authors_response.json()
+        authors = data.get("authors", [])
+
+        for author in authors:
+            author_id = author.get("id")
+            if not author_id:
+                continue
+            inbox_url = f"{author_id.rstrip('/')}/inbox/"
+
+            response = requests.post(
+                url=inbox_url,
+                json=entry_data,
+                headers=headers,
+                timeout=10,
+            )
+            if response.status_code not in [200, 201]:
+                print(f"Failed to send entry to {inbox_url}: {response.status_code}")
+            else:
+                print(f"Successfully sent entry to {inbox_url}")
+    except Exception as e:
+        print(f"Error sending entry to node {node.host}: {str(e)}")

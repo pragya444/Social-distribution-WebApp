@@ -23,6 +23,13 @@ from api.serializers import (
     AuthorSerializer,
 )
 
+
+import logging
+import requests
+from urllib.parse import urlparse, urlunparse
+
+log = logging.getLogger(__name__)
+
 User = get_user_model()
 
 
@@ -38,6 +45,91 @@ def is_local_user(user):
     return local_base and user_host == local_base
 
 
+def build_inbox_url(author_url: str) -> str:
+    """
+    Canonical author URL → their inbox URL with a trailing slash.
+    Example:
+      https://peer.herokuapp.com/api/authors/<uuid>  ->  .../inbox/
+    """
+    u = urlparse(author_url or "")
+    scheme = u.scheme or "http"
+    path = u.path.rstrip("/") + "/inbox/"
+    return urlunparse((scheme, u.netloc, path, "", "", ""))
+
+def send_follow_to_remote(actor, target, request):
+    """POST a simple ActivityPub 'follow' object to the target's inbox."""
+    actor_data  = AuthorSerializer(actor,  context={"request": request}).data
+    object_data = AuthorSerializer(target, context={"request": request}).data
+
+    payload = {
+        "type": "follow",
+        "summary": f"{actor_data.get('displayName', actor.username)} wants to follow "
+                   f"{object_data.get('displayName', target.username)}",
+        "actor":  {**actor_data,  "type": "author"},
+        "object": {**object_data, "type": "author"},
+    }
+
+    inbox_url = build_inbox_url(target.url)
+    try:
+        r = requests.post(
+            inbox_url, json=payload,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            timeout=10, allow_redirects=False
+        )
+        # If their server still redirects, re-POST to the Location so we keep POST (not GET)
+        if r.is_redirect and r.headers.get("Location"):
+            r = requests.post(
+                r.headers["Location"], json=payload,
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                timeout=10, allow_redirects=False
+            )
+        if r.status_code not in (200, 201, 202, 204):
+            log.warning("Remote inbox %s returned %s: %.200s", inbox_url, r.status_code, r.text)
+    except Exception as e:
+        log.exception("Failed to post follow to %s: %s", inbox_url, e)
+
+
+
+
+# class FollowRequestActionView(APIView):
+#     permission_classes = [IsAuthenticated]
+#     authentication_classes = [SessionAuthentication]
+
+#     def post(self, request, author_id):
+#         if str(request.user.id) != str(author_id):
+#             return HttpResponseForbidden("Not your account")
+
+#         target_id = request.POST.get("target_id")
+#         target = get_object_or_404(User, id=target_id)
+#         if target == request.user:
+#             return JsonResponse({"error": "cannot follow yourself"}, status=400)
+
+#         if is_local_user(target):
+#             # local → just create PENDING and redirect (your existing logic    
+
+#             fr, created = Follow.objects.get_or_create(
+#                 follower=request.user, followee=target,
+#                 defaults={"status": Follow.Status.PENDING}
+#            )
+#             if not created and fr.status == Follow.Status.REJECTED:
+#                 fr.status = Follow.Status.PENDING
+#                 fr.save(update_fields=["status"])
+
+#             return redirect("profile", author_id=target.id)
+#         # REMOTE target → create/refresh local PENDING, then send to remote inbox
+#         follow, created = Follow.objects.get_or_create(
+#             follower=request.user,
+#             followee=target,
+#             defaults={"status": Follow.Status.PENDING},
+#         )
+#         if not created and follow.status == Follow.Status.REJECTED:
+#             follow.status = Follow.Status.PENDING
+#             follow.save(update_fields=["status"])
+
+#         # Fire-and-forget to remote inbox (handled by helper)
+#         send_follow_to_remote(actor=request.user, target=target, request=request)
+
+#         return redirect("profile", author_id=target.id)    
 
 
 
@@ -54,15 +146,24 @@ class FollowRequestActionView(APIView):
         if target == request.user:
             return JsonResponse({"error": "cannot follow yourself"}, status=400)
 
-        fr, created = Follow.objects.get_or_create(
-            follower=request.user, followee=target,
+        # Create/refresh local PENDING
+        follow, created = Follow.objects.get_or_create(
+            follower=request.user,
+            followee=target,
             defaults={"status": Follow.Status.PENDING}
         )
-        if not created and fr.status == Follow.Status.REJECTED:
-            fr.status = Follow.Status.PENDING
-            fr.save(update_fields=["status"])
+        if not created and follow.status == Follow.Status.REJECTED:
+            follow.status = Follow.Status.PENDING
+            follow.save(update_fields=["status"])
+
+        # If remote, send to their inbox
+        if not is_local_user(target):
+            send_follow_to_remote(actor=request.user, target=target, request=request)
 
         return redirect("profile", author_id=target.id)
+
+
+
 
 
 class UnfollowView(APIView):

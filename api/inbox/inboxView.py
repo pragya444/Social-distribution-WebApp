@@ -452,6 +452,6 @@ class InboxView(APIView):
                     if response.status_code not in [200, 201]:
                         print(f"Failed to send like to {inbox_url}: {response.status_code} {response.text}")
                     else:
-                        print(f"Successfully sent like to {inbox_url}")
+                        print(f"Successfully sent like to {inbox_url}: {response.status_code} {response.text}")
             except Exception as e:
                 print(f"Error sending like to node {node.host}: {str(e)}")

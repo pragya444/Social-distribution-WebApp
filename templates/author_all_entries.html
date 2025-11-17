@@ -143,7 +143,8 @@
           data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
           data-inbox-url="/api/authors/{{ e.author_id }}/inbox/"
           data-object-fqid="{{ e.url }}"
-          data-remote-inbox-url="{% if e.author.username|slice:':7' == 'remote_' %}{{ e.author.host }}authors/{{ e.author_id }}/inbox/{% endif %}"
+          data-remote-host="{% if e.author.username|slice:':7' == 'remote_' %}{{ e.author.host }}{% endif %}"
+          data-remote-author-id="{{e.author_id}}"
         >
         <!-- data-likes-url="{{e.author.host}}authors/{{ e.author_id }}/inbox/" -->
 

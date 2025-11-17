@@ -1,0 +1,2198 @@
+openapi: 3.0.3
+info:
+  title: Distributed Social Networking 
+  description: |
+    # API Documentation 
+    
+    This API powers a social media platform with author profiles, entries (posts), comments, likes, and follow relationships.
+    
+    ## Key Features:
+    - User authentication and authorization via JWT cookies
+    - CRUD operations for entries and comments
+    - Social features: following, friends, likes
+    - Multi-format support (JSON API and HTML web interface)
+    - Privacy controls with visibility levels
+    
+    ## When to Use This API:
+    - Building a social media client application
+    - Integrating with Crimson platform
+    - Managing user content and social interactions
+    
+    ## Authentication:
+    - Uses JWT tokens stored in cookies
+    - Most endpoints require authentication except public profiles and entries
+    - Login via `/auth/login/` to obtain session cookie
+  version: "1.0.0"
+servers:
+  - url: http://127.0.0.1:8000
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: jwt
+      description: JWT token stored in cookie after successful login
+  schemas:
+    Author:
+      type: object
+      description: API author object returned by endpoints
+      properties:
+        type:
+          type: string
+          example: author
+          description: Constant type tag
+        id:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: Unique identifier for the author
+        username:
+          type: string
+          example: "http://127.0.0.1:8000/api/"
+          description: Host base URL for this node
+        displayName:
+          type: string
+          example: "John Doe"
+          description: Human-friendly display name
+        description:
+          type: string
+          example: "Software developer and open source enthusiast"
+          description: Bio/About text shown on profile
+        github:
+          type: string
+          example: "https://github.com/johndoe"
+          description: GitHub profile URL (optional)
+        profileImage:
+          type: string
+          example: "https://example.com/images/profile.jpg"
+          description: Absolute URL to profile picture (optional)
+        web:
+          type: string
+          example: "http://127.0.0.1:8000/authors/johndoe"
+          description: Human-facing web URL for the profile
+      required: [type, id, host, displayName]
+      example:
+        type: author
+        id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000"
+        host: "http://127.0.0.1:8000/api/"
+        displayName: "John Doe"
+        description: "Software developer and open source enthusiast"
+        github: "https://github.com/johndoe"
+        profileImage: "https://example.com/images/profile.jpg"
+        web: "http://127.0.0.1:8000/authors/johndoe"
+
+    Entry:
+      type: object
+      description: Represents a post/entry
+      properties:
+        type:
+          type: string
+          example: "entry"
+          description: Type identifier, always "entry"
+        title:
+          type: string
+          example: "My First Post"
+          description: Title of the entry
+        id:
+          type: string
+          example: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
+          description: Fully-qualified API URL for the entry
+        web:
+          type: string
+          example: "http://127.0.0.1:8000/authors/550e.../entries/660e..."
+          description: Human-facing web URL for the entry
+        description:
+          type: string
+          example: "Short summary of the post"
+          description: Optional short description
+        contentType:
+          type: string
+          example: "text/markdown"
+          description: |
+            Content type of the entry content. Supported types:
+            - text/plain: Plain text
+            - text/markdown: Markdown formatted text
+            - image/png;base64: Base64 encoded PNG image
+            - image/jpeg;base64: Base64 encoded JPEG image
+        content:
+          type: string
+          example: "This is my **first post** in the platform!"
+          description: The actual content of the entry
+        author:
+          $ref: '#/components/schemas/Author'
+        comments:
+          type: object
+          description: Comments collection metadata
+        likes:
+          type: object
+          description: Likes collection metadata
+        published:
+          type: string
+          format: date-time
+          example: "2023-10-05T15:45:00Z"
+          description: Timestamp when entry was published
+        updated:
+          type: string
+          format: date-time
+          example: "2023-10-05T16:00:00Z"
+          description: Timestamp when entry was last updated
+        visibility:
+          type: string
+          enum: [PUBLIC, UNLISTED, FRIENDS, PRIVATE]
+          example: "PUBLIC"
+          description: |
+            Visibility level of the entry:
+            - PUBLIC: Visible to everyone
+            - UNLISTED: Visible via direct link but not in public streams
+            - FRIENDS: Visible only to mutual followers
+            - PRIVATE: Visible only to the author
+      required: [type, id, contentType, content, author]
+      example:
+        type: "entry"
+        title: "My First Post"
+        id: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
+        web: "http://127.0.0.1:8000/authors/550e.../entries/660e..."
+        contentType: "text/markdown"
+        content: "This is my **first post** in the platform!"
+        author:
+          type: author
+          id: "http://127.0.0.1:8000/api/authors/550e..."
+          host: "http://127.0.0.1:8000/api/"
+          displayName: "John Doe"
+          web: "http://127.0.0.1:8000/authors/johndoe"
+        published: "2023-10-05T15:45:00Z"
+        visibility: "PUBLIC"
+
+    EntryList:
+      type: object
+      description: Paginated list of entries
+      properties:
+        type:
+          type: string
+          example: "entries"
+          description: Type identifier, always "entries"
+        page_number:
+          type: integer
+          example: 1
+          description: Current page (1-based)
+        size:
+          type: integer
+          example: 10
+          description: Page size
+        count:
+          type: integer
+          example: 42
+          description: Total number of entries across all pages
+        src:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entry'
+          description: Array of entry objects for current page
+      example:
+        type: "entries"
+        page_number: 1
+        size: 10
+        count: 42
+        src:
+          - type: "entry"
+            title: "My First Post"
+            id: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
+            contentType: "text/markdown"
+            content: "This is my **first post** in the platform!"
+            author:
+              type: author
+              id: "http://127.0.0.1:8000/api/authors/550e..."
+              host: "http://127.0.0.1:8000/api/"
+              displayName: "John Doe"
+              web: "http://127.0.0.1:8000/authors/johndoe"
+            published: "2023-10-05T15:45:00Z"
+            visibility: "PUBLIC"
+
+    Comment:
+      type: object
+      description: Represents a comment on an entry
+      properties:
+        type:
+          type: string
+          example: "comment"
+          description: Type identifier, always "comment"
+        id:
+          type: string
+          example: "http://127.0.0.1:8000/api/authors/111/commented/770e8400-e29b-41d4-a716-446655440000"
+          description: Fully-qualified API URL for the comment
+        comment:
+          type: string
+          example: "Great post! Thanks for sharing."
+          description: The comment text content
+        contentType:
+          type: string
+          example: "text/plain"
+          description: Content type of the comment (usually text/plain or text/markdown)
+        published:
+          type: string
+          format: date-time
+          example: "2023-10-05T16:30:00Z"
+          description: Timestamp when comment was published
+        author:
+          $ref: '#/components/schemas/Author'
+        entry:
+          type: string
+          example: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
+          description: API URL for the entry this comment belongs to
+        web:
+          type: string
+          example: "http://127.0.0.1:8000/authors/johndoe/entries/660e..."
+          description: Human-facing web URL for the entry
+        likes:
+          type: object
+          description: Likes collection metadata for this comment
+      required: [type, id, comment, contentType, author]
+      example:
+        type: "comment"
+        id: "http://127.0.0.1:8000/api/authors/111/commented/770e8400-e29b-41d4-a716-446655440000"
+        comment: "Great post! Thanks for sharing."
+        contentType: "text/plain"
+        published: "2023-10-05T16:30:00Z"
+        author:
+          type: author
+          id: "http://127.0.0.1:8000/api/authors/550e..."
+          host: "http://127.0.0.1:8000/api/"
+          displayName: "John Doe"
+          web: "http://127.0.0.1:8000/authors/johndoe"
+
+    Likes:
+      type: object
+      description: Paginated likes on an entry or comment
+      properties:
+        type:
+          type: string
+          example: "likes"
+          description: Type identifier, always "likes"
+        page_number:
+          type: integer
+          example: 1
+        size:
+          type: integer
+          example: 50
+        count:
+          type: integer
+          example: 5
+          description: Total number of likes
+        src:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                example: "Like"
+              author:
+                $ref: '#/components/schemas/Author'
+              published:
+                type: string
+                format: date-time
+                example: "2023-10-05T16:30:00Z"
+              id:
+                type: string
+                example: "http://127.0.0.1:8000/api/authors/550e.../liked/abc123"
+              object:
+                type: string
+                example: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
+          description: Array of like objects
+      example:
+        type: "likes"
+        page_number: 1
+        size: 50
+        count: 5
+        src:
+          - type: "Like"
+            id: "http://127.0.0.1:8000/api/authors/550e.../liked/abc123"
+            author:
+              type: author
+              id: "http://127.0.0.1:8000/api/authors/550e..."
+              host: "http://127.0.0.1:8000/api/"
+              displayName: "johndoe"
+            object: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
+
+    FollowersList:
+      type: object
+      description: List of followers, following, or friends
+      properties:
+        count:
+          type: integer
+          example: 3
+          description: Total number of items in the list
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Author'
+          description: Array of author objects
+      example:
+        count: 3
+        results:
+          - id: "550e8400-e29b-41d4-a716-446655440000"
+            username: "johndoe"
+            name: "John Doe"
+            url: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/"
+          - id: "551e8400-e29b-41d4-a716-446655440001"
+            username: "janedoe"
+            name: "Jane Doe"
+            url: "http://127.0.0.1:8000/authors/551e8400-e29b-41d4-a716-446655440001/"
+
+    ErrorResponse:
+      type: object
+      description: Standard error response format
+      properties:
+        detail:
+          type: string
+          example: "Invalid credentials"
+          description: Human-readable error message
+      example:
+        detail: "Invalid credentials"
+
+paths:
+  # Auth
+  /auth/register/:
+    get:
+      tags:
+        - Auth
+      summary: Load registration form (web)
+      description: |
+        ## When to Use:
+        - Displaying registration form in a web browser
+        - User wants to create a new account via web interface
+        
+        ## Why Use This:
+        - Provides HTML form for user registration
+        - Simple web-based user onboarding
+        
+        ## Response:
+        Returns HTML registration form
+      responses:
+        '200':
+          description: HTML registration form
+          content:
+            text/html:
+              example: "<html><body>Registration form HTML</body></html>"
+    post:
+      tags:
+        - Auth
+      summary: Register a new user (web form)
+      description: |
+        ## When to Use:
+        - Creating a new user account via web form submission
+        - User registration workflow
+        
+        ## How to Use:
+        Submit form data with user credentials and profile information
+        
+        ## Important Notes:
+        - Accounts require admin approval before becoming active
+        - Username must be unique
+        - Password should meet security requirements
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  example: "newuser"
+                  description: Unique username for the new account
+                password:
+                  type: string
+                  example: "securepassword123"
+                  description: Password for the new account
+                name:
+                  type: string
+                  example: "New User"
+                  description: Display name for the user
+                github:
+                  type: string
+                  example: "https://github.com/newuser"
+                  description: GitHub profile URL (optional)
+            example:
+              username: "newuser"
+              password: "securepassword123"
+              name: "New User"
+              github: "https://github.com/newuser"
+      responses:
+        '201':
+          description: Created - awaiting admin approval
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Please wait for an admin to approve your account."
+                    description: Success message indicating pending approval
+              example:
+                message: "Please wait for an admin to approve your account."
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                username_taken:
+                  summary: Username already exists
+                  value:
+                    detail: "Username already taken"
+                invalid_data:
+                  summary: Invalid form data
+                  value:
+                    detail: "Invalid form data provided"
+
+  /auth/login/:
+    get:
+      tags:
+        - Auth
+      summary: Load login form (web)
+      description: |
+        ## When to Use:
+        - Displaying login form in web browser
+        - User authentication via web interface
+        
+        ## Response:
+        Returns HTML login form
+      responses:
+        '200':
+          description: HTML login form
+          content:
+            text/html:
+              example: "<html><body>Login form HTML</body></html>"
+    post:
+      tags:
+        - Auth
+      summary: Login (sets JWT cookie)
+      description: |
+        ## When to Use:
+        - User authentication
+        - Starting a new session
+        
+        ## How to Use:
+        Submit username and password via form data
+        
+        ## Important Notes:
+        - Sets JWT cookie upon successful authentication
+        - Cookie is required for authenticated endpoints
+        - Redirects to user's stream after login
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  example: "johndoe"
+                  description: Username for login
+                password:
+                  type: string
+                  example: "password123"
+                  description: Password for login
+            example:
+              username: "johndoe"
+              password: "password123"
+      responses:
+        '302':
+          description: Redirect to user's stream with cookie set
+          headers:
+            Location:
+              schema:
+                type: string
+                example: "/authors/550e8400-e29b-41d4-a716-446655440000/stream/"
+            Set-Cookie:
+              schema:
+                type: string
+                example: "jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...; Path=/; HttpOnly"
+        '400':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Invalid credentials"
+
+  /auth/logout/:
+    post:
+      tags:
+        - Auth
+      summary: Logout (clear JWT cookie and session)
+      description: |
+        Use to end an authenticated web session. This endpoint clears the `jwt`, `sessionid`, and `csrftoken` cookies and then redirects to the login page.
+      security:
+        - cookieAuth: []
+      responses:
+        '302':
+          description: Redirect to `/auth/login/` after clearing cookies
+          headers:
+            Location:
+              schema:
+                type: string
+                example: "/auth/login/"
+
+  # Authors
+  /authors/:
+    get:
+      tags:
+        - Authors
+      summary: List authors (paginated)
+      description: |
+        Returns a paginated list of authors. Useful for admin or discovery pages.
+        Supports `page` and `size` query parameters for pagination. Only authenticated users see additional metadata.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: 1-based page number
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: Paginated list of authors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  size:
+                    type: integer
+                  count:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Author'
+              example:
+                page: 1
+                size: 20
+                count: 123
+                results:
+                  - id: "550e8400-e29b-41d4-a716-446655440000"
+                    username: "johndoe"
+                    name: "John Doe"
+                    url: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/"
+
+  /authors/{author_id}/:
+    get:
+      tags:
+        - Authors
+      summary: Get author profile (HTML or JSON via Accept header)
+      description: |
+        ## When to Use:
+        - Viewing author profile information
+        - Displaying user profile in client applications
+        
+        ## How to Use:
+        - Send `Accept: application/json` for JSON response
+        - Send `Accept: text/html` for HTML response (default)
+        
+        ## Why Use This:
+        - Get comprehensive author information including statistics
+        - Check relationship status with current user
+        
+        ## Authentication:
+        Required for private profiles and relationship status
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the author
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Author profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/Author'
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Entry'
+                    description: Recent entries by this author
+                  posts_count:
+                    type: integer
+                    example: 15
+                    description: Total number of posts by this author
+                  followers_count:
+                    type: integer
+                    example: 42
+                    description: Number of followers
+                  following_count:
+                    type: integer
+                    example: 23
+                    description: Number of authors this user follows
+                  friends_count:
+                    type: integer
+                    example: 12
+                    description: Number of mutual follows (friends)
+                  rel_status:
+                    type: string
+                    example: "following"
+                    description: |
+                      Relationship status with current user:
+                      - "self": Current user's own profile
+                      - "following": Current user follows this author
+                      - "followed_by": This author follows current user
+                      - "friends": Mutual follow
+                      - "pending": Follow request pending approval
+                      - "none": No relationship
+                  can_approve:
+                    type: boolean
+                    example: true
+                    description: Whether current user can approve follow requests (admin only)
+              examples:
+                own_profile:
+                  summary: Viewing own profile
+                  value:
+                    user:
+                      id: "550e8400-e29b-41d4-a716-446655440000"
+                      username: "johndoe"
+                      name: "John Doe"
+                      description: "Software developer"
+                      github: "https://github.com/johndoe"
+                      profile_picture: "/media/profile_pics/john.jpg"
+                      url: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/"
+                      created: "2023-10-05T14:30:00Z"
+                    entries: []
+                    posts_count: 15
+                    followers_count: 42
+                    following_count: 23
+                    friends_count: 12
+                    rel_status: "self"
+                    can_approve: true
+                other_profile:
+                  summary: Viewing another user's profile
+                  value:
+                    user:
+                      id: "551e8400-e29b-41d4-a716-446655440001"
+                      username: "janedoe"
+                      name: "Jane Doe"
+                      description: "Designer and artist"
+                      github: "https://github.com/janedoe"
+                      profile_picture: "/media/profile_pics/jane.jpg"
+                      url: "http://127.0.0.1:8000/authors/551e8400-e29b-41d4-a716-446655440001/"
+                      created: "2023-09-15T10:20:00Z"
+                    entries: []
+                    posts_count: 8
+                    followers_count: 28
+                    following_count: 15
+                    friends_count: 7
+                    rel_status: "friends"
+                    can_approve: false
+        '302':
+          description: Redirect to login if not authenticated
+        '404':
+          description: Author not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Author not found"
+
+  /authors/{author_id}/edit/:
+    get:
+      tags:
+        - Authors
+      summary: Load profile edit form (HTML)
+      description: Returns an HTML form pre-filled with the author's current profile values.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML profile edit form
+    post:
+      tags:
+        - Authors
+      summary: Submit profile edits (form)
+      description: |
+        Update author profile fields via web form. Only the owner may update their profile.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "John Q. Doe"
+                  description: Display name
+                description:
+                  type: string
+                  example: "Backend developer"
+                github:
+                  type: string
+                  example: "https://github.com/johndoe"
+                profile_picture:
+                  type: string
+                  example: "https://example.com/john.jpg"
+      security:
+        - cookieAuth: []
+      responses:
+        '302':
+          description: Redirect to updated profile page
+        '403':
+          description: Forbidden if not the owner
+
+  /authors/{author_id}/stream/:
+    get:
+      tags:
+        - Authors
+      summary: Author stream (personalized feed)
+      description: |
+        Returns an HTML page showing the author's content feed. Supports `tab` query param to filter content:
+        - `all`: Public and unlisted
+        - `following`: Posts from authors this user follows
+        - `friends`: Friends-only content
+        - `private`: Owner-only content
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tab
+          in: query
+          schema:
+            type: string
+            enum: [all, following, friends, private]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: HTML stream page
+
+  # Entries
+  /authors/{author_id}/entries/:
+    get:
+      tags:
+        - Entries
+      summary: List entries (web or API depending on Accept header)
+      description: |
+        ## When to Use:
+        - Fetching all entries by a specific author
+        - Displaying user's posts in a client application
+        
+        ## How to Use:
+        - JSON API: Send `Accept: application/json`
+        - Web interface: Send `Accept: text/html` (default)
+        
+        ## Important Notes:
+        - Returns entries based on visibility and authentication
+        - Private entries only visible to author
+        - Friends-only entries only visible to mutual followers
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the author whose entries to fetch
+      responses:
+        '200':
+          description: List of entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryList'
+              examples:
+                public_entries:
+                  summary: Public entries list
+                  value:
+                    type: "entries"
+                    count: 3
+                    src:
+                      - type: "entry"
+                        title: "My Public Post"
+                        id: "660e8400-e29b-41d4-a716-446655440000"
+                        contentType: "text/markdown"
+                        content: "This is a public post"
+                        author:
+                          id: "550e8400-e29b-41d4-a716-446655440000"
+                          username: "johndoe"
+                          name: "John Doe"
+                          url: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/"
+                        published: "2023-10-05T15:45:00Z"
+                        visibility: "PUBLIC"
+    post:
+      tags:
+        - Entries
+      summary: Create entry (JSON API)
+      description: |
+        ## When to Use:
+        - Creating new posts via API clients
+        - Programmatic content creation
+        
+        ## How to Use:
+        Send JSON with entry content and metadata
+        
+        ## Why Use This vs Web Form:
+        - Better for automated posting
+        - Integration with external systems
+        - More control over content formatting
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the author creating the entry
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: "My API Created Post"
+                  description: Title of the entry
+                content:
+                  type: string
+                  example: "This post was created via API"
+                  description: Content of the entry
+                contentType:
+                  type: string
+                  example: "text/markdown"
+                  description: Content type (text/plain, text/markdown, image/*)
+                visibility:
+                  type: string
+                  example: "PUBLIC"
+                  description: Visibility level (PUBLIC, UNLISTED, FRIENDS, PRIVATE)
+            example:
+              title: "My API Created Post"
+              content: "This post was created via API"
+              contentType: "text/markdown"
+              visibility: "PUBLIC"
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+              example:
+                type: "entry"
+                title: "My API Created Post"
+                id: "661e8400-e29b-41d4-a716-446655440000"
+                contentType: "text/markdown"
+                content: "This post was created via API"
+                author:
+                  id: "550e8400-e29b-41d4-a716-446655440000"
+                  username: "johndoe"
+                  name: "John Doe"
+                  url: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/"
+                published: "2023-10-05T16:00:00Z"
+                visibility: "PUBLIC"
+        '403':
+          description: Forbidden - cannot create entries for other users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Cannot create entries for other users"
+
+  /authors/{author_id}/entries/new/:
+    get:
+      tags:
+        - Entries
+      summary: Entry creation form (HTML)
+      description: Returns HTML form to create a new entry (text or image upload).
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML form
+    post:
+      tags:
+        - Entries
+      summary: Submit new entry via multipart form
+      description: |
+        Create a text or image entry via web form. For images, set `as_image=on` and include `image` file field. Server converts images to base64 for storage.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: "Sunset"
+                content:
+                  type: string
+                  example: "Nice view"
+                contentType:
+                  type: string
+                  example: "text/markdown"
+                visibility:
+                  type: string
+                  example: "PUBLIC"
+                as_image:
+                  type: string
+                  example: "on"
+                image:
+                  type: string
+                  format: binary
+      security:
+        - cookieAuth: []
+      responses:
+        '302':
+          description: Redirect to author's stream on success
+        '400':
+          description: Validation error
+
+  /authors/{author_id}/entries/{entry_id}/edit/:
+    get:
+      tags:
+        - Entries
+      summary: Entry edit form (HTML)
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML form pre-filled with entry data
+    post:
+      tags:
+        - Entries
+      summary: Submit entry edits (multipart/form)
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+                contentType:
+                  type: string
+                visibility:
+                  type: string
+      security:
+        - cookieAuth: []
+      responses:
+        '302':
+          description: Redirect to author's stream on success
+
+  /authors/{author_id}/entries/{entry_id}/image/:
+    get:
+      tags:
+        - Entries
+      summary: Retrieve image binary for an author's entry
+      description: Returns raw binary for entries stored with image base64 content. Respects visibility rules.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Image binary data with appropriate Content-Type
+        '403':
+          description: Forbidden if user lacks permission
+        '404':
+          description: Not found
+
+  /authors/{author_id}/entries/{entry_id}/:
+    get:
+      tags:
+        - Entries
+      summary: Retrieve a single entry by ID
+      description: Returns HTML (shared entry page) or JSON depending on Accept header. Enforces visibility rules.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Entry JSON or HTML page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+            text/html:
+              example: "<html>Shared entry page</html>"
+        '403':
+          description: Not authorized to view
+        '404':
+          description: Entry not found
+    put:
+      tags:
+        - Entries
+      summary: Update an entry
+      description: Owner-only update. Supports text or base64 image updates.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                content:
+                  type: string
+                contentType:
+                  type: string
+                visibility:
+                  type: string
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                content:
+                  type: string
+                contentType:
+                  type: string
+                image:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Updated entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '403':
+          description: Forbidden
+    delete:
+      tags:
+        - Entries
+      summary: Delete an entry (soft delete)
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+
+  /entries/{entry_fqid}:
+    get:
+      tags:
+        - Entries
+      summary: Retrieve entry by fully-qualified ID (FQID)
+      description: |
+        Fetch an entry using its FQID (used for foreign/remote entries). Returns JSON entry object.
+      parameters:
+        - name: entry_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Entry JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '404':
+          description: Not found
+
+  /entries/{entry_fqid}/image:
+    get:
+      tags:
+        - Entries
+      summary: Retrieve binary image for an entry by FQID
+      description: |
+        Returns raw binary image data for entries stored as base64 images. Use this URL as the `src` for `<img>` tags.
+      parameters:
+        - name: entry_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: "Image binary (Content-Type: image/*)"
+        '404':
+          description: Not found or entry is not an image
+
+  # Comments
+  /authors/{author_id}/entries/{entry_id}/comments:
+    get:
+      tags:
+        - Comments
+      summary: List comments (supports pagination)
+      description: |
+        ## When to Use:
+        - Fetching comments for a specific entry
+        - Displaying comment threads
+        
+        ## How Pagination Works:
+        - Use `page` query parameter for page number (default: 1)
+        - Use `size` query parameter for items per page (default: 10)
+        - Response includes pagination metadata
+        
+        ## Important Notes:
+        - Comments are ordered by published date (newest first)
+        - Pagination metadata included in response
+      parameters:
+        - in: path
+          name: author_id
+          required: true
+          schema:
+            type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the entry author
+        - in: path
+          name: entry_id
+          required: true
+          schema:
+            type: string
+          example: "660e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the entry
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          example: 1
+          description: Page number for pagination (1-based)
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 10
+          example: 10
+          description: Number of items per page
+      responses:
+        '200':
+          description: Paginated comments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  page_number:
+                    type: integer
+                    example: 1
+                    description: Current page number
+                  size:
+                    type: integer
+                    example: 10
+                    description: Number of items per page
+                  count:
+                    type: integer
+                    example: 25
+                    description: Total number of comments across all pages
+                  src:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+                    description: Comments for the current page
+              examples:
+                paginated_comments:
+                  summary: First page of comments
+                  value:
+                    page_number: 1
+                    size: 10
+                    count: 25
+                    src:
+                      - type: "comment"
+                        id: "770e8400-e29b-41d4-a716-446655440000"
+                        comment: "First comment on the post"
+                        contentType: "text/plain"
+                        published: "2023-10-05T16:30:00Z"
+                        author:
+                          id: "551e8400-e29b-41d4-a716-446655440001"
+                          username: "janedoe"
+                          name: "Jane Doe"
+                          url: "http://127.0.0.1:8000/authors/551e8400-e29b-41d4-a716-446655440001/"
+    post:
+      tags:
+        - Comments
+      summary: Create a comment on an entry
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: author_id
+          required: true
+          schema:
+            type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the entry author
+        - in: path
+          name: entry_id
+          required: true
+          schema:
+            type: string
+          example: "660e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                  example: "Nice post!"
+                  description: The comment text content
+                contentType:
+                  type: string
+                  example: "text/plain"
+                  description: Content type (text/plain or text/markdown)
+              required: [comment]
+      responses:
+        '201':
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          description: Bad request
+        '403':
+          description: Not authorized
+
+  /authors/{author_id}/entries/{entry_id}/comments/{comment_id}/:
+    get:
+      tags:
+        - Comments
+      summary: Retrieve specific comment
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: comment_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Comment object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '404':
+          description: Not found
+
+  # Likes
+  /authors/{author_id}/entries/{entry_id}/likes:
+    parameters:
+      - name: author_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: entry_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Likes
+      summary: List likes for an entry
+      description: Returns authors who liked the entry; includes `liked` to indicate current user's status when authenticated.
+      responses:
+        '200':
+          description: Likes list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Likes'
+    post:
+      tags:
+        - Likes
+      summary: Like an entry (idempotent)
+      security:
+        - cookieAuth: []
+      description: |
+        Create or confirm a like by the current authenticated user. Multiple POSTs are idempotent.
+      responses:
+        '200':
+          description: Liked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  liked:
+                    type: boolean
+                  count:
+                    type: integer
+    delete:
+      tags:
+        - Likes
+      summary: Remove like
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Unliked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  liked:
+                    type: boolean
+                  count:
+                    type: integer
+              example:
+                ok: true
+                liked: false
+                count: 4
+
+  /authors/{author_id}/entries/{entry_id}/comments/{comment_id}/likes:
+    parameters:
+      - name: author_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: entry_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: comment_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Likes
+      summary: List likes for a comment
+      responses:
+        '200':
+          description: Likes for comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Likes'
+    post:
+      tags:
+        - Likes
+      summary: Like a comment
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Liked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  liked:
+                    type: boolean
+                  count:
+                    type: integer
+              example:
+                ok: true
+                liked: true
+                count: 6
+    delete:
+      tags:
+        - Likes
+      summary: Remove like from comment
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Unliked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  liked:
+                    type: boolean
+                  count:
+                    type: integer
+              example:
+                ok: true
+                liked: false
+                count: 5
+
+  /authors/{author_id}/liked:
+    get:
+      tags:
+        - Likes
+      summary: List entries the author has liked
+      description: Returns entries liked by the specified author. Supports FQID variants.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Liked entries list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Entry'
+
+  # Followers
+  /authors/{author_id}/followers:
+    get:
+      tags:
+        - Followers
+      summary: JSON list of followers
+      description: |
+        ## When to Use:
+        - Getting programmatic access to followers list
+        - Integration with external systems
+        
+        ## Why Use API vs HTML Endpoint:
+        - Machine-readable JSON format
+        - Better for client applications
+        - Consistent pagination and structure
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the author
+      responses:
+        '200':
+          description: JSON followers list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowersList'
+              examples:
+                followers_list:
+                  summary: List of followers
+                  value:
+                    count: 2
+                    results:
+                      - id: "551e8400-e29b-41d4-a716-446655440001"
+                        username: "janedoe"
+                        name: "Jane Doe"
+                        url: "http://127.0.0.1:8000/authors/551e8400-e29b-41d4-a716-446655440001/"
+                      - id: "552e8400-e29b-41d4-a716-446655440002"
+                        username: "bobsmith"
+                        name: "Bob Smith"
+                        url: "http://127.0.0.1:8000/authors/552e8400-e29b-41d4-a716-446655440002/"
+
+  /authors/{author_id}/followers/page/:
+    get:
+      tags:
+        - Followers
+      summary: HTML page listing followers
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML followers page
+
+  /authors/{author_id}/following/page:
+    get:
+      tags:
+        - Followers
+      summary: HTML page listing authors this author follows
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML following page
+
+  /authors/{author_id}/friends/:
+    get:
+      tags:
+        - Followers
+      summary: HTML page listing mutual follows (friends)
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML friends page
+
+  /authors/{author_id}/followers/{foreign_author_fqid}:
+    get:
+      tags:
+        - Followers
+      summary: Follower detail (foreign FQID)
+      description: Retrieve follower detail using a percent-encoded foreign author FQID.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: foreign_author_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Follower detail (Author schema)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Author'
+    put:
+      tags:
+        - Followers
+      summary: Approve a pending foreign follower
+      description: Owner approves a pending follower represented by foreign FQID.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: foreign_author_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Approved follower
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Author'
+        '403':
+          description: Not authorized
+        '404':
+          description: No matching follow request
+    delete:
+      tags:
+        - Followers
+      summary: Remove or deny a foreign follower
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: foreign_author_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - cookieAuth: []
+      responses:
+        '204':
+          description: Removed follower
+        '403':
+          description: Not authorized
+
+  /authors/{author_id}/following/{foreign_author_fqid}:
+    get:
+      tags:
+        - Followers
+      summary: Following detail (foreign FQID)
+      description: Retrieve following detail using a percent-encoded foreign author FQID.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: foreign_author_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Following detail (Author schema)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Author'
+
+  /authors/{author_id}/follow:
+    post:
+      tags:
+        - Followers
+      summary: Send a follow request to another author
+      description: |
+        The authenticated author sends a follow request to a target author. Creates a Follow in `PENDING` status.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                target_id:
+                  type: string
+                  example: "551e8400-e29b-41d4-a716-446655440001"
+                  description: Target author id to follow
+      security:
+        - cookieAuth: []
+      responses:
+        '302':
+          description: Redirect to target profile (web)
+        '400':
+          description: Bad request (e.g., following yourself)
+
+  /authors/{author_id}/unfollow:
+    post:
+      tags:
+        - Followers
+      summary: Unfollow a user
+      description: Deletes any existing follow relationship between the authenticated author and the target.
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                target_id:
+                  type: string
+                  example: "551e8400-e29b-41d4-a716-446655440001"
+      security:
+        - cookieAuth: []
+      responses:
+        '302':
+          description: Redirect to target profile
+
+  # Follow Requests
+  /authors/{author_id}/follow_requests/:
+    parameters:
+      - name: author_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - "Follow Requests"
+      summary: List incoming follow requests (API + HTML)
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: List of follow requests
+    post:
+      tags:
+        - "Follow Requests"
+      summary: Create a follow request (API)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target:
+                  type: string
+      security:
+        - cookieAuth: []
+      responses:
+        '201':
+          description: Follow request created
+
+  /authors/{author_id}/follow_requests/send/:
+    parameters:
+      - name: author_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - "Follow Requests"
+      summary: Send follow request (HTML form)
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                target_id:
+                  type: string
+      security:
+        - cookieAuth: []
+      responses:
+        '302':
+          description: Redirect after sending request
+
+  /authors/{author_id}/requests/{follower_id}/approve:
+    post:
+      tags:
+        - "Follow Requests"
+      summary: Approve a pending follow request
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: follower_id
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - cookieAuth: []
+      responses:
+        '302':
+          description: Redirect to requests page after approval
+
+  /authors/{author_id}/requests/{follower_id}/deny:
+    post:
+      tags:
+        - "Follow Requests"
+      summary: Deny a pending follow request
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: follower_id
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - cookieAuth: []
+      responses:
+        '302':
+          description: Redirect to requests page after denial
+
+  /authors/{author_id}/requests:
+    get:
+      tags:
+        - "Follow Requests"
+      summary: HTML page listing pending follow requests
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML page of follow requests
+          content:
+            text/html:
+              example: "<html>Follow requests</html>"
+
+  # Inbox
+  /authors/{author_id}/inbox:
+    post:
+      tags:
+        - Inbox
+      summary: Receive federated activities (entry, follow, like, comment)
+      description: |
+        Accepts objects from other nodes:
+        - entry: Ingest or update a remote entry
+        - follow: Create/update follow request targeting the local author
+        - like: Toggle like on an entry (local/remote actor)
+        - comment: Create a remote comment
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  description: Follow object
+                  properties:
+                    type:
+                      type: string
+                      example: follow
+                    actor:
+                      $ref: '#/components/schemas/Author'
+                    object:
+                      $ref: '#/components/schemas/Author'
+                  required: [type, actor, object]
+                - $ref: '#/components/schemas/Entry'
+                - type: object
+                  description: Like object
+                  properties:
+                    type:
+                      type: string
+                      example: like
+                    author:
+                      $ref: '#/components/schemas/Author'
+                    object:
+                      type: string
+                      example: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
+                  required: [type, author, object]
+                - $ref: '#/components/schemas/Comment'
+      responses:
+        '200':
+          description: Processed successfully
+        '201':
+          description: Created a new object
+        '400':
+          description: Invalid payload
+        '404':
+          description: Referenced entity not found
+
+  # Following list JSON
+  /authors/{author_id}/following:
+    get:
+      tags:
+        - Followers
+      summary: JSON list of authors this author is following
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: JSON following list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    example: following
+                  following:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Author'
+
+  # Entry FQID comments
+  /entries/{entry_fqid}/comments/:
+    get:
+      tags:
+        - Comments
+      summary: List comments by entry FQID
+      parameters:
+        - name: entry_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Paginated comments
+    post:
+      tags:
+        - Comments
+      summary: Create comment by entry FQID
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: entry_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                contentType:
+                  type: string
+              required: [comment]
+      responses:
+        '201':
+          description: Created comment
+
+  # Entry FQID likes
+  /entries/{entry_fqid}/likes:
+    get:
+      tags:
+        - Likes
+      summary: List likes by entry FQID
+      parameters:
+        - name: entry_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Likes list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Likes'
+
+  # Liked items
+  /authors/{author_id}/liked/{like_id}:
+    get:
+      tags:
+        - Likes
+      summary: Retrieve a single like by ID for an author
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: like_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Like object
+
+  /authors/{author_fqid}/liked:
+    get:
+      tags:
+        - Likes
+      summary: List items liked by a foreign author (FQID)
+      parameters:
+        - name: author_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 5
+      responses:
+        '200':
+          description: Likes list
+
+  /liked/{liked_fqid}:
+    get:
+      tags:
+        - Likes
+      summary: Retrieve a like by its FQID
+      parameters:
+        - name: liked_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Like object
+
+  # Comment likes FQID variant
+  /authors/{author_id}/entries/{entry_id}/comments/{comment_fqid}/likes:
+    get:
+      tags:
+        - Likes
+      summary: List likes for a comment by FQID
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: comment_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Likes for comment
+
+security:
+  - {}

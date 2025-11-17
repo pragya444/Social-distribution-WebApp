@@ -15,6 +15,7 @@ import requests
 import json
 import urllib.request
 from django.views.decorators.csrf import csrf_exempt  
+from requests.auth import HTTPBasicAuth
 
 from api.serializers import (
     FollowRequestSerializer,
@@ -56,11 +57,28 @@ def build_inbox_url(author_url: str) -> str:
     path = u.path.rstrip("/") + "/inbox/"
     return urlunparse((scheme, u.netloc, path, "", "", ""))
 
+def _remote_basic_auth_for(url: str):
+    netloc = urlparse(url or "").netloc
+    # Try settings-based mapping
+    user = os.getenv("REMOTE_NODE_B_USER") if os.getenv("REMOTE_NODE_B_HOST") == netloc else None
+    pwd  = os.getenv("REMOTE_NODE_B_PASS") if os.getenv("REMOTE_NODE_B_HOST") == netloc else None
+
+    if user and pwd:
+        return HTTPBasicAuth(user, pwd)
+
+    # Optional: resolve from Node model if you have one
+    try:
+        from api.models import Node  # if exists
+        node = Node.objects.filter(host__icontains=netloc).first()
+        if node and node.username and node.password:
+            return HTTPBasicAuth(node.username, node.password)
+    except Exception:
+        pass
+    return None
+
 def send_follow_to_remote(actor, target, request):
-    """POST a simple ActivityPub 'follow' object to the target's inbox."""
     actor_data  = AuthorSerializer(actor,  context={"request": request}).data
     object_data = AuthorSerializer(target, context={"request": request}).data
-
     payload = {
         "type": "follow",
         "summary": f"{actor_data.get('displayName', actor.username)} wants to follow "
@@ -68,20 +86,21 @@ def send_follow_to_remote(actor, target, request):
         "actor":  {**actor_data,  "type": "author"},
         "object": {**object_data, "type": "author"},
     }
-
     inbox_url = build_inbox_url(target.url)
+    auth = _remote_basic_auth_for(target.url)
+
     try:
         r = requests.post(
             inbox_url, json=payload,
             headers={"Content-Type": "application/json", "Accept": "application/json"},
-            timeout=10, allow_redirects=False
+            auth=auth, timeout=10, allow_redirects=False
         )
         # If their server still redirects, re-POST to the Location so we keep POST (not GET)
         if r.is_redirect and r.headers.get("Location"):
             r = requests.post(
                 r.headers["Location"], json=payload,
                 headers={"Content-Type": "application/json", "Accept": "application/json"},
-                timeout=10, allow_redirects=False
+                auth=auth, timeout=10, allow_redirects=False
             )
         if r.status_code not in (200, 201, 202, 204):
             log.warning("Remote inbox %s returned %s: %.200s", inbox_url, r.status_code, r.text)

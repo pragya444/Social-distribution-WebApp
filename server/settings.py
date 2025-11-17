@@ -18,8 +18,9 @@ import dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-LOCAL_API_BASE = "http://127.0.0.1:8000/api/"
-
+# LOCAL_API_BASE = "http://127.0.0.1:8000/api/"
+SITE_BASE = os.getenv("SITE_BASE", "http://127.0.0.1:8000").rstrip("/")
+LOCAL_API_BASE = f"{SITE_BASE}/api"
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 

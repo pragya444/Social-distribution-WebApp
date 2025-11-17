@@ -10,8 +10,7 @@ from django.db.models import F
 from django.utils.dateparse import parse_datetime
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-import requests
-import pprint
+
 
 
 User = get_user_model()
@@ -130,124 +129,52 @@ class InboxView(APIView):
         return user
         
     
-    # def handle_like(self, request, author, data, is_local):
-    #     entry_fqid = data.get('object', '')
-    #     remote_host = data.get('remote_host', '')
-    #     remote_author_id = data.get('remote_author_id', '')
-
-    #     # print(data)
-
-    #     try:
-    #         entry = Entry.objects.get(url=entry_fqid)
-    #     except Entry.DoesNotExist:
-    #         return Response({"error": "Entry not found"}, status=404)
-        
-    #     if is_local:
-    #         user = request.user
-    #     else:
-    #         user_data = data.get('author', {})
-    #         if not user_data.get('id'):
-    #             return Response({"error": "Author data missing in like"}, status=400)
-
-    #         user = self.get_or_create_remote_user(user_data)
-
-    #     like_qs = EntryLike.objects.filter(user=user, entry=entry)
-
-    #     if like_qs.exists():
-    #         delete_like = EntryLikeSerializer(like_qs.first(), context={'request': request})
-    #         if is_local and remote_host and remote_author_id:
-    #             self.send_like_to_remote(remote_host, remote_author_id, delete_like.data)
-
-    #         like_qs.delete()
-    #         entry.like_count = max(entry.like_count - 1, 0)
-    #         like_count = max(entry.like_count - 1, 0)
-    #         # entry.save(update_fields=['like_count'])
-    #         Entry.objects.filter(id=entry.id).update(like_count=like_count)
-    #         entry.refresh_from_db(fields=['like_count'])
-    #         return Response({"ok": True, "message": "Like removed", "liked": False, "count": entry.like_count}, status=200)
-        
-    #     like = EntryLike.objects.create(user=user, entry=entry)
-    #     Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
-    #     entry.refresh_from_db(fields=['like_count'])
-    #     serializer = EntryLikeSerializer(like, context={'request': request})
-    #     # print(serializer.data)
-
-    #     if is_local and remote_host and remote_author_id:
-    #         self.send_like_to_remote(remote_host, remote_author_id, serializer.data)
-
-                
-    #     return Response({**serializer.data, "liked": True, "count": entry.like_count}, status=201)
-
-
     def handle_like(self, request, author, data, is_local):
         entry_fqid = data.get('object', '')
         remote_host = data.get('remote_host', '')
         remote_author_id = data.get('remote_author_id', '')
+
+        # print(data)
 
         try:
             entry = Entry.objects.get(url=entry_fqid)
         except Entry.DoesNotExist:
             return Response({"error": "Entry not found"}, status=404)
         
-        # Who is liking?
         if is_local:
             user = request.user
         else:
             user_data = data.get('author', {})
             if not user_data.get('id'):
                 return Response({"error": "Author data missing in like"}, status=400)
+
             user = self.get_or_create_remote_user(user_data)
 
         like_qs = EntryLike.objects.filter(user=user, entry=entry)
 
-        # ---------- UNLIKE BRANCH ----------
         if like_qs.exists():
-            delete_like = EntryLikeSerializer(like_qs.first(), context={'request': request}).data
+            delete_like = EntryLikeSerializer(like_qs.first(), context={'request': request})
+            if is_local and remote_host and remote_author_id:
+                self.send_like_to_remote(remote_host, remote_author_id, delete_like.data)
 
-            # Delete locally
             like_qs.delete()
-            # Entry.objects.filter(id=entry.id).update(like_count=F('like_count') - 1)
+            entry.like_count = max(entry.like_count - 1, 0)
             like_count = max(entry.like_count - 1, 0)
             # entry.save(update_fields=['like_count'])
             Entry.objects.filter(id=entry.id).update(like_count=like_count)
             entry.refresh_from_db(fields=['like_count'])
-
-            # Federation for UNLIKE (using same serializer data shape)
-            if is_local:
-                if remote_host and remote_author_id:
-                    # local_author unliking remote entry → tell the remote origin
-                    self.send_like_to_remote(remote_host, remote_author_id, delete_like)
-                else:
-                    # local_author unliking local entry → broadcast to all nodes
-                    self.broadcast_like_to_all_nodes(delete_like)
-            else:
-                # remote node unliking my entry → save + broadcast to others
-                self.broadcast_like_to_all_nodes(delete_like)
-
-            return Response(
-                {"ok": True, "message": "Like removed", "liked": False, "count": entry.like_count},
-                status=200,
-            )
-
-        # ---------- NEW LIKE BRANCH ----------
+            return Response({"ok": True, "message": "Like removed", "liked": False, "count": entry.like_count}, status=200)
+        
         like = EntryLike.objects.create(user=user, entry=entry)
         Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
         entry.refresh_from_db(fields=['like_count'])
         serializer = EntryLikeSerializer(like, context={'request': request})
-        like_data = serializer.data  # this is what we'll send to other nodes
+        # print(serializer.data)
 
-        # CASE 1: local_author likes local entry → send to all nodes
-        if is_local and not remote_host:
-            self.broadcast_like_to_all_nodes(like_data)
-
-        # CASE 2: local_author likes remote entry → send to remote node
         if is_local and remote_host and remote_author_id:
-            self.send_like_to_remote(remote_host, remote_author_id, like_data)
+            self.send_like_to_remote(remote_host, remote_author_id, serializer.data)
 
-        # CASE 3: remote node sends like to me → save, then send to all nodes
-        if not is_local:
-            self.broadcast_like_to_all_nodes(like_data)
-
+                
         return Response({**serializer.data, "liked": True, "count": entry.like_count}, status=201)
     
     def handle_entry(self, is_local, request, data):
@@ -339,6 +266,11 @@ class InboxView(APIView):
         )
     
     def send_like_to_remote(self, remote_host, remote_author_id, entryLike):
+           # Send like to remote inbox
+            import requests
+            import pprint
+            #get the remote author from database using remote_author_id
+
             print()
             print("Received entryLike to send to remote:")
             pprint.pprint(entryLike)
@@ -384,53 +316,3 @@ class InboxView(APIView):
                 
             except Exception as e:
                 print(f"Failed to send like to remote inbox: {e}")
-
-
-    def broadcast_like_to_all_nodes(self, like_data):
-        nodes = Nodes.objects.filter(is_connected=True)
-
-        if not nodes.exists():
-            print("No connected nodes to broadcast like to.")
-            return
-
-        for node in nodes:
-            headers = {
-                "Authorization": f"{node.token}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
-
-            base = node.host.rstrip('/')
-
-            try:
-                authors_response = requests.get(
-                    url=f"{base}/api/authors/",
-                    headers=headers,
-                    timeout=10,
-                )
-                if authors_response.status_code != 200:
-                    print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")
-                    continue
-                
-                data = authors_response.json()
-                authors = data.get("authors", [])
-
-                for author in authors:
-                    author_id = author.get("id")
-                    if not author_id:
-                        continue
-
-                    inbox_url = f"{author_id.rstrip('/')}/inbox/"
-
-                    response = requests.post(
-                        url=inbox_url,
-                        json=like_data,
-                        headers=headers,
-                        timeout=10,
-                    )
-                    if response.status_code not in [200, 201]:
-                        print(f"Failed to send like to {inbox_url}: {response.status_code} {response.text}")
-                    else:
-                        print(f"Successfully sent like to {inbox_url}")
-            except Exception as e:
-                print(f"Error sending like to node {node.host}: {str(e)}")

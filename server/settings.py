@@ -35,6 +35,8 @@ ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
+# URL = os.environ.get("URL")
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -103,11 +105,13 @@ else:
 
 
 dotenv_file = os.path.join(BASE_DIR, '.env')
-if os.path.isfile(dotenv_file):
-    dotenv.load_dotenv(dotenv_file)
-    DJANGO_ENV = os.getenv('DJANGO_ENV')
+# if os.path.isfile(dotenv_file):
+#     dotenv.load_dotenv(dotenv_file)
+#     # DJANGO_ENV = os.getenv('DJANGO_ENV')
+#     # URL = os.getenv('URL')
 
-
+DJANGO_ENV = os.environ.get('DJANGO_ENV') 
+URL = os.environ.get('URL')
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 

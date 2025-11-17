@@ -16,6 +16,7 @@ import json
 import urllib.request
 from django.views.decorators.csrf import csrf_exempt  
 from requests.auth import HTTPBasicAuth
+import os
 
 from api.serializers import (
     FollowRequestSerializer,

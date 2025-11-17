@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from api.serializers import EntrySerializer, FollowRequestSerializer, EntryLikeSerializer, CommentSerializer
-from api.models import Entry, EntryLike, Follow, Comment
+from api.models import Entry, EntryLike, Follow, Comment, Nodes
 from django.contrib.auth import get_user_model
 from django.utils.text import slugify
 from django.db.models import F
@@ -131,6 +131,10 @@ class InboxView(APIView):
     
     def handle_like(self, request, author, data, is_local):
         entry_fqid = data.get('object', '')
+        remote_host = data.get('remote_host', '')
+        remote_author_id = data.get('remote_author_id', '')
+
+        # print(data)
 
         try:
             entry = Entry.objects.get(url=entry_fqid)
@@ -149,6 +153,10 @@ class InboxView(APIView):
         like_qs = EntryLike.objects.filter(user=user, entry=entry)
 
         if like_qs.exists():
+            delete_like = EntryLikeSerializer(like_qs.first(), context={'request': request})
+            if is_local and remote_host and remote_author_id:
+                self.send_like_to_remote(remote_host, remote_author_id, delete_like.data)
+
             like_qs.delete()
             entry.like_count = max(entry.like_count - 1, 0)
             like_count = max(entry.like_count - 1, 0)
@@ -156,10 +164,17 @@ class InboxView(APIView):
             Entry.objects.filter(id=entry.id).update(like_count=like_count)
             entry.refresh_from_db(fields=['like_count'])
             return Response({"ok": True, "message": "Like removed", "liked": False, "count": entry.like_count}, status=200)
+        
         like = EntryLike.objects.create(user=user, entry=entry)
         Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
         entry.refresh_from_db(fields=['like_count'])
         serializer = EntryLikeSerializer(like, context={'request': request})
+        # print(serializer.data)
+
+        if is_local and remote_host and remote_author_id:
+            self.send_like_to_remote(remote_host, remote_author_id, serializer.data)
+
+                
         return Response({**serializer.data, "liked": True, "count": entry.like_count}, status=201)
     
     def handle_entry(self, is_local, request, data):
@@ -249,3 +264,55 @@ class InboxView(APIView):
                 "created": published,
             }
         )
+    
+    def send_like_to_remote(self, remote_host, remote_author_id, entryLike):
+           # Send like to remote inbox
+            import requests
+            import pprint
+            #get the remote author from database using remote_author_id
+
+            print()
+            print("Received entryLike to send to remote:")
+            pprint.pprint(entryLike)
+            print()
+
+
+            try:
+                remote_author = User.objects.get(id=remote_author_id)
+            except User.DoesNotExist:
+                print(f"Remote author with id {remote_author_id} does not exist.")
+                return
+            
+            formatted_host = remote_host.rstrip('api/') + '/'
+
+            node = Nodes.objects.filter(host=formatted_host).first()
+
+            if not node:
+                print(f"No node configuration found for host: {formatted_host}")
+                return
+            
+            if not node.is_connected:
+                print(f"Node for host {formatted_host} is not connected.")
+                return
+            
+            headers = {
+                'Authorization': f"{node.token}",
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+
+            remote_inbox_url = f"{remote_author.fqid.rstrip('/')}/inbox/"
+            try:
+                resp = requests.post(
+                    url=remote_inbox_url, 
+                    json=entryLike, 
+                    headers=headers, 
+                    timeout=5
+                )
+                if resp.status_code not in [200, 201]:
+                    print(f"Failed to send like to remote inbox. Status code: {resp.status_code}, Response: {resp.text}")
+                else:
+                    print(f"Successfully sent like to remote inbox at {remote_inbox_url}")
+                
+            except Exception as e:
+                print(f"Failed to send like to remote inbox: {e}")

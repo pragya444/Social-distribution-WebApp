@@ -146,7 +146,9 @@ class InboxView(APIView):
         if like_qs.exists():
             like_qs.delete()
             entry.like_count = max(entry.like_count - 1, 0)
-            entry.save()
+            like_count = max(entry.like_count - 1, 0)
+            # entry.save(update_fields=['like_count'])
+            Entry.objects.filter(id=entry.id).update(like_count=like_count)
             entry.refresh_from_db(fields=['like_count'])
             return Response({"ok": True, "message": "Like removed", "liked": False, "count": entry.like_count}, status=200)
         like = EntryLike.objects.create(user=user, entry=entry)

@@ -35,7 +35,7 @@ ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
-URL = os.getenv("URL")
+# URL = os.environ.get("URL")
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -108,6 +108,7 @@ dotenv_file = os.path.join(BASE_DIR, '.env')
 if os.path.isfile(dotenv_file):
     dotenv.load_dotenv(dotenv_file)
     DJANGO_ENV = os.getenv('DJANGO_ENV')
+    URL = os.getenv('URL')
 
 
 # Password validation

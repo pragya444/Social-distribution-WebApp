@@ -1,225 +1,85 @@
-// (async function () {
-//   async function j(url, opts = {}) {
-//     const csrftoken = document.cookie.match(/csrftoken=([^;]+)/)?.[1];
-//     const headers = { "Content-Type": "application/json" };
-//     if (csrftoken) headers["X-CSRFToken"] = csrftoken;
-//     const r = await fetch(url, { headers, credentials: "same-origin", ...opts });
-//     const data = await r.json().catch(() => ({}));
-//     return { ok: r.ok, status: r.status, data };
-//   }
 
-//   function esc(s) {
-//     return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-//   }
-
-//   // ---- Entry likes ----
-//   async function loadLikes(row) {
-//     const likesurl = row.dataset.likesUrl;
-//     const inboxUrl = row.dataset.inboxUrl;
-//     const objectFQID = row.dataset.objectFqid;
-//     const url = likesurl; // You can modify this if needed to include inboxUrl or objectFQID
-
-//     const cnt = row.querySelector("[data-like-count]");
-//     const btn = row.querySelector(".like-toggle");
-
-//     const { ok, data } = await j(likesurl);
-//     if (ok && cnt) cnt.textContent = data.count ?? 0;
-
-
-//     // row.querySelector("[data-like-btn]")?.addEventListener("click", async (e) => {
-//     //   e.preventDefault();
-//     //   const payload = {
-//     //     type: "like",
-//     //     object: objectFQID,
-//     //   }
-//     //   const r = await j(inboxUrl, {
-//     //     method: "POST",
-//     //     body: JSON.stringify(payload),
-//     //   });
-
-//     //   if (!r.ok) {
-//     //     console.error("Failed to send like to inbox", r.data);
-//     //     return;
-//     //   }
-
-//     //   loadLikes(row);
-//     // });
-//   }
-
-//   // ---- comment likes ----
-//   async function loadCommentLikes(commentEl) {
-//     const url = commentEl.dataset.likeUrl;
-//     const countEl = commentEl.querySelector("[data-comment-like-count]");
-//     const { ok, data } = await j(url);
-//     if (ok && countEl) countEl.textContent = data.count ?? 0;
-
-//     const btn = commentEl.querySelector("[data-comment-like-btn]");
-//     if (btn) {
-//       btn.addEventListener("click", async (e) => {
-//         e.preventDefault();
-//         const liked = btn.classList.contains("liked");
-//         const method = liked ? "DELETE" : "POST";
-//         const r = await j(url, { method });
-//         if (r.ok) {
-//           btn.classList.toggle("liked", method === "POST");
-//           const diff = method === "POST" ? 1 : -1;
-//           const cur = parseInt(countEl.textContent || "0", 10);
-//           countEl.textContent = Math.max(cur + diff, 0);
-//         } else if (r.status === 403) {
-//           alert("Please log in to like comments.");
-//         }
-//       });
-//     }
-//   }
-
-//   // ---- Comments load + render ----
-//   async function loadComments(block) {
-//     const url = block.dataset.commentsUrl;
-//     const list = block.querySelector("[data-comments-list]");
-//     const { ok, data } = await j(url);
-//     if (!ok) {
-//       list.innerHTML = '<p class="muted">Failed to load comments.</p>';
-//       return;
-//     }
-//     const items = (data.src || [])
-//       .map(
-//         (c) => `
-//       <div class="comment-item" data-like-url="/api/authors/${c.author.id}/entries/${c.entry_id}/comments/${c.id}/likes">
-//         <p><b>${esc(c.author?.displayName || "")}</b>: ${esc(c.comment || "")}</p>
-//         <button class="comment-like-btn" data-comment-like-btn>❤️</button>
-//         <span data-comment-like-count>0</span>
-//       </div>`
-//       )
-//       .join("");
-//     list.innerHTML = items || "<p class='muted'>No comments yet.</p>";
-
-//     list.querySelectorAll(".comment-item").forEach(loadCommentLikes);
-//   }
-
-//   // ---- Comment form submit ----
-//   function hookForm(block) {
-//     const form = block.querySelector("[data-comment-form]");
-//     if (!form) return;
-//     form.addEventListener("submit", async (e) => {
-//       e.preventDefault();
-//       const text = form.comment.value.trim();
-//       if (!text) return;
-//       const url = block.dataset.commentsUrl;
-//       const r = await j(url, {
-//         method: "POST",
-//         body: JSON.stringify({ type: "comment", comment: text, contentType: "text/plain" }),
-//       });
-//       if (r.ok) {
-//         form.reset();
-//         loadComments(block);
-//       } else if (r.status === 403) {
-//         alert("Login required to comment.");
-//       }
-//     });
-//   }
-
-//   document.querySelectorAll("[data-likes-url]").forEach(loadLikes);
-//   document.querySelectorAll("[data-comments-url]").forEach((block) => {
-//     loadComments(block);
-//     hookForm(block);
-//   });
-// })();
-
-
-
-
-
-
-
-// Frontend for entry likes, comment listing, and comment likes
-
+/* === Comments + Comment-Likes (single source of truth) ===
+   Drop-in script to avoid double-binding and duplicate renders.
+   - One-time guard
+   - In-flight lock to prevent concurrent loads
+   - De-duplication of comments by id
+*/
 
 (function () {
-  //fetch likes
+  // ---- one-time guard ----
+  if (window.__COMMENT_MODAL_BOUND__) return;
+  window.__COMMENT_MODAL_BOUND__ = true;
+
+  // ---- fetch helpers ----
+  function getCookie(name) {
+    const m = document.cookie.match(new RegExp("(^|; )" + name + "=([^;]*)"));
+    return m ? decodeURIComponent(m[2]) : null;
+  }
+
+  // Use existing window.__j if present; otherwise define it
+  if (typeof window.__j !== "function") {
+    window.__j = async function (url, opts = {}) {
+      const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+      const csrftoken = getCookie("csrftoken");
+      if (csrftoken) headers["X-CSRFToken"] = csrftoken;
+      const r = await fetch(url, { credentials: "same-origin", headers, ...opts });
+      let data = {};
+      try { data = await r.json(); } catch (e) {}
+      return { ok: r.ok, status: r.status, data };
+    };
+  }
+
   async function likeFetchWithFallback(url, opts = {}) {
     // 1) try as-is
     let r = await window.__j(url, opts);
     if (r.status !== 404) return r;
-
-    // 2) if 404, retry toggling trailing slash
+    // 2) retry with/without trailing slash
     const hasSlash = url.endsWith("/");
     const alt = hasSlash ? url.slice(0, -1) : url + "/";
     return window.__j(alt, opts);
   }
 
-  // ENTRY LIKE BUTTONS
-  async function initEntryLike(btn) {
-    const url = btn.dataset.likesUrl;
-    if (!url) return;
-
-    const cnt = btn.querySelector("[data-like-count]");
-
-    // initial GET populates liked + count
-    const g = await likeFetchWithFallback(url);
-    if (g.ok) {
-      btn.classList.toggle("liked", !!g.data.liked);
-      btn.setAttribute("aria-pressed", g.data.liked ? "true" : "false");
-      if (cnt) cnt.textContent = g.data.count ?? 0;
-    }
-
-    btn.addEventListener("click", async () => {
-      const liked = btn.classList.contains("liked");
-      const method = liked ? "DELETE" : "POST";
-      const r = await likeFetchWithFallback(url, { method });
-
-      if (r.ok) {
-        btn.classList.toggle("liked", !!r.data.liked);
-        btn.setAttribute("aria-pressed", r.data.liked ? "true" : "false");
-        if (cnt && typeof r.data.count === "number") {
-          cnt.textContent = r.data.count;
-        }
-      } else if (r.status === 403) {
-        alert("Please log in to like.");
-      } else {
-        alert("Error toggling like.");
-        console.error("Entry like failed", url, r);
-      }
-    });
-  }
-
-  //  COMMENT MODAL 
+  // ---- DOM refs ----
   const modal = document.getElementById("commentModal");
-  const list = document.getElementById("commentModalList");
-  const form = document.getElementById("commentModalForm");
+  const list  = document.getElementById("commentModalList");
+  const form  = document.getElementById("commentModalForm");
   const closeBtn = document.getElementById("commentModalClose");
 
-  let activeUrl = null;        // /api/authors/<a>/entries/<e>/comments
-  let activeCountEl = null;    // span[data-comment-count] 
+  let activeUrl = null;      // /api/authors/<a>/entries/<e>/comments
+  let activeCountEl = null;  // span[data-comment-count] on the trigger
 
   function showModal() {
     if (!modal) return;
     modal.style.display = "flex";
   }
-
   function hideModal() {
     if (!modal) return;
     modal.style.display = "none";
-    list.innerHTML = "";
+    if (list) list.innerHTML = "";
+    form?.reset();
     activeUrl = null;
     activeCountEl = null;
   }
 
-  // Normalize like API response 
+  // ---- utilities ----
+  function esc(s) {
+    return String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  }
   function normalizeLikeData(data) {
-    if (typeof data?.count === "number") {
-      return { liked: !!data.liked, count: data.count };
-    }
+    if (typeof data?.count === "number") return { liked: !!data.liked, count: data.count };
     const src = Array.isArray(data?.src) ? data.src : [];
     return { liked: !!data.liked, count: src.length };
   }
 
+  // ---- comment-like row init ----
   async function initCommentLikeRow(row) {
     const likeUrl = row.getAttribute("data-like-url");
     const heart = row.querySelector(".small-heart");
     const cnt = row.querySelector("[data-comment-like-count]");
     if (!likeUrl || !heart || !cnt) return;
 
-    // initial GET populate count + liked
+    // initial GET
     const g = await likeFetchWithFallback(likeUrl, {});
     if (g.ok) {
       const norm = normalizeLikeData(g.data);
@@ -233,7 +93,6 @@
       const liked = heart.classList.contains("liked");
       const method = liked ? "DELETE" : "POST";
       const r = await likeFetchWithFallback(likeUrl, { method });
-
       if (r.ok) {
         const norm = normalizeLikeData(r.data);
         heart.classList.toggle("liked", norm.liked);
@@ -248,57 +107,66 @@
     });
   }
 
+  // ---- comments load (with in-flight lock + de-dupe) ----
+  let loadingComments = false;
+
   async function loadComments(url) {
-    if (!list) return;
+    if (!list || !url) return;
+    if (loadingComments) return;    // prevent overlapping loads
+    loadingComments = true;
 
     list.innerHTML = '<p class="muted">Loading…</p>';
 
-    const r = await window.__j(url);
-    if (!r.ok) {
-      list.innerHTML = '<p class="muted">Failed to load comments.</p>';
-      console.error("Comments GET failed", r.status, r.data);
-      return;
-    }
+    try {
+      const r = await window.__j(url);
+      if (!r.ok) {
+        list.innerHTML = '<p class="muted">Failed to load comments.</p>';
+        console.error("Comments GET failed", r.status, r.data);
+        return;
+      }
 
-    // normalize response shape: src / items / comments / results / array
-    let items = [];
-    const d = r.data;
-    if (Array.isArray(d)) {
-      items = d;
-    } else {
-      items = d.src || d.items || d.comments || d.results || [];
-    }
+      // normalize payload to array
+      let items = [];
+      const d = r.data;
+      if (Array.isArray(d)) items = d;
+      else items = d.src || d.items || d.comments || d.results || [];
 
-    const m = String(url).match(
-      /authors\/([^/]+)\/entries\/([^/]+)\/comments/
-    );
-    const entryAuthorId = m?.[1];
-    const entryId = m?.[2];
+      // de-duplicate by stable key (id/comment_id/uuid or trailing /comments/<id>)
+      const idFrom = (c) => {
+        let k = c.id ?? c.comment_id ?? c.uuid ?? "";
+        const m = String(k).match(/\/comments\/([^/]+)\/?$/);
+        if (m) k = m[1];
+        return String(k || "");
+      };
+      const seen = new Set();
+      items = items.filter((c) => {
+        const k = idFrom(c);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
 
-    if (!items.length) {
-      list.innerHTML = '<p class="muted">No comments yet.</p>';
-      return;
-    }
+      // derive author/entry ids from URL
+      const m = String(url).match(/authors\/([^/]+)\/entries\/([^/]+)\/comments/);
+      const entryAuthorId = m?.[1];
+      const entryId = m?.[2];
 
-    const esc = (s) =>
-      String(s ?? "").replace(/[&<>]/g, (c) => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-      }[c]));
+      if (!items.length) {
+        list.innerHTML = '<p class="muted">No comments yet.</p>';
+        return;
+      }
 
-    list.innerHTML = items
-      .map((c) => {
+      list.innerHTML = items.map((c) => {
         const display =
           c.author?.displayName ??
           c.author?.username ??
           c.author?.name ??
           "Anonymous";
 
-        let commentId = c.id || c.comment_id || c.uuid || "";
-        // If c.id is full URL, grab tail after "/comments/"
-        const mId = String(commentId).match(/\/comments\/([^/]+)\/?$/);
-        if (mId) commentId = mId[1];
+        // compute commentId (handles full URLs)
+        let commentId = c.id ?? c.comment_id ?? c.uuid ?? "";
+        const mid = String(commentId).match(/\/comments\/([^/]+)\/?$/);
+        if (mid) commentId = mid[1];
 
         const likeUrl = entryAuthorId && entryId && commentId
           ? `/api/authors/${entryAuthorId}/entries/${entryId}/comments/${commentId}/likes/`
@@ -325,14 +193,15 @@
             </div>
           </div>
         `;
-      })
-      .join("");
+      }).join("");
 
-
-    // wire up hearts for each comment row
-    const rows = list.querySelectorAll(".cmt-row");
-    for (const row of rows) {
-      await initCommentLikeRow(row);
+      // wire up like hearts
+      const rows = list.querySelectorAll(".cmt-row");
+      for (const row of rows) {
+        await initCommentLikeRow(row);
+      }
+    } finally {
+      loadingComments = false;
     }
   }
 
@@ -351,24 +220,27 @@
     }
   }
 
+  // ---- open modal on .comment-trigger (single binding) ----
   document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".comment-trigger");
     if (!btn || !modal) return;
 
     e.preventDefault();
-
     const url = btn.dataset.commentsUrl;
     if (!url) return;
 
+    // If already open for the same URL, skip
+    if (modal.style.display === "flex" && url === activeUrl) return;
+
     activeUrl = url;
-    activeCountEl = btn.querySelector("[data-comment-count]");
+    activeCountEl = btn.querySelector("[data-comment-count]") || null;
 
     showModal();
     await loadComments(activeUrl);
     await refreshCommentCount(activeUrl, activeCountEl);
   });
 
-  // POST new comment from modal form
+  // ---- submit new comment from modal ----
   if (form) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -389,12 +261,8 @@
       if (r.ok) {
         form.reset();
         await loadComments(activeUrl);
-
-        // Updated comment API returns comment_count on the created comment
-        if (
-          typeof r.data?.comment_count === "number" &&
-          activeCountEl
-        ) {
+        // Prefer server-returned count if provided
+        if (typeof r.data?.comment_count === "number" && activeCountEl) {
           activeCountEl.textContent = r.data.comment_count;
         } else {
           await refreshCommentCount(activeUrl, activeCountEl);
@@ -409,16 +277,11 @@
     });
   }
 
-  // Close modal
+  // ---- close modal ----
   if (closeBtn && modal) {
     closeBtn.addEventListener("click", hideModal);
     modal.addEventListener("click", (e) => {
       if (e.target === modal) hideModal();
     });
   }
-
-  // Initialize entry like buttons on page load
-  document
-    .querySelectorAll("[data-likes-url].like-toggle")
-    .forEach(initEntryLike);
 })();

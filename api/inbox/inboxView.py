@@ -1,21 +1,27 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from api.serializers import EntrySerializer, FollowRequestSerializer, EntryLikeSerializer, CommentSerializer
 from api.models import Entry, EntryLike, Follow, Comment
 from django.contrib.auth import get_user_model
 from django.utils.text import slugify
 from django.db.models import F
 from django.utils.dateparse import parse_datetime
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 
 
 
 User = get_user_model()
 
 class InboxView(APIView):
+    authentication_classes = [BasicAuthentication, SessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = [SessionAuthentication]
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
 
     def post(self, request, author_id):
         if request.user.is_authenticated:

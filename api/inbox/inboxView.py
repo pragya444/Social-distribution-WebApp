@@ -41,7 +41,6 @@ class InboxView(APIView):
             #     return Response({"error": "Invalid or missing authorization token."}, status=401)
             is_local = False
         
-
         data = request.data
         item_type = data.get('type', '').lower()
 
@@ -51,6 +50,7 @@ class InboxView(APIView):
         elif item_type == 'follow':
             actor_obj = data.get("actor") or {}
             object_obj = data.get("object") or {}
+            is_approved = data.get("approved", False)  # NEW: Check if this is an approval
 
             actor_id_fqid = actor_obj.get("id")
             object_id_fqid = object_obj.get("id")
@@ -58,13 +58,10 @@ class InboxView(APIView):
             if not actor_id_fqid or not object_id_fqid:
                 return Response({"error": "actor.id and object.id are required for follow"}, status=400)
 
-            # object.id should be the FQID of the *local* author whose inbox this is
-        
             cleaned_object = object_id_fqid.rstrip("/")
             cleaned_actor = actor_id_fqid.rstrip("/")
 
             try:
-                # local followee (the author whose inbox we're addressing)
                 followee = User.objects.get(url__in=[cleaned_object, cleaned_object + "/"])
             except User.DoesNotExist:
                 return Response(
@@ -72,33 +69,45 @@ class InboxView(APIView):
                     status=404,
                 )
 
-            
-
             try:
-                # follower (may be remote or local, but must already exist in our DB as a User with url)
                 follower = User.objects.get(url__in=[cleaned_actor, cleaned_actor + "/"])
             except User.DoesNotExist:
-                # we require the remote actor
-                # to have a User row already.
-                return Response(
-                    {"error": f"Unknown follower for actor.id: {actor_id_fqid}"},
-                    status=404,
+                follower = self.get_or_create_remote_user(actor_obj)
+            
+            # NEW: Handle approval notification differently
+            if is_approved:
+                # This is an approval from the remote node - update our local record
+                follow = Follow.objects.filter(
+                    follower=follower,
+                    followee=followee
+                ).first()
+                
+                if follow:
+                    follow.status = Follow.Status.APPROVED
+                    follow.save(update_fields=["status"])
+                    resp_data = FollowRequestSerializer(follow, context={"request": request}).data
+                    return Response(resp_data, status=200)
+                else:
+                    # Create approved follow if it doesn't exist
+                    follow = Follow.objects.create(
+                        follower=follower,
+                        followee=followee,
+                        status=Follow.Status.APPROVED
+                    )
+                    resp_data = FollowRequestSerializer(follow, context={"request": request}).data
+                    return Response(resp_data, status=201)
+            else:
+                # This is a new follow request
+                follower = self.get_or_create_remote_user(actor_obj)
+                follow, created = Follow.objects.get_or_create(
+                    follower=follower,
+                    followee=followee,
+                    defaults={"status": Follow.Status.PENDING},
                 )
-            
-            # Ensure we have (or create) a local record for the remote follower
-            follower = self.get_or_create_remote_user(actor_obj)
-            follow, created = Follow.objects.get_or_create(
-                follower=follower,
-                followee=followee,
-                defaults={"status": Follow.Status.PENDING},
-            )
 
-            # Represent it back in the standard follow-request shape
-            resp_data = FollowRequestSerializer(follow, context={"request": request}).data
-            return Response(resp_data, status=201 if created else 200)
+                resp_data = FollowRequestSerializer(follow, context={"request": request}).data
+                return Response(resp_data, status=201 if created else 200)
 
-
-            
         elif item_type == 'like':
             return self.handle_like(request, author_id, data, is_local)
         elif item_type == 'comment':
@@ -138,55 +147,6 @@ class InboxView(APIView):
         return user
         
     
-    # def handle_like(self, request, author, data, is_local):
-    #     entry_fqid = data.get('object', '')
-    #     remote_host = data.get('remote_host', '')
-    #     remote_author_id = data.get('remote_author_id', '')
-
-    #     # print(data)
-
-    #     try:
-    #         entry = Entry.objects.get(url=entry_fqid)
-    #     except Entry.DoesNotExist:
-    #         return Response({"error": "Entry not found"}, status=404)
-        
-    #     if is_local:
-    #         user = request.user
-    #     else:
-    #         user_data = data.get('author', {})
-    #         if not user_data.get('id'):
-    #             return Response({"error": "Author data missing in like"}, status=400)
-
-    #         user = self.get_or_create_remote_user(user_data)
-
-    #     like_qs = EntryLike.objects.filter(user=user, entry=entry)
-
-    #     if like_qs.exists():
-    #         delete_like = EntryLikeSerializer(like_qs.first(), context={'request': request})
-    #         if is_local and remote_host and remote_author_id:
-    #             self.send_like_to_remote(remote_host, remote_author_id, delete_like.data)
-
-    #         like_qs.delete()
-    #         entry.like_count = max(entry.like_count - 1, 0)
-    #         like_count = max(entry.like_count - 1, 0)
-    #         # entry.save(update_fields=['like_count'])
-    #         Entry.objects.filter(id=entry.id).update(like_count=like_count)
-    #         entry.refresh_from_db(fields=['like_count'])
-    #         return Response({"ok": True, "message": "Like removed", "liked": False, "count": entry.like_count}, status=200)
-        
-    #     like = EntryLike.objects.create(user=user, entry=entry)
-    #     Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
-    #     entry.refresh_from_db(fields=['like_count'])
-    #     serializer = EntryLikeSerializer(like, context={'request': request})
-    #     # print(serializer.data)
-
-    #     if is_local and remote_host and remote_author_id:
-    #         self.send_like_to_remote(remote_host, remote_author_id, serializer.data)
-
-                
-    #     return Response({**serializer.data, "liked": True, "count": entry.like_count}, status=201)
-
-
     def handle_like(self, request, author, data, is_local):
         entry_fqid = data.get('object', '')
         remote_host = data.get('remote_host', '')
@@ -200,25 +160,23 @@ class InboxView(APIView):
         except Entry.DoesNotExist:
             return Response({"error": "Entry not found"}, status=404)
         
-        # Who is liking?
         if is_local:
             user = request.user
         else:
             user_data = data.get('author', {})
             if not user_data.get('id'):
                 return Response({"error": "Author data missing in like"}, status=400)
+
             user = self.get_or_create_remote_user(user_data)
 
         like_qs = EntryLike.objects.filter(user=user, entry=entry)
 
-        # ---------- UNLIKE BRANCH ----------
         if like_qs.exists():
             delete_like = EntryLikeSerializer(
                 like_qs.first(),
                 context={'request': request}
             ).data
 
-            # Delete locally
             like_qs.delete()
             like_count = max(entry.like_count - 1, 0)
             Entry.objects.filter(id=entry.id).update(like_count=like_count)

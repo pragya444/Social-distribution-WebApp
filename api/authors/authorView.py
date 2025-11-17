@@ -130,7 +130,7 @@ class AuthorListView(APIView):
     def get(self, request):
         page = int(request.GET.get('page', 1))
         size = int(request.GET.get('size', 10))
-        authors = User.objects.all()
+        authors = User.objects.all().filter(is_active=True).order_by('username')  # or 'id', 'created', etc.
         paginator = Paginator(authors, size)
         current_page = paginator.get_page(page)
 

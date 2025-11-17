@@ -103,8 +103,8 @@ def send_follow_to_remote(actor, target, request):
                 headers={"Content-Type": "application/json", "Accept": "application/json"},
                 auth=auth, timeout=10, allow_redirects=False
             )
-        if r.status_code not in (200, 201, 202, 204):
-            log.warning("Remote inbox %s returned %s: %.200s", inbox_url, r.status_code, r.text)
+        #if r.status_code not in (200, 201, 202, 204):
+            #log.warning("Remote inbox %s returned %s: %.200s", inbox_url, r.status_code, r.text)
     except Exception as e:
         log.exception("Failed to post follow to %s: %s", inbox_url, e)
 
@@ -264,8 +264,8 @@ class ApproveFollowRequestView(APIView):
                 timeout=10, 
                 allow_redirects=False
             )
-            if r.status_code not in (200, 201, 202, 204):
-                log.warning(f"Remote inbox {inbox_url} returned {r.status_code}: {r.text[:200]}")
+            #if r.status_code not in (200, 201, 202, 204): UNCOMMENT LATER
+                #log.warning(f"Remote inbox {inbox_url} returned {r.status_code}: {r.text[:200]}")
         except Exception as e:
             log.exception(f"Failed to post approval to {inbox_url}: {e}")
 

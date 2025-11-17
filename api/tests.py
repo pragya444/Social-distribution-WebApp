@@ -1619,7 +1619,7 @@ class CommentLikesByFQIDTests(TestCase):
         self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
         self.entry = Entry.objects.create(
             author=self.user,
-            title="Test",
+            title="Test Entry",
             content="Content",
             content_type="text/plain",
             visibility="PUBLIC"

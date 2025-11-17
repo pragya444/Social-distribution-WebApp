@@ -228,10 +228,12 @@ class InboxView(APIView):
             if is_local:
                 if remote_host and remote_author_id:
                     # local_author unliking remote entry → tell the remote origin
+                    print("Sending unlike to remote...")
                     self.send_like_to_remote(remote_host, remote_author_id, delete_like)
                 else:
                     # local_author unliking local entry → broadcast to all nodes
-                    self.broadcast_like_to_all_nodes(delete_like)
+                    print("Broadcasting unlike to all nodes...")
+                    self.broadcast_like_to_all_nodes(delete_like, remote_host=remote_host_from_req)
 
             # ❌ if not is_local: remote node unliking → store only, no rebroadcast
 
@@ -256,10 +258,12 @@ class InboxView(APIView):
         if is_local:
             if remote_host and remote_author_id:
                 # CASE 2: local_author likes remote entry → send to remote node
+                print("Sending like to remote...")
                 self.send_like_to_remote(remote_host, remote_author_id, like_data)
             else:
                 # CASE 1: local_author likes local entry → send to all nodes
-                self.broadcast_like_to_all_nodes(like_data)
+                print("Broadcasting like to all nodes...")
+                self.broadcast_like_to_all_nodes(like_data, remote_host=remote_host_from_req)
 
         # ❌ CASE 3: remote node sends like to me → save locally, no broadcast
 
@@ -410,7 +414,8 @@ class InboxView(APIView):
             return
 
         for node in nodes:
-
+            
+            # Might have to change the logic later if we add /api to node.host
             if node.host == remote_host:
                 print(f"Skipping broadcasting to origin node: {node.host}")
                 continue
@@ -435,23 +440,30 @@ class InboxView(APIView):
                 
                 data = authors_response.json()
                 authors = data.get("authors", [])
-
+                
+                target_author = None
                 for author in authors:
-                    author_id = author.get("id")
-                    if not author_id:
-                        continue
+                    if get_host_from_object(author.get("id", "")) == node.host:
+                        target_author = author
+                        break
 
-                    inbox_url = f"{author_id.rstrip('/')}/inbox/"
+                
+                # for author in authors:
+                author_id = target_author.get("id") if target_author else None
+                if not author_id:
+                    continue
 
-                    response = requests.post(
-                        url=inbox_url,
-                        json=like_data,
-                        headers=headers,
-                        timeout=5,
-                    )
-                    if response.status_code not in [200, 201]:
-                        print(f"Failed to send like to {inbox_url}: {response.status_code} {response.text}")
-                    else:
-                        print(f"Successfully sent like to {inbox_url}: {response.status_code} {response.text}")
+                inbox_url = f"{author_id.rstrip('/')}/inbox/"
+
+                response = requests.post(
+                    url=inbox_url,
+                    json=like_data,
+                    headers=headers,
+                    timeout=5,
+                )
+                if response.status_code not in [200, 201]:
+                    print(f"Failed to send like to {inbox_url}: {response.status_code} {response.text}")
+                else:
+                    print(f"Successfully sent like to {inbox_url}: {response.status_code} {response.text}")
             except Exception as e:
                 print(f"Error sending like to node {node.host}: {str(e)}")

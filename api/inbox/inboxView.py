@@ -451,7 +451,8 @@ class InboxView(APIView):
                 # for author in authors:
                 author_id = target_author.get("id") if target_author else None
                 if not author_id:
-                    continue
+                    print(f"No matching author found on node {node.host} for broadcasting like.")
+                    return
 
                 inbox_url = f"{author_id.rstrip('/')}/inbox/"
 

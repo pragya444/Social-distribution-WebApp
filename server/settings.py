@@ -35,6 +35,8 @@ ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
+URL = os.getenv("URL")
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',

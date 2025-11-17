@@ -45,19 +45,68 @@ def is_local_user(user):
     return local_base and user_host == local_base
 
 
+
+# helper function to send Accept to remote inbox
+def send_accept_to_remote(approver_user, follower_user, request):
+    """
+    POST an Accept(Follow) to follower's inbox.
+    approver_user: the local user who approved the follow
+    follower_user: the remote user who requested to follow
+    """
+    from api.serializers import AuthorSerializer  
+
+    actor_data   = AuthorSerializer(approver_user, context={"request": request}).data
+    follower_obj = AuthorSerializer(follower_user, context={"request": request}).data
+
+    payload = {
+        "type": "Accept",
+        "actor": {**actor_data, "type": "author"},   # the approver
+        "object": {
+            "type": "follow",
+            "actor":  {**follower_obj, "type": "author"},   # original follower
+            "object": {**actor_data,   "type": "author"},   # approver
+        },
+    }
+
+    inbox_url = build_inbox_url(follower_user.url)
+    try:
+        r = requests.post(
+            inbox_url, json=payload,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            timeout=10, allow_redirects=False,
+        )
+        # if they 30x, re-POST to Location so we keep POST semantics
+        if r.is_redirect and r.headers.get("Location"):
+            r = requests.post(
+                r.headers["Location"], json=payload,
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                timeout=10, allow_redirects=False,
+            )
+        if r.status_code not in (200, 201, 202, 204):
+            log.warning("Accept to %s returned %s: %.200s", inbox_url, r.status_code, r.text)
+    except Exception as e:
+        log.exception("Failed to POST Accept to %s: %s", inbox_url, e)
+
+
+
+
+
+
+
 def build_inbox_url(author_url: str) -> str:
     """
-    Canonical author URL → their inbox URL with a trailing slash.
+    inbox URL with a trailing slash.
     Example:
-      https://peer.herokuapp.com/api/authors/<uuid>  ->  .../inbox/
+      https://crimson-node-raiyana-06162b6fe0cf.herokuapp.com/api/authors/DlqthKu-E3qju57qUuFPuA/  ->  .../inbox/
     """
     u = urlparse(author_url or "")
     scheme = u.scheme or "http"
     path = u.path.rstrip("/") + "/inbox/"
     return urlunparse((scheme, u.netloc, path, "", "", ""))
 
+
 def send_follow_to_remote(actor, target, request):
-    """POST a simple ActivityPub 'follow' object to the target's inbox."""
+    """sending follow-request object to remote target's inbox"""
     actor_data  = AuthorSerializer(actor,  context={"request": request}).data
     object_data = AuthorSerializer(target, context={"request": request}).data
 
@@ -76,7 +125,7 @@ def send_follow_to_remote(actor, target, request):
             headers={"Content-Type": "application/json", "Accept": "application/json"},
             timeout=10, allow_redirects=False
         )
-        # If their server still redirects, re-POST to the Location so we keep POST (not GET)
+        # If their server still redirects, re-POST to the Location so we keep POST 
         if r.is_redirect and r.headers.get("Location"):
             r = requests.post(
                 r.headers["Location"], json=payload,
@@ -204,6 +253,17 @@ class ApproveFollowRequestView(APIView):
         fr = get_object_or_404(Follow, follower_id=follower_id, followee=request.user)
         fr.status = Follow.Status.APPROVED
         fr.save(update_fields=["status"])
+
+        #notify the follower’s node if they are remote
+        try:
+            
+            if not is_local_user(fr.follower) and getattr(fr.follower, "url", None):
+                send_accept_to_remote(approver_user=request.user,
+                                      follower_user=fr.follower,
+                                      request=request)
+        except Exception:
+            
+            pass
         return redirect("follow-requests-page", author_id=author_id)
 
 

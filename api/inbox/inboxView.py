@@ -27,12 +27,8 @@ class InboxView(APIView):
         if request.user.is_authenticated:
             is_local = True
         else:
-            # auth = request.headers.get('Authorization', '')
-            # if auth != "SecretToken":
-            #     return Response({"error": "Invalid or missing authorization token."}, status=401)
             is_local = False
         
-
         data = request.data
         item_type = data.get('type', '').lower()
 
@@ -42,6 +38,7 @@ class InboxView(APIView):
         elif item_type == 'follow':
             actor_obj = data.get("actor") or {}
             object_obj = data.get("object") or {}
+            is_approved = data.get("approved", False)  # NEW: Check if this is an approval
 
             actor_id_fqid = actor_obj.get("id")
             object_id_fqid = object_obj.get("id")
@@ -49,13 +46,10 @@ class InboxView(APIView):
             if not actor_id_fqid or not object_id_fqid:
                 return Response({"error": "actor.id and object.id are required for follow"}, status=400)
 
-            # object.id should be the FQID of the *local* author whose inbox this is
-        
             cleaned_object = object_id_fqid.rstrip("/")
             cleaned_actor = actor_id_fqid.rstrip("/")
 
             try:
-                # local followee (the author whose inbox we're addressing)
                 followee = User.objects.get(url__in=[cleaned_object, cleaned_object + "/"])
             except User.DoesNotExist:
                 return Response(
@@ -63,33 +57,45 @@ class InboxView(APIView):
                     status=404,
                 )
 
-            
-
             try:
-                # follower (may be remote or local, but must already exist in our DB as a User with url)
                 follower = User.objects.get(url__in=[cleaned_actor, cleaned_actor + "/"])
             except User.DoesNotExist:
-                # we require the remote actor
-                # to have a User row already.
-                return Response(
-                    {"error": f"Unknown follower for actor.id: {actor_id_fqid}"},
-                    status=404,
+                follower = self.get_or_create_remote_user(actor_obj)
+            
+            # NEW: Handle approval notification differently
+            if is_approved:
+                # This is an approval from the remote node - update our local record
+                follow = Follow.objects.filter(
+                    follower=follower,
+                    followee=followee
+                ).first()
+                
+                if follow:
+                    follow.status = Follow.Status.APPROVED
+                    follow.save(update_fields=["status"])
+                    resp_data = FollowRequestSerializer(follow, context={"request": request}).data
+                    return Response(resp_data, status=200)
+                else:
+                    # Create approved follow if it doesn't exist
+                    follow = Follow.objects.create(
+                        follower=follower,
+                        followee=followee,
+                        status=Follow.Status.APPROVED
+                    )
+                    resp_data = FollowRequestSerializer(follow, context={"request": request}).data
+                    return Response(resp_data, status=201)
+            else:
+                # This is a new follow request
+                follower = self.get_or_create_remote_user(actor_obj)
+                follow, created = Follow.objects.get_or_create(
+                    follower=follower,
+                    followee=followee,
+                    defaults={"status": Follow.Status.PENDING},
                 )
-            
-            # Ensure we have (or create) a local record for the remote follower
-            follower = self.get_or_create_remote_user(actor_obj)
-            follow, created = Follow.objects.get_or_create(
-                follower=follower,
-                followee=followee,
-                defaults={"status": Follow.Status.PENDING},
-            )
 
-            # Represent it back in the standard follow-request shape
-            resp_data = FollowRequestSerializer(follow, context={"request": request}).data
-            return Response(resp_data, status=201 if created else 200)
+                resp_data = FollowRequestSerializer(follow, context={"request": request}).data
+                return Response(resp_data, status=201 if created else 200)
 
-
-            
         elif item_type == 'like':
             return self.handle_like(request, author_id, data, is_local)
         elif item_type == 'comment':

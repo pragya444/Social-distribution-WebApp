@@ -224,7 +224,52 @@ class ApproveFollowRequestView(APIView):
         fr = get_object_or_404(Follow, follower_id=follower_id, followee=request.user)
         fr.status = Follow.Status.APPROVED
         fr.save(update_fields=["status"])
+        
+        # NEW: Notify remote node if the follower is remote
+        if not is_local_user(fr.follower):
+            try:
+                self._send_approval_to_remote(fr, request)
+            except Exception as e:
+                log.warning(f"Failed to notify remote node of approval: {e}")
+        
         return redirect("follow-requests-page", author_id=author_id)
+    
+    def _send_approval_to_remote(self, follow, request):
+        """
+        Send the approved follow relationship to the remote follower's inbox.
+        This updates their following list on their node.
+        """
+        from api.serializers import AuthorSerializer
+        
+        actor_data = AuthorSerializer(follow.follower, context={"request": request}).data
+        object_data = AuthorSerializer(follow.followee, context={"request": request}).data
+        
+        payload = {
+            "type": "follow",
+            "summary": f"{object_data.get('displayName', follow.followee.username)} accepted your follow request",
+            "actor": {**actor_data, "type": "author"},
+            "object": {**object_data, "type": "author"},
+            "approved": True  # Add this field to indicate approval
+        }
+        
+        inbox_url = build_inbox_url(follow.follower.url)
+        auth = _remote_basic_auth_for(follow.follower.url)
+        
+        try:
+            r = requests.post(
+                inbox_url, 
+                json=payload,
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                auth=auth, 
+                timeout=10, 
+                allow_redirects=False
+            )
+            if r.status_code not in (200, 201, 202, 204):
+                log.warning(f"Remote inbox {inbox_url} returned {r.status_code}: {r.text[:200]}")
+        except Exception as e:
+            log.exception(f"Failed to post approval to {inbox_url}: {e}")
+
+
 
 
 class DenyFollowRequestView(APIView):

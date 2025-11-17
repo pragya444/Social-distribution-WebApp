@@ -12,9 +12,17 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 import requests
 import pprint
+from urllib.parse import urlparse
 
 
 User = get_user_model()
+
+
+def get_host_from_object(object_fqid: str) -> str:
+    parsed = urlparse(object_fqid)  # parses protocol, host, path, etc.
+    return f"{parsed.scheme}://{parsed.netloc}/"
+
+
 
 class InboxView(APIView):
     authentication_classes = [BasicAuthentication, SessionAuthentication]
@@ -184,6 +192,8 @@ class InboxView(APIView):
         remote_host = data.get('remote_host', '')
         remote_author_id = data.get('remote_author_id', '')
 
+        remote_host_from_req = get_host_from_object(entry_fqid)
+
         try:
             entry = Entry.objects.get(url=entry_fqid)
         except Entry.DoesNotExist:
@@ -222,7 +232,7 @@ class InboxView(APIView):
                     self.broadcast_like_to_all_nodes(delete_like)
             else:
                 # remote node unliking my entry → save + broadcast to others
-                self.broadcast_like_to_all_nodes(delete_like)
+                self.broadcast_like_to_all_nodes(delete_like, remote_host=remote_host_from_req)
 
             return Response(
                 {"ok": True, "message": "Like removed", "liked": False, "count": entry.like_count},
@@ -246,7 +256,7 @@ class InboxView(APIView):
 
         # CASE 3: remote node sends like to me → save, then send to all nodes
         if not is_local:
-            self.broadcast_like_to_all_nodes(like_data)
+            self.broadcast_like_to_all_nodes(like_data, remote_host=remote_host_from_req)
 
         return Response({**serializer.data, "liked": True, "count": entry.like_count}, status=201)
     
@@ -386,7 +396,7 @@ class InboxView(APIView):
                 print(f"Failed to send like to remote inbox: {e}")
 
 
-    def broadcast_like_to_all_nodes(self, like_data):
+    def broadcast_like_to_all_nodes(self, like_data, remote_host=None):
         nodes = Nodes.objects.filter(is_connected=True)
 
         if not nodes.exists():
@@ -394,6 +404,11 @@ class InboxView(APIView):
             return
 
         for node in nodes:
+
+            if node.host == remote_host:
+                print(f"Skipping broadcasting to origin node: {node.host}")
+                continue
+
             headers = {
                 "Authorization": f"{node.token}",
                 "Content-Type": "application/json",
@@ -406,7 +421,7 @@ class InboxView(APIView):
                 authors_response = requests.get(
                     url=f"{base}/api/authors/",
                     headers=headers,
-                    timeout=10,
+                    timeout=5,
                 )
                 if authors_response.status_code != 200:
                     print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")
@@ -426,7 +441,7 @@ class InboxView(APIView):
                         url=inbox_url,
                         json=like_data,
                         headers=headers,
-                        timeout=10,
+                        timeout=5,
                     )
                     if response.status_code not in [200, 201]:
                         print(f"Failed to send like to {inbox_url}: {response.status_code} {response.text}")

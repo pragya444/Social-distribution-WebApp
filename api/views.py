@@ -577,7 +577,7 @@ class CommentListCreateView(APIView):
         Entry.objects.filter(id=entry.id).update(comment_count=F('comment_count') + 1)
         entry.refresh_from_db()
 
-        return Response(helpers.comment_to_json(comment, request), status=201)
+        return Response(helpers.comment_to_json(comment), status=201)
 
 class EntryLikesView(APIView):
     '''

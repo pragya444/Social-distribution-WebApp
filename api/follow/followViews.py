@@ -91,6 +91,48 @@ def send_follow_to_remote(actor, target, request):
 
 
 
+# class FollowRequestActionView(APIView):
+#     permission_classes = [IsAuthenticated]
+#     authentication_classes = [SessionAuthentication]
+
+#     def post(self, request, author_id):
+#         if str(request.user.id) != str(author_id):
+#             return HttpResponseForbidden("Not your account")
+
+#         target_id = request.POST.get("target_id")
+#         target = get_object_or_404(User, id=target_id)
+#         if target == request.user:
+#             return JsonResponse({"error": "cannot follow yourself"}, status=400)
+
+#         if is_local_user(target):
+#             # local → just create PENDING and redirect (your existing logic    
+
+#             fr, created = Follow.objects.get_or_create(
+#                 follower=request.user, followee=target,
+#                 defaults={"status": Follow.Status.PENDING}
+#            )
+#             if not created and fr.status == Follow.Status.REJECTED:
+#                 fr.status = Follow.Status.PENDING
+#                 fr.save(update_fields=["status"])
+
+#             return redirect("profile", author_id=target.id)
+#         # REMOTE target → create/refresh local PENDING, then send to remote inbox
+#         follow, created = Follow.objects.get_or_create(
+#             follower=request.user,
+#             followee=target,
+#             defaults={"status": Follow.Status.PENDING},
+#         )
+#         if not created and follow.status == Follow.Status.REJECTED:
+#             follow.status = Follow.Status.PENDING
+#             follow.save(update_fields=["status"])
+
+#         # Fire-and-forget to remote inbox (handled by helper)
+#         send_follow_to_remote(actor=request.user, target=target, request=request)
+
+#         return redirect("profile", author_id=target.id)    
+
+
+
 class FollowRequestActionView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [SessionAuthentication]
@@ -104,32 +146,24 @@ class FollowRequestActionView(APIView):
         if target == request.user:
             return JsonResponse({"error": "cannot follow yourself"}, status=400)
 
-        if is_local_user(target):
-            # local → just create PENDING and redirect (your existing logic    
-
-            fr, created = Follow.objects.get_or_create(
-                follower=request.user, followee=target,
-                defaults={"status": Follow.Status.PENDING}
-           )
-            if not created and fr.status == Follow.Status.REJECTED:
-                fr.status = Follow.Status.PENDING
-                fr.save(update_fields=["status"])
-
-            return redirect("profile", author_id=target.id)
-        # REMOTE target → create/refresh local PENDING, then send to remote inbox
+        # Create/refresh local PENDING
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": Follow.Status.PENDING},
+            defaults={"status": Follow.Status.PENDING}
         )
         if not created and follow.status == Follow.Status.REJECTED:
             follow.status = Follow.Status.PENDING
             follow.save(update_fields=["status"])
 
-        # Fire-and-forget to remote inbox (handled by helper)
-        send_follow_to_remote(actor=request.user, target=target, request=request)
+        # If remote, send to their inbox
+        if not is_local_user(target):
+            send_follow_to_remote(actor=request.user, target=target, request=request)
 
-        return redirect("profile", author_id=target.id)    
+        return redirect("profile", author_id=target.id)
+
+
+
 
 
 class UnfollowView(APIView):

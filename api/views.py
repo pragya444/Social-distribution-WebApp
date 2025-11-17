@@ -249,8 +249,6 @@ class AuthorStreamView(APIView):
         if request.user.is_authenticated and entries:
             liked_ids = set(EntryLike.objects.filter(user=request.user, entry__in=entries).values_list('entry_id', flat=True))
         
-        print(liked_ids)
-        
         for e in entries:
             e.user_liked = e.id in liked_ids
             e.rendered = helpers.render_entry(e)

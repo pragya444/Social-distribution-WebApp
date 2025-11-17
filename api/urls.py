@@ -26,7 +26,7 @@ urlpatterns = [
 
     
     path("entries/<path:entry_fqid>/image",EntryImageFQIDView.as_view(),name="entry-image-fqid",), #/entries/{ENTRY_FQID}/image
-    path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),# Entry FQID routes
+    # path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),# Entry FQID routes
 
     
     
@@ -43,22 +43,21 @@ urlpatterns = [
 
 
 
-    # Comment routes
-    path('authors/<str:author_id>/entries/<str:entry_id>/comments', views.CommentListCreateView.as_view(), name='comments-list-create'),
-    path('entries/<path:entry_id>/comments/', views.CommentListCreateView.as_view(), name='comments-list-fqid'),  # for FQID
-    path('authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_id>/', views.CommentDetailView.as_view(), name='comment-detail'),
+    # # Comment routes
+    # path('authors/<str:author_id>/entries/<str:entry_id>/comments', views.CommentListCreateView.as_view(), name='comments-list-create'),
+    # path('entries/<path:entry_id>/comments/', views.CommentListCreateView.as_view(), name='comments-list-fqid'),  # for FQID
+    # path('authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_id>/', views.CommentDetailView.as_view(), name='comment-detail'),
 
-    # Like routes
+    # # Like routes
 
 
     path('authors/<str:author_id>/entries/<str:entry_id>/likes', views.EntryLikesView.as_view(), name='entry-likes'), # Local access
     path('entries/<path:entry_fqid>/likes', views.EntryLikesView.as_view(), name='entry-likes-fqid'),  # for FQID
     # TODO: The comment Section
     path('authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/likes', views.CommentLikesView.as_view(), name='comment-likes-fqid'),  # for FQID
-    
-    
-    
     path('authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/', views.CommentLikesView.as_view(), name='comment-likes'), # Local access
+    
+    
     
     # Liked routes
     path('authors/<str:author_id>/liked', views.LikedView.as_view(), name='liked-entries'),
@@ -109,4 +108,50 @@ urlpatterns = [
     # New inbox endpoint
     path('authors/<str:author_id>/inbox', inboxView.InboxView.as_view(), name='inbox-api'),
     path('authors/<str:author_id>/inbox/', inboxView.InboxView.as_view(), name='inbox'),
+
+
+
+    path('authors/<str:author_id>/entries/<str:entry_id>/comments',views.CommentListCreateView.as_view(),name='comments-list-create',),
+    path('authors/<str:author_id>/entries/<str:entry_id>/likes',views.EntryLikesView.as_view(),name='entry-likes',),
+    path('authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/',views.CommentLikesView.as_view(),name='comment-likes',),
+
+    # JSON API endpoints 
+    path("api/authors/<str:author_id>/entries/<str:entry_id>/comments",views.CommentListCreateView.as_view(),name="api-comments-list-create",),
+    path("api/authors/<str:author_id>/entries/<str:entry_id>/likes",views.EntryLikesView.as_view(),name="api-entry-likes",),
+    path("api/authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/",views.CommentLikesView.as_view(),name="api-comment-likes",),
+    
+
+     # === Comments API ===
+     path(
+     "authors/<str:author_id>/inbox/",
+     inboxView.InboxView.as_view(),
+     name="author-inbox",
+     ),
+     path("entries/<path:entry_fqid>/comments",
+     views.EntryCommentsByFQIDView.as_view(),
+     name="entry-comments-by-fqid"),
+
+
+     path("authors/<str:author_id>/entries/<str:entry_id>/comments/<path:remote_comment_fqid>",
+     views.EntryCommentByFQIDView.as_view(),
+     name="entry-comment-by-fqid"),
+
+     # === Commented API ===
+     path("authors/<str:author_id>/commented",
+     views.CommentedListView.as_view(),
+     name="commented-list"),
+
+     path("authors/<path:author_id>/commented",
+     views.CommentedListView.as_view(),
+     name="commented-list-fqid"),
+
+     path("authors/<str:author_id>/commented/<str:comment_id>",
+     views.CommentedDetailView.as_view(),
+     name="commented-detail"),
+
+     path("commented/<path:comment_fqid>",
+     views.CommentedByFQIDView.as_view(),
+     name="commented-by-fqid"),
+
+    path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),
 ]

@@ -79,7 +79,8 @@
         data-likes-url="/api/authors/{{ entry.author.id }}/entries/{{ entry.id }}/likes"
         data-inbox-url="/api/authors/{{ entry.author.id }}/inbox/"
         data-object-fqid="{{ entry.url }}"
-        data-remote-inbox-url="{% if entry.author.username|slice:':7' == 'remote_' %}{{ entry.author.host }}authors/{{ entry.author.id }}/inbox/{% endif %}"
+        data-remote-host="{% if entry.author.username|slice:':7' == 'remote_' %}{{ entry.author.host }}{% endif %}"
+        data-remote-author-id="{{entry.author_id}}"
       >
         <svg class="icon " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" aria-hidden="true">

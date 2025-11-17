@@ -414,7 +414,8 @@ class EntryLikeSerializer(serializers.ModelSerializer):
 
     def get_object(self, obj):
         request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.entry.author.id}/entries/{obj.entry.id}"
+        # return f"{request.scheme}://{request.get_host()}/api/authors/{obj.entry.author.id}/entries/{obj.entry.id}"
+        return obj.entry.fqid
     
 
 

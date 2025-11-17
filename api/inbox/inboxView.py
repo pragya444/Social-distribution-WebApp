@@ -1,21 +1,27 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from api.serializers import EntrySerializer, FollowRequestSerializer, EntryLikeSerializer, CommentSerializer
-from api.models import Entry, EntryLike, Follow, Comment
+from api.models import Entry, EntryLike, Follow, Comment, Nodes
 from django.contrib.auth import get_user_model
 from django.utils.text import slugify
 from django.db.models import F
 from django.utils.dateparse import parse_datetime
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 
 
 
 User = get_user_model()
 
 class InboxView(APIView):
+    authentication_classes = [BasicAuthentication, SessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = [SessionAuthentication]
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
 
     def post(self, request, author_id):
         if request.user.is_authenticated:
@@ -41,10 +47,7 @@ class InboxView(APIView):
             object_id_fqid = object_obj.get("id")
 
             if not actor_id_fqid or not object_id_fqid:
-                return Response(
-                    {"error": "actor.id and object.id are required for follow"},
-                    status=400,
-                )
+                return Response({"error": "actor.id and object.id are required for follow"}, status=400)
 
             # object.id should be the FQID of the *local* author whose inbox this is
         
@@ -60,6 +63,8 @@ class InboxView(APIView):
                     status=404,
                 )
 
+            
+
             try:
                 # follower (may be remote or local, but must already exist in our DB as a User with url)
                 follower = User.objects.get(url__in=[cleaned_actor, cleaned_actor + "/"])
@@ -70,7 +75,9 @@ class InboxView(APIView):
                     {"error": f"Unknown follower for actor.id: {actor_id_fqid}"},
                     status=404,
                 )
-
+            
+            # Ensure we have (or create) a local record for the remote follower
+            follower = self.get_or_create_remote_user(actor_obj)
             follow, created = Follow.objects.get_or_create(
                 follower=follower,
                 followee=followee,
@@ -78,9 +85,7 @@ class InboxView(APIView):
             )
 
             # Represent it back in the standard follow-request shape
-            resp_data = FollowRequestSerializer(
-                follow, context={"request": request}
-            ).data
+            resp_data = FollowRequestSerializer(follow, context={"request": request}).data
             return Response(resp_data, status=201 if created else 200)
 
 
@@ -126,6 +131,10 @@ class InboxView(APIView):
     
     def handle_like(self, request, author, data, is_local):
         entry_fqid = data.get('object', '')
+        remote_host = data.get('remote_host', '')
+        remote_author_id = data.get('remote_author_id', '')
+
+        # print(data)
 
         try:
             entry = Entry.objects.get(url=entry_fqid)
@@ -144,15 +153,28 @@ class InboxView(APIView):
         like_qs = EntryLike.objects.filter(user=user, entry=entry)
 
         if like_qs.exists():
+            delete_like = EntryLikeSerializer(like_qs.first(), context={'request': request})
+            if is_local and remote_host and remote_author_id:
+                self.send_like_to_remote(remote_host, remote_author_id, delete_like.data)
+
             like_qs.delete()
             entry.like_count = max(entry.like_count - 1, 0)
-            entry.save()
+            like_count = max(entry.like_count - 1, 0)
+            # entry.save(update_fields=['like_count'])
+            Entry.objects.filter(id=entry.id).update(like_count=like_count)
             entry.refresh_from_db(fields=['like_count'])
             return Response({"ok": True, "message": "Like removed", "liked": False, "count": entry.like_count}, status=200)
+        
         like = EntryLike.objects.create(user=user, entry=entry)
         Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
         entry.refresh_from_db(fields=['like_count'])
         serializer = EntryLikeSerializer(like, context={'request': request})
+        # print(serializer.data)
+
+        if is_local and remote_host and remote_author_id:
+            self.send_like_to_remote(remote_host, remote_author_id, serializer.data)
+
+                
         return Response({**serializer.data, "liked": True, "count": entry.like_count}, status=201)
     
     def handle_entry(self, is_local, request, data):
@@ -242,3 +264,55 @@ class InboxView(APIView):
                 "created": published,
             }
         )
+    
+    def send_like_to_remote(self, remote_host, remote_author_id, entryLike):
+           # Send like to remote inbox
+            import requests
+            import pprint
+            #get the remote author from database using remote_author_id
+
+            print()
+            print("Received entryLike to send to remote:")
+            pprint.pprint(entryLike)
+            print()
+
+
+            try:
+                remote_author = User.objects.get(id=remote_author_id)
+            except User.DoesNotExist:
+                print(f"Remote author with id {remote_author_id} does not exist.")
+                return
+            
+            formatted_host = remote_host.rstrip('api/') + '/'
+
+            node = Nodes.objects.filter(host=formatted_host).first()
+
+            if not node:
+                print(f"No node configuration found for host: {formatted_host}")
+                return
+            
+            if not node.is_connected:
+                print(f"Node for host {formatted_host} is not connected.")
+                return
+            
+            headers = {
+                'Authorization': f"{node.token}",
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+
+            remote_inbox_url = f"{remote_author.fqid.rstrip('/')}/inbox/"
+            try:
+                resp = requests.post(
+                    url=remote_inbox_url, 
+                    json=entryLike, 
+                    headers=headers, 
+                    timeout=5
+                )
+                if resp.status_code not in [200, 201]:
+                    print(f"Failed to send like to remote inbox. Status code: {resp.status_code}, Response: {resp.text}")
+                else:
+                    print(f"Successfully sent like to remote inbox at {remote_inbox_url}")
+                
+            except Exception as e:
+                print(f"Failed to send like to remote inbox: {e}")

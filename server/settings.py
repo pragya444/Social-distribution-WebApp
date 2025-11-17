@@ -18,8 +18,9 @@ import dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-LOCAL_API_BASE = "http://127.0.0.1:8000/api/"
-
+# LOCAL_API_BASE = "http://127.0.0.1:8000/api/"
+SITE_BASE = os.getenv("SITE_BASE", "http://127.0.0.1:8000").rstrip("/")
+LOCAL_API_BASE = f"{SITE_BASE}/api"
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -28,12 +29,14 @@ dotenv.load_dotenv(BASE_DIR / ".env")
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DEBUG", "False") == "True"
+DEBUG = "True"
 
 ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
+
+# URL = os.environ.get("URL")
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -103,11 +106,13 @@ else:
 
 
 dotenv_file = os.path.join(BASE_DIR, '.env')
-if os.path.isfile(dotenv_file):
-    dotenv.load_dotenv(dotenv_file)
-    DJANGO_ENV = os.getenv('DJANGO_ENV')
+# if os.path.isfile(dotenv_file):
+#     dotenv.load_dotenv(dotenv_file)
+#     # DJANGO_ENV = os.getenv('DJANGO_ENV')
+#     # URL = os.getenv('URL')
 
-
+DJANGO_ENV = os.environ.get('DJANGO_ENV') 
+URL = os.environ.get('URL')
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 

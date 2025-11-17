@@ -580,6 +580,7 @@ def send_entry_to_node(node, entry_data):
     headers = {
         "Authorization": f"{node.token}",
         "Content-Type": "application/json",
+        "Accept": "application/json",
     }
 
     base = node.host.rstrip('/')

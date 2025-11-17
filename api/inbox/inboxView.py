@@ -41,10 +41,7 @@ class InboxView(APIView):
             object_id_fqid = object_obj.get("id")
 
             if not actor_id_fqid or not object_id_fqid:
-                return Response(
-                    {"error": "actor.id and object.id are required for follow"},
-                    status=400,
-                )
+                return Response({"error": "actor.id and object.id are required for follow"}, status=400)
 
             # object.id should be the FQID of the *local* author whose inbox this is
         
@@ -60,6 +57,8 @@ class InboxView(APIView):
                     status=404,
                 )
 
+            
+
             try:
                 # follower (may be remote or local, but must already exist in our DB as a User with url)
                 follower = User.objects.get(url__in=[cleaned_actor, cleaned_actor + "/"])
@@ -70,7 +69,9 @@ class InboxView(APIView):
                     {"error": f"Unknown follower for actor.id: {actor_id_fqid}"},
                     status=404,
                 )
-
+            
+            # Ensure we have (or create) a local record for the remote follower
+            follower = self.get_or_create_remote_user(actor_obj)
             follow, created = Follow.objects.get_or_create(
                 follower=follower,
                 followee=followee,
@@ -78,9 +79,7 @@ class InboxView(APIView):
             )
 
             # Represent it back in the standard follow-request shape
-            resp_data = FollowRequestSerializer(
-                follow, context={"request": request}
-            ).data
+            resp_data = FollowRequestSerializer(follow, context={"request": request}).data
             return Response(resp_data, status=201 if created else 200)
 
 

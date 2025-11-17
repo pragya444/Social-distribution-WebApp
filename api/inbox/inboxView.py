@@ -192,6 +192,7 @@ class InboxView(APIView):
         remote_host = data.get('remote_host', '')
         remote_author_id = data.get('remote_author_id', '')
 
+        # e.g. "http://nodebbbb/" from "http://nodebbbb/api/authors/222/entries/249"
         remote_host_from_req = get_host_from_object(entry_fqid)
 
         try:
@@ -212,17 +213,18 @@ class InboxView(APIView):
 
         # ---------- UNLIKE BRANCH ----------
         if like_qs.exists():
-            delete_like = EntryLikeSerializer(like_qs.first(), context={'request': request}).data
+            delete_like = EntryLikeSerializer(
+                like_qs.first(),
+                context={'request': request}
+            ).data
 
             # Delete locally
             like_qs.delete()
-            # Entry.objects.filter(id=entry.id).update(like_count=F('like_count') - 1)
             like_count = max(entry.like_count - 1, 0)
-            # entry.save(update_fields=['like_count'])
             Entry.objects.filter(id=entry.id).update(like_count=like_count)
             entry.refresh_from_db(fields=['like_count'])
 
-            # Federation for UNLIKE (using same serializer data shape)
+            # ✅ Federation for UNLIKE only for *local* requests
             if is_local:
                 if remote_host and remote_author_id:
                     # local_author unliking remote entry → tell the remote origin
@@ -230,12 +232,16 @@ class InboxView(APIView):
                 else:
                     # local_author unliking local entry → broadcast to all nodes
                     self.broadcast_like_to_all_nodes(delete_like)
-            else:
-                # remote node unliking my entry → save + broadcast to others
-                self.broadcast_like_to_all_nodes(delete_like, remote_host=remote_host_from_req)
+
+            # ❌ if not is_local: remote node unliking → store only, no rebroadcast
 
             return Response(
-                {"ok": True, "message": "Like removed", "liked": False, "count": entry.like_count},
+                {
+                    "ok": True,
+                    "message": "Like removed",
+                    "liked": False,
+                    "count": entry.like_count,
+                },
                 status=200,
             )
 
@@ -244,21 +250,21 @@ class InboxView(APIView):
         Entry.objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
         entry.refresh_from_db(fields=['like_count'])
         serializer = EntryLikeSerializer(like, context={'request': request})
-        like_data = serializer.data  # this is what we'll send to other nodes
+        like_data = serializer.data  # this is what we'll send to other nodes (if needed)
 
-        # CASE 1: local_author likes local entry → send to all nodes
-        if is_local and not remote_host:
-            self.broadcast_like_to_all_nodes(like_data)
+        # ✅ Only act on federation for *local* likes
+        if is_local:
+            if remote_host and remote_author_id:
+                # CASE 2: local_author likes remote entry → send to remote node
+                self.send_like_to_remote(remote_host, remote_author_id, like_data)
+            else:
+                # CASE 1: local_author likes local entry → send to all nodes
+                self.broadcast_like_to_all_nodes(like_data)
 
-        # CASE 2: local_author likes remote entry → send to remote node
-        if is_local and remote_host and remote_author_id:
-            self.send_like_to_remote(remote_host, remote_author_id, like_data)
-
-        # CASE 3: remote node sends like to me → save, then send to all nodes
-        if not is_local:
-            self.broadcast_like_to_all_nodes(like_data, remote_host=remote_host_from_req)
+        # ❌ CASE 3: remote node sends like to me → save locally, no broadcast
 
         return Response({**serializer.data, "liked": True, "count": entry.like_count}, status=201)
+
     
     def handle_entry(self, is_local, request, data):
         if is_local:

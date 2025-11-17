@@ -70,7 +70,7 @@ class InboxView(APIView):
                     status=404,
                 )
             
-            # Ensure we have or create a local record for the remote follower
+            # Ensure we have (or create) a local record for the remote follower
             follower = self.get_or_create_remote_user(actor_obj)
             follow, created = Follow.objects.get_or_create(
                 follower=follower,
@@ -88,12 +88,6 @@ class InboxView(APIView):
             return self.handle_like(request, author_id, data, is_local)
         elif item_type == 'comment':
             serializer = CommentSerializer(data=data)
-
-        elif item_type in ('accept', 'accepted'):
-            # handle Accept(Follow) pushed by the approver's node
-            return self._handle_accept(request, author_id, data)
-
-
         else:
             return Response({"error": f"Invalid item type: {item_type}"}, status=400)
 
@@ -103,73 +97,6 @@ class InboxView(APIView):
 
         return Response(serializer.errors, status=400)
     
-
-
-
-
-    def _handle_accept(self, request, inbox_author_id, data):
-        """
-        We expect:
-        {
-          "type": "Accept",
-          "actor": { ... APPROVER ... },  
-          "object": {
-            "type": "follow",
-            "actor":  { ... FOLLOWER ... },  
-            "object": { ... APPROVER ... }
-          }
-        }
-        This arrives at the FOLLOWER's inbox. We mark
-        (follower = inbox_author, followee = approver) as APPROVED.
-        """
-        obj = data.get("object") or {}
-        if (obj.get("type") or "").lower() != "follow":
-            return Response({"error": "Accept must wrap a follow object"}, status=400)
-
-        follower_obj = obj.get("actor")  or {}
-        approver_obj = obj.get("object") or {}
-        follower_fqid  = follower_obj.get("id", "").rstrip("/")
-        approver_fqid  = approver_obj.get("id", "").rstrip("/")
-
-        if not follower_fqid or not approver_fqid:
-            return Response({"error": "Accept.follow requires follower (actor) and approver (object) ids"}, status=400)
-
-        # Resolve/ensure both users exist locally
-        follower = self.get_or_create_remote_user(follower_obj)   # should be the local inbox owner
-        approver = self.get_or_create_remote_user(approver_obj)   # may be remote or local
-
-        # this Accept should be delivered to the follower's inbox path
-    
-        try:
-            # ensure the path author matches follower
-            if str(follower.id) != str(inbox_author_id):
-                return Response({"error": "Delivered to wrong inbox"}, status=400)
-        except Exception:
-            # if author_id isn't a UUID-like, try fetching by pk
-            local_owner = User.objects.filter(id=inbox_author_id).first()
-            if not local_owner or str(local_owner.id) != str(follower.id):
-                return Response({"error": "Delivered to wrong inbox"}, status=400)
-
-        # Flip follow relation to APPROVED
-        follow, _ = Follow.objects.get_or_create(
-            follower=follower,
-            followee=approver,
-            defaults={"status": Follow.Status.PENDING},
-        )
-        if follow.status != Follow.Status.APPROVED:
-            follow.status = Follow.Status.APPROVED
-            follow.save(update_fields=["status"])
-
-        return Response({"ok": True, "status": "APPROVED"}, status=200)
-
-
-
-
-
-
-
-
-
 
     def get_or_create_remote_user(self, user_data):
         def make_remote_username(fqid):

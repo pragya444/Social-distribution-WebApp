@@ -8,7 +8,12 @@ from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 import json
 import base64
+import warnings
 from .models import Entry, Follow, Comment, EntryLike, CommentLike, Nodes
+
+warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
+warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
+
 User = get_user_model()
 
 '''

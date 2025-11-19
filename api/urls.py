@@ -172,5 +172,4 @@ urlpatterns = [
     # Serve OpenAPI spec and lightweight documentation UIs
     path('docs/openapi.yaml', openapi_yaml_view, name='openapi-yaml'),
     path('docs/swagger/', TemplateView.as_view(template_name='swagger_ui.html'), name='swagger-ui'),
-    path('docs/redoc/', TemplateView.as_view(template_name='redoc.html'), name='redoc'),
 ]

@@ -1,4 +1,6 @@
 from django.urls import path
+from django.views.generic import TemplateView
+from django.http import HttpResponse
 from . import views
 from .auth import authViews
 from .entries import entryView
@@ -6,6 +8,18 @@ from .views import EntryImageView, EntryImageFQIDView
 from .inbox import inboxView
 from .authors import authorView
 from .follow import followViews
+import pathlib
+
+
+def openapi_yaml_view(request):
+    """Serve the bundled OpenAPI YAML file for Swagger/Redoc UIs."""
+    docs_path = pathlib.Path(__file__).resolve().parent / "docs" / "API-documentation.yaml"
+    try:
+        text = docs_path.read_text(encoding="utf-8")
+    except Exception:
+        return HttpResponse("OpenAPI document not found", status=404)
+
+    return HttpResponse(text, content_type="application/yaml")
 
 
 
@@ -154,4 +168,8 @@ urlpatterns = [
      name="commented-by-fqid"),
 
     path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),
+
+    # Serve OpenAPI spec and lightweight documentation UIs
+    path('docs/openapi.yaml', openapi_yaml_view, name='openapi-yaml'),
+    path('docs/swagger/', TemplateView.as_view(template_name='swagger_ui.html'), name='swagger-ui'),
 ]

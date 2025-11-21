@@ -203,7 +203,7 @@ class CommentedListView(APIView):
 
         qs = Comment.objects.filter(author=author).select_related("entry", "entry__author").order_by("created")
 
-        items = [helpers.comment_to_json(c) for c in qs]
+        
         data = {
             "type": "comments",
             "id": request.build_absolute_uri(),
@@ -212,7 +212,8 @@ class CommentedListView(APIView):
             "count": qs.count(),
             "src": items,
         }
-        return Response(data, status=200)
+        serializer = CommentMinimalSerializer(qs, context={"request": request})
+        return Response(serializer.data, status=200)
 
     def post(self, request, author_id):
         # Local author POSTs a comment object here

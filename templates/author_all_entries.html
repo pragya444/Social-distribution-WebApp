@@ -182,7 +182,13 @@
 
         <div class="action">
           <!-- Replaced share emoji with heroicon -->
-          <svg class="share-icon" data-author_id="{{ e.author.id }}" data-entry_id="{{ e.id }}" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="share-icon"
+               data-author_id="{{ e.author.id }}"
+               data-entry_id="{{ e.id }}"
+               data-share-url="{% if e.url %}{{ e.url }}{% else %}{{ request.scheme }}://{{ request.get_host }}/api/authors/{{ e.author_id }}/entries/{{ e.id }}/{% endif %}"
+               xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+               viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
+               fill="none" stroke-linecap="round" stroke-linejoin="round">
             <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
             <circle cx="6" cy="12" r="3" />
             <circle cx="18" cy="6" r="3" />
@@ -252,12 +258,10 @@
   document.addEventListener('click', e => {
     const icon = e.target.closest('.share-icon');
     if (icon) {
-      const entry_id = icon.dataset.entry_id;
-      const author_id = icon.dataset.author_id;
-      if (!entry_id || !author_id) return;
-      const link = `${window.location.origin}/api/authors/${author_id}/entries/${entry_id}/`;
-      navigator.clipboard.writeText(link).then(() => {
-        shareInput.value = link;
+      const shareUrl = icon.dataset.shareUrl; // remote-safe if present
+      if (!shareUrl) return;
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        shareInput.value = shareUrl;      // keep showing copied link
         shareModal.style.display = 'flex';
         shareInput.select();
       }).catch(err => console.error('Clipboard copy failed:', err));

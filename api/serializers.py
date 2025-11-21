@@ -272,96 +272,63 @@ class FollowRequestSerializer(serializers.ModelSerializer):
 
         return f"{follower_name} wants to follow {followee_name}"
 
-class CommentSerializer(serializers.ModelSerializer):
-    """Comment serializer following API spec"""
-    type = serializers.CharField(default="comment", read_only=True)
-    author = AuthorSerializer(read_only=True)
-    comment = serializers.CharField()
-    contentType = serializers.CharField(default="text/markdown")
-    published = serializers.DateTimeField(source='created', read_only=True)
-    id = serializers.SerializerMethodField()
-    entry = serializers.SerializerMethodField()
-    web = serializers.SerializerMethodField()
-    likes = serializers.SerializerMethodField()
-    '''{
-    "type":"comment",
-    "author":{
-        "type":"author",
-        "id":"http://nodeaaaa/api/authors/111",
-        "web":"http://nodeaaaa/authors/greg",
-        "host":"http://nodeaaaa/api/",
-        "displayName":"Greg Johnson",
-        "github": "http://github.com/gjohnson",
-        "profileImage": "https://i.imgur.com/k7XVwpB.jpeg"
-    },
-    "comment":"Sick Olde English",
-    "contentType":"text/markdown",
-    // ISO 8601 TIMESTAMP
-    "published":"2015-03-09T13:07:04+00:00",
-    // ID of the Comment
-    "id": "http://nodeaaaa/api/authors/111/commented/130",
-    "entry": "http://nodebbbb/api/authors/222/entries/249",
-    }'''
+# class CommentSerializer(serializers.ModelSerializer):
+#     """Comment serializer following API spec"""
+#     type = serializers.CharField(default="comment", read_only=True)
+#     author = AuthorSerializer(read_only=True)
+#     comment = serializers.CharField()
+#     contentType = serializers.CharField(default="text/markdown")
+#     published = serializers.DateTimeField(source='created', read_only=True)
+#     id = serializers.SerializerMethodField()
+#     entry = serializers.SerializerMethodField()
+#     web = serializers.SerializerMethodField()
+#     likes = serializers.SerializerMethodField()
+#     '''{
+#     "type":"comment",
+#     "author":{
+#         "type":"author",
+#         "id":"http://nodeaaaa/api/authors/111",
+#         "web":"http://nodeaaaa/authors/greg",
+#         "host":"http://nodeaaaa/api/",
+#         "displayName":"Greg Johnson",
+#         "github": "http://github.com/gjohnson",
+#         "profileImage": "https://i.imgur.com/k7XVwpB.jpeg"
+#     },
+#     "comment":"Sick Olde English",
+#     "contentType":"text/markdown",
+#     // ISO 8601 TIMESTAMP
+#     "published":"2015-03-09T13:07:04+00:00",
+#     // ID of the Comment
+#     "id": "http://nodeaaaa/api/authors/111/commented/130",
+#     "entry": "http://nodebbbb/api/authors/222/entries/249",
+#     }'''
 
-    class Meta:
-        model = Comment
-        fields = ['type', 'author', 'comment', 'contentType', 'published', 'id', 'entry', 'web', 'likes']
+#     class Meta:
+#         model = Comment
+#         fields = ['type', 'author', 'comment', 'contentType', 'published', 'id', 'entry', 'web', 'likes']
     
-    def get_likes(self, obj): 
-        request = self.context.get('request')
-        return {
-            'type': 'likes',
-            'id': f"{request.scheme}://{request.get_host()}/api/authors/{obj.author.id}/comments/{obj.id}/likes",
-            'web': f"{request.scheme}://{request.get_host()}/authors/{obj.author.username}/comments/{obj.id}",
-            'page_number': 1,
-            'size': 50,
-            'count': obj.like_count,
-            'src': []  # Populated when needed
-        }
-    def get_id(self, obj):
-        request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.author.id}/commented/{obj.id}"
+#     def get_likes(self, obj): 
+#         request = self.context.get('request')
+#         return {
+#             'type': 'likes',
+#             'id': f"{request.scheme}://{request.get_host()}/api/authors/{obj.author.id}/comments/{obj.id}/likes",
+#             'web': f"{request.scheme}://{request.get_host()}/authors/{obj.author.username}/comments/{obj.id}",
+#             'page_number': 1,
+#             'size': 50,
+#             'count': obj.like_count,
+#             'src': []  # Populated when needed
+#         }
+#     def get_id(self, obj):
+#         request = self.context.get('request')
+#         return f"{request.scheme}://{request.get_host()}/api/authors/{obj.author.id}/commented/{obj.id}"
 
-    def get_entry(self, obj):
-        request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.entry.author.id}/entries/{obj.entry.id}"
+#     def get_entry(self, obj):
+#         request = self.context.get('request')
+#         return f"{request.scheme}://{request.get_host()}/api/authors/{obj.entry.author.id}/entries/{obj.entry.id}"
     
-    def get_web(self, obj):
-        request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/authors/{obj.entry.author.username}/entries/{obj.entry.id}"
-
-class CommentsSerializer(serializers.Serializer):
-    """Comments list serializer matching API spec"""
-    type = serializers.CharField(default="comments", read_only=True)
-    id = serializers.SerializerMethodField()
-    web = serializers.SerializerMethodField() 
-    page_number = serializers.IntegerField()
-    size = serializers.IntegerField()
-    count = serializers.IntegerField()
-    src = CommentSerializer(many=True)
-
-    def get_id(self, obj):
-        request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.author.id}/entries/{obj.id}/comments"
-
-    def get_web(self, obj):
-        request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/authors/{obj.author.username}/entries/{obj.id}"
-
-class CommentedSerializer(serializers.Serializer):
-    """Serializer for list of comments following API spec"""
-    type = serializers.CharField(default="comments", read_only=True)
-    comments = serializers.ListField(child=serializers.DictField())
-
-class FollowersSerializer(serializers.Serializer):
-    """Serializer for list of followers following API spec"""
-    type = serializers.CharField(default="followers", read_only=True)
-    followers = AuthorSerializer(many=True)
-
-class FollowingSerializer(serializers.Serializer):
-    """Serializer for list of authors a user is following (Following API)"""
-    type = serializers.CharField(default="following", read_only=True)
-    following = AuthorSerializer(many=True)
+#     def get_web(self, obj):
+#         request = self.context.get('request')
+#         return f"{request.scheme}://{request.get_host()}/authors/{obj.entry.author.username}/entries/{obj.entry.id}"
 
 
 class LikeSerializer(serializers.ModelSerializer):
@@ -393,6 +360,132 @@ class LikeSerializer(serializers.ModelSerializer):
             return f"{request.scheme}://{request.get_host()}/api/authors/{obj.entry.author.id}/entries/{obj.entry.id}"
         else:
             return f"{request.scheme}://{request.get_host()}/api/authors/{obj.comment.author.id}/commented/{obj.comment.id}"
+
+
+from rest_framework import serializers
+from .models import Comment, CommentLike
+from .serializers import AuthorSerializer  # existing one
+from .serializers import LikeSerializer    # from above
+
+
+class CommentSerializer(serializers.ModelSerializer):
+    type = serializers.SerializerMethodField()
+    author = AuthorSerializer(read_only=True)
+    id = serializers.SerializerMethodField()
+    web = serializers.SerializerMethodField()
+    entry = serializers.SerializerMethodField()
+    published = serializers.DateTimeField(source="created")  # or your field name
+    likes = serializers.SerializerMethodField()
+    contentType = serializers.CharField(default="text/markdown")
+
+    class Meta:
+        model = Comment
+        fields = [
+            "type",
+            "author",
+            "comment",
+            "contentType",
+            "published",
+            "id",
+            "entry",
+            "web",
+            "likes",
+        ]
+
+    def get_type(self, obj):
+        return "comment"
+
+    def _base(self):
+        request = self.context.get("request")
+        return request.build_absolute_uri("/").rstrip("/")
+
+    def get_id(self, obj):
+        base = self._base()
+        # http://nodeaaaa/api/authors/111/commented/130
+        return f"{base}/api/authors/{obj.author.id}/commented/{obj.id}"
+
+    def get_web(self, obj):
+        base = self._base()
+        entry = obj.entry
+        # http://nodebbbb/authors/222/entries/249
+        return f"{base}/authors/{entry.author.id}/entries/{entry.id}"
+
+    def get_entry(self, obj):
+        base = self._base()
+        entry = obj.entry
+        # http://nodebbbb/api/authors/222/entries/249
+        return f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
+
+    def get_likes(self, obj):
+        """
+        Build the *likes wrapper* for this comment.
+        Uses LikeSerializer for the inner src[] list.
+        """
+        request = self.context.get("request")
+        base = request.build_absolute_uri("/").rstrip("/")
+
+        # newest → oldest
+        likes_qs = CommentLike.objects.filter(comment=obj).order_by("-created")
+        total = likes_qs.count()
+
+        # first page only (spec: ~5 likes per thing; or 50 for comments, up to you)
+        page_number = 1
+        size = 50
+        likes_page = likes_qs[:size]
+
+        likes_serializer = LikeSerializer(
+            likes_page, many=True, context={"request": request}
+        )
+
+        likes_id = f"{base}/api/authors/{obj.author.id}/commented/{obj.id}/likes"
+        web = f"{base}/authors/{obj.author.id}/comments/{obj.id}/likes"
+
+        return {
+            "type": "likes",
+            "id": likes_id,
+            "web": web,
+            "page_number": page_number,
+            "size": size,
+            "count": total,
+            "src": likes_serializer.data,
+        }
+
+
+class CommentsSerializer(serializers.Serializer):
+    """Comments list serializer matching API spec"""
+    type = serializers.CharField(default="comments", read_only=True)
+    id = serializers.SerializerMethodField()
+    web = serializers.SerializerMethodField() 
+    page_number = serializers.IntegerField()
+    size = serializers.IntegerField()
+    count = serializers.IntegerField()
+    src = CommentSerializer(many=True)
+    
+
+    def get_id(self, obj):
+        request = self.context.get('request')
+        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.author.id}/entries/{obj.id}/comments"
+
+    def get_web(self, obj):
+        request = self.context.get('request')
+        return f"{request.scheme}://{request.get_host()}/authors/{obj.author.username}/entries/{obj.id}"
+
+class CommentedSerializer(serializers.Serializer):
+    """Serializer for list of comments following API spec"""
+    type = serializers.CharField(default="comments", read_only=True)
+    comments = serializers.ListField(child=serializers.DictField())
+
+class FollowersSerializer(serializers.Serializer):
+    """Serializer for list of followers following API spec"""
+    type = serializers.CharField(default="followers", read_only=True)
+    followers = AuthorSerializer(many=True)
+
+class FollowingSerializer(serializers.Serializer):
+    """Serializer for list of authors a user is following (Following API)"""
+    type = serializers.CharField(default="following", read_only=True)
+    following = AuthorSerializer(many=True)
+
+
 
 
 

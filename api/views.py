@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
-from .serializers import EntrySerializer, AuthorsSerializer, FollowRequestSerializer, FollowersSerializer, FollowingSerializer, LikeSerializer,LikesSerializer, CommentSerializer
+from .serializers import EntrySerializer, AuthorsSerializer, FollowRequestSerializer, FollowersSerializer, FollowingSerializer, LikeSerializer,LikesSerializer, CommentSerializer, CommentMinimalSerializer
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
 
 from .utils import helpers
@@ -302,7 +302,8 @@ class EntryCommentByFQIDView(APIView):
         if not comment or comment.entry_id != entry.id:
             raise Http404("comment not found")
 
-        return Response(helpers.comment_to_json(comment), status=200)
+        serializer = CommentMinimalSerializer(comment, context={"request": request})
+        return Response(serializer.data, status=200)
 
 
 class AuthorStreamView(APIView):

@@ -171,8 +171,8 @@ urlpatterns = [
 
 
     
-    # path('authors/<str:author_id>/entries/<str:entry_id>/likes',views.EntryLikesView.as_view(),name='entry-likes',),
-    
+    path('authors/<str:author_id>/entries/<str:entry_id>/likes',views.EntryLikesView.as_view(),name='entry-likes',),
+    path("api/authors/<str:author_id>/entries/<str:entry_id>/likes",views.EntryLikesView.as_view(),name="api-entry-likes",),
    
 
     

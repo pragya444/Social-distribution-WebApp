@@ -94,7 +94,7 @@
       } else if (r.status === 403) {
         alert("Please log in to like.");
       } else {
-        alert("Error toggling like. meow");
+        alert("Error toggling like.");
         console.error("Toggle comment like failed", likeUrl, r);
       }
     });

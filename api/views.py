@@ -302,7 +302,8 @@ class EntryCommentByFQIDView(APIView):
         if not comment or comment.entry_id != entry.id:
             raise Http404("comment not found")
 
-        return Response(helpers.comment_to_json(comment), status=200)
+        serializer = CommentSerializer(comment, context={"request": request})
+        return Response(serializer.data, status=200)
 
 
 class AuthorStreamView(APIView):

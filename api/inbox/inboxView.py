@@ -136,7 +136,7 @@ class InboxView(APIView):
                 'name': user_data.get('displayName', 'Remote User'),
                 'host': user_data.get('host', ''),
                 'github': user_data.get('github', ''),
-                'profile_picture': user_data.get('profilePicture', ''),
+                'profile_picture': (user_data.get('profileImage') or user_data.get('profilePicture') or ''),
             }
         )
 

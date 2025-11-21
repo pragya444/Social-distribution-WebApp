@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
-from .serializers import EntrySerializer, AuthorsSerializer, FollowRequestSerializer, FollowersSerializer, FollowingSerializer, LikeSerializer,LikesSerializer, CommentSerializer
+from .serializers import EntrySerializer, AuthorsSerializer, FollowRequestSerializer, FollowersSerializer, FollowingSerializer, LikeSerializer,LikesSerializer, CommentSerializer, CommentMinimalSerializer
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
 
 from .utils import helpers

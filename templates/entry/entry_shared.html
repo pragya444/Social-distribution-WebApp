@@ -89,6 +89,25 @@
         </svg><span>Like </span><span id="like-count" data-like-count>{{ entry.like_count }}</span>
       </button>
     </div>
+
+    <!-- NEW: Share action (adds clickable icon + text; preserves remote host) -->
+    <div class="action" id="share-action" style="cursor:pointer;">
+      <svg class="icon share-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none"
+           viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M4 12v8a2 2 0 0 0 2 2h8M8 16l12-12M14 4h6v6" />
+      </svg>
+      <span class="share-text">Share</span>
+      <!-- Hidden field containing canonical share URL (remote-safe) -->
+      <input type="text"
+             readonly
+             class="share-link"
+             value="{{ share_url }}"
+             aria-hidden="true"
+             style="position:absolute;left:-9999px;top:-9999px;">
+      <div class="share-copied-msg" style="display:none;">Link copied to clipboard</div>
+    </div>
+
     <div class="action" id="toggle-comments" style="cursor:pointer;">
       <!-- chat icon -->
       <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -335,4 +354,5 @@
 });
 
 </script>
+<script src="{% static 'js/shareEnhancements.js' %}"></script>
 {% endblock %}

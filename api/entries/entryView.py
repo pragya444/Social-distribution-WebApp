@@ -274,6 +274,11 @@ class SingleEntryView(APIView):
                     status=403,
                 )
 
+        # For HTML we still pass the model instance (existing template expects it),
+        # but we derive a canonical share_url from the serialized dict so remote host is preserved.
+        serialized = entry_obj(request, entry)
+        share_url = serialized.get("web") or serialized.get("id") or entry.url
+
         # If the client wants HTML, render the shared entry page
         if isinstance(request.accepted_renderer, TemplateHTMLRenderer):
             entry.rendered = helpers.render_entry(entry)
@@ -297,6 +302,7 @@ class SingleEntryView(APIView):
                     "entry": entry,
                     "author_id": author_id,
                     "like": like,
+                    "share_url": share_url,
                 },
                 template_name="entry/entry_shared.html",
             )

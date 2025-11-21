@@ -676,3 +676,93 @@ class FollowingDetailView(APIView):
         follow.delete()
         return Response(status=204)
 
+
+
+class FollowByFQIDPageView(APIView):
+    """
+    Simple page where a logged-in local author can paste a remote author FQID
+    and send them a follow activity to their /inbox.
+    """
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer]
+    authentication_classes = [SessionAuthentication]
+
+    def get(self, request, author_id):
+        if str(request.user.id) != str(author_id):
+            return HttpResponseForbidden("Not your account")
+
+        return Response(
+            {
+                "message": None,
+                "error": None,
+                "fqid": "",
+            },
+            template_name="follow_by_fqid.html",
+        )
+
+    def post(self, request, author_id):
+        if str(request.user.id) != str(author_id):
+            return HttpResponseForbidden("Not your account")
+
+        fqid = (request.data.get("fqid") or "").strip()
+        if not fqid:
+            return Response(
+                {
+                    "message": None,
+                    "error": "Please enter an author FQID.",
+                    "fqid": "",
+                },
+                template_name="follow_by_fqid.html",
+                status=400,
+            )
+
+        decoded = urllib.parse.unquote(fqid)
+        cleaned = decoded.rstrip("/")
+
+        try:
+            target = User.objects.get(url__in=[cleaned, cleaned + "/"])
+        except User.DoesNotExist:
+            return Response(
+                {
+                    "message": None,
+                    "error": "No local record for that remote author FQID. "
+                             "They must exist in our database first.",
+                    "fqid": fqid,
+                },
+                template_name="follow_by_fqid.html",
+                status=404,
+            )
+
+        if target == request.user:
+            return Response(
+                {
+                    "message": None,
+                    "error": "You cannot follow yourself.",
+                    "fqid": fqid,
+                },
+                template_name="follow_by_fqid.html",
+                status=400,
+            )
+
+        follow, created = Follow.objects.get_or_create(
+            follower=request.user,
+            followee=target,
+            defaults={"status": Follow.Status.PENDING},
+        )
+        if not created and follow.status == Follow.Status.REJECTED:
+            follow.status = Follow.Status.PENDING
+            follow.save(update_fields=["status"])
+
+        # If target is remote, send follow activity to their /inbox
+        if not is_local_user(target):
+            send_follow_to_remote(actor=request.user, target=target, request=request)
+
+        display_name = getattr(target, "username", None) or cleaned
+        return Response(
+            {
+                "message": f"Follow request sent to {display_name}.",
+                "error": None,
+                "fqid": fqid,
+            },
+            template_name="follow_by_fqid.html",
+        )

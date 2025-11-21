@@ -171,6 +171,11 @@ urlpatterns = [
     path("authors/<str:author_id>/following/page", followViews.FollowingPageView.as_view(), name="following-page"),
     path("authors/<str:author_id>/friends/", followViews.FriendsPageView.as_view(), name="friends-page"),
 
+    path(
+        "authors/<str:author_id>/follow-by-fqid/",
+        followViews.FollowByFQIDPageView.as_view(),
+        name="follow-by-fqid",
+    ),
 
 
     # New follower detail (percent-encoded foreign author FQID)

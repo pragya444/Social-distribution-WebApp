@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Entry, User, Follow, Comment, EntryLike, Nodes
+from .models import Entry, User, Follow, Comment, EntryLike, Node
 from django.contrib.admin.sites import NotRegistered, AlreadyRegistered
 
 
@@ -30,4 +30,4 @@ class FollowAdmin(admin.ModelAdmin):
 
 admin.site.register(Comment)
 admin.site.register(EntryLike)
-admin.site.register(Nodes)
+admin.site.register(Node)

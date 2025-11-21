@@ -307,8 +307,9 @@ class Liked(models.Model):
         
     
 
-class Nodes(models.Model):
+class Node(models.Model):
     id = models.CharField(primary_key=True, unique=True, max_length=50, db_index=True, default=generate_id)
     host = models.CharField(max_length=255, unique=True)
-    token = models.CharField(max_length=255, default="")
+    username = models.CharField(max_length=255)
+    password = models.CharField(max_length=255)
     is_connected = models.BooleanField()

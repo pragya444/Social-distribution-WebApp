@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from api.serializers import EntrySerializer, FollowRequestSerializer, EntryLikeSerializer, CommentSerializer
-from api.models import Entry, EntryLike, Follow, Comment, Nodes
+from api.models import Entry, EntryLike, Follow, Comment, Node
 from django.contrib.auth import get_user_model
 from django.utils.text import slugify
 from django.db.models import F
@@ -25,7 +25,7 @@ def get_host_from_object(object_fqid: str) -> str:
 
 
 class InboxView(APIView):
-    authentication_classes = [BasicAuthentication, SessionAuthentication]
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
     permission_classes = [AllowAny]
 
     @method_decorator(csrf_exempt)
@@ -33,13 +33,14 @@ class InboxView(APIView):
         return super().dispatch(*args, **kwargs)
 
     def post(self, request, author_id):
-        if request.user.is_authenticated:
+        auth = getattr(request, "successful_authenticator", None)
+
+        if isinstance(auth, SessionAuthentication):
             is_local = True
-        else:
-            # auth = request.headers.get('Authorization', '')
-            # if auth != "SecretToken":
-            #     return Response({"error": "Invalid or missing authorization token."}, status=401)
+        elif isinstance(auth, BasicAuthentication):
             is_local = False
+        else:
+            return Response({"error": "Invalid or missing authorization."}, status=401)
         
         data = request.data
         item_type = data.get('type', '').lower()
@@ -331,7 +332,7 @@ class InboxView(APIView):
             
             formatted_host = remote_host.rstrip('api/') + '/'
 
-            node = Nodes.objects.filter(host=formatted_host).first()
+            node = Node.objects.filter(host=formatted_host).first()
 
             if not node:
                 print(f"No node configuration found for host: {formatted_host}")
@@ -365,7 +366,7 @@ class InboxView(APIView):
 
 
     def broadcast_like_to_all_nodes(self, like_data, remote_host=None):
-        nodes = Nodes.objects.filter(is_connected=True)
+        nodes = Node.objects.filter(is_connected=True)
 
         if not nodes.exists():
             print("No connected nodes to broadcast like to.")

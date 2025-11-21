@@ -9,7 +9,7 @@ from rest_framework import status
 import json
 import base64
 import warnings
-from .models import Entry, Follow, Comment, EntryLike, CommentLike, Nodes
+from .models import Entry, Follow, Comment, EntryLike, CommentLike, Node
 
 warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
 warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
@@ -1580,7 +1580,7 @@ class NodesManagementTests(TestCase):
         
     def test_create_node_directly(self):
         """Test creating a node connection directly in database"""
-        node = Nodes.objects.create(
+        node = Node.objects.create(
             host="https://example.com/api/",
             token="test-token",
             is_connected=True
@@ -1591,13 +1591,13 @@ class NodesManagementTests(TestCase):
         
     def test_node_uniqueness(self):
         """Test that node hosts must be unique"""
-        Nodes.objects.create(
+        Node.objects.create(
             host="https://example.com/api/",
             token="token1",
             is_connected=True
         )
         with self.assertRaises(Exception):
-            Nodes.objects.create(
+            Node.objects.create(
                 host="https://example.com/api/",
                 token="token2",
                 is_connected=True
@@ -1605,7 +1605,7 @@ class NodesManagementTests(TestCase):
     
     def test_node_connection_toggle(self):
         """Test toggling node connection status"""
-        node = Nodes.objects.create(
+        node = Node.objects.create(
             host="https://example.com/api/",
             token="test-token",
             is_connected=True

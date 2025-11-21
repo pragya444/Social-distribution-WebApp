@@ -127,7 +127,7 @@ class InboxView(APIView):
     def get_or_create_remote_user(self, user_data):
         def make_remote_username(fqid):
             slug = slugify(fqid)
-            return f"remote_{slug}"[:150]  # Limit to 150 chars
+            return f"remote_{slug}"[:150]
 
         user_fqid = user_data.get('id', '')
 
@@ -138,15 +138,35 @@ class InboxView(APIView):
                 'name': user_data.get('displayName', 'Remote User'),
                 'host': user_data.get('host', ''),
                 'github': user_data.get('github', ''),
-                'profile_picture': user_data.get('profilePicture', ''),
+                'profile_picture': user_data.get('profileImage', ''),
             }
         )
 
+        # --- UPDATE LOGIC ---
+        # Map incoming data -> model fields
+        update_fields = {
+            'name': user_data.get('displayName'),
+            'host': user_data.get('host'),
+            'github': user_data.get('github'),
+            'profile_picture': user_data.get('profileImage'),
+        }
+
+        updated = False
+        for field, value in update_fields.items():
+            if value not in (None, '') and getattr(user, field) != value:
+                setattr(user, field, value)
+                updated = True
+
+        if updated:
+            user.save(update_fields=list(update_fields.keys()))
+
+        # Set unusable password only if newly created
         if created:
             user.set_unusable_password()
-            user.save()
-        
+            user.save(update_fields=['password'])
+
         return user
+            return user
         
     
     def handle_like(self, request, author, data, is_local):

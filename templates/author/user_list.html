@@ -23,7 +23,13 @@
       {% endif %}
       <div class="meta">
         <a class="name" href="{% url 'profile' author_id=u.id %}">{{ u.name|default:u.username }}</a>
-        <div class="username">@{{ u.username }}</div>
+        <div class="username">
+          {% if u.host %}
+            {{ u.host }}
+          {% else %}
+            @{{ u.username }}
+          {% endif %}
+        </div>
       </div>
     </div>
   {% empty %}

@@ -451,6 +451,44 @@ class CommentSerializer(serializers.ModelSerializer):
         }
 
 
+class CommentMinimalSerializer(serializers.ModelSerializer):
+    type = serializers.SerializerMethodField()
+    author = AuthorSerializer(read_only=True)
+    id = serializers.SerializerMethodField()
+    entry = serializers.SerializerMethodField()
+    published = serializers.DateTimeField(source="created")
+    contentType = serializers.CharField(default="text/markdown")
+
+    class Meta:
+        model = Comment
+        fields = [
+            "type",
+            "author",
+            "comment",
+            "contentType",
+            "published",
+            "id",
+            "entry",
+        ]
+
+    def get_type(self, obj):
+        return "comment"
+
+    def _base(self):
+        request = self.context.get("request")
+        return request.build_absolute_uri("/").rstrip("/")
+
+    def get_id(self, obj):
+        base = self._base()
+        return f"{base}/api/authors/{obj.author.id}/commented/{obj.id}"
+
+    def get_entry(self, obj):
+        base = self._base()
+        entry = obj.entry
+        return f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
+
+
+
 class CommentsSerializer(serializers.Serializer):
     """Comments list serializer matching API spec"""
     type = serializers.CharField(default="comments", read_only=True)

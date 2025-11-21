@@ -302,7 +302,7 @@ class EntryCommentByFQIDView(APIView):
         if not comment or comment.entry_id != entry.id:
             raise Http404("comment not found")
 
-        serializer = CommentSerializer(comment, context={"request": request})
+        serializer = CommentMinimalSerializer(comment, context={"request": request})
         return Response(serializer.data, status=200)
 
 

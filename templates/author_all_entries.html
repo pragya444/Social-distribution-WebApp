@@ -74,19 +74,16 @@
         <div class="name">
           <div class="display">{{ e.author.name }}</div>
           <div class="handle">
-          <div class="handle">
-            <a href="{% url 'profile' author_id=e.author.id %}"
-                style="text-decoration:none;">
-              {% if e.author.username|slice:":7" == "remote_" and e.author.host %}
-                {{ e.author.host|cut:"/api/" }}
+            <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+              {% if e.author.host %}
+                {{ e.author.host }}
               {% else %}
                 @{{ e.author.username|lower }}
               {% endif %}
             </a>
           </div>
-          </div>
-          </div>
         </div>
+
       </div>
 
       <div class="meta">
@@ -281,6 +278,5 @@
 </script>
 
 {% endblock %}
-
 
 

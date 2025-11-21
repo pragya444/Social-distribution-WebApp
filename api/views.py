@@ -201,7 +201,7 @@ class CommentedListView(APIView):
         local_author_id = _normalize_local_id(author_id)
         author = get_object_or_404(User, id=local_author_id)
 
-        qs = Comment.objects.filter(author=author).select_related("entry", "entry__author").order_by("created")
+        comment = Comment.objects.filter(author=author).select_related("entry", "entry__author").order_by("created")
 
         
         # data = {
@@ -212,7 +212,7 @@ class CommentedListView(APIView):
         #     "count": qs.count(),
         #     "src": items,
         # }
-        serializer = CommentMinimalSerializer(qs, context={"request": request})
+        serializer = CommentMinimalSerializer(comment, context={"request": request})
         return Response(serializer.data, status=200)
 
     def post(self, request, author_id):

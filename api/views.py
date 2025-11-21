@@ -2,7 +2,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.db.models import F, Q
 from .models import User, Entry, Comment, EntryLike, CommentLike, Follow, Liked
 from django.contrib.auth import get_user_model
-from django.http import JsonResponse, HttpResponseForbidden
+from django.http import JsonResponse, HttpResponseForbidden, FileResponse
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.authentication import SessionAuthentication
@@ -323,17 +323,46 @@ class EntryEditView(APIView):
 
 
 class EntryImageView(APIView):
-    permission_classes = [AllowAny]
+    """
+    Return the image file associated with a given entry.
 
-    def get(self, request, author_id, entry_id):
-        # Fetch the entry by author and id, ensure it is not deleted
+    Endpoint:
+        GET /api/authors/<author_id>/entries/<entry_id>/image/
+    """
+
+    # Disable DRF renderers because this view returns a plain HttpResponse
+    # (a file response), not a DRF Response that needs content negotiation.
+    renderer_classes = []
+
+    def get(self, request, author_id, entry_id, *args, **kwargs):
+        """
+        Look up the entry by author and entry identifiers and return the
+        associated image file as a streaming HTTP response.
+        """
+
+        # Adjust the lookup fields to match your actual Entry/Author model fields:
+        # - author__external_id may instead be author_id / author__id / author__uuid
+        # - external_id may instead be pk / uuid / slug / etc.
         entry = get_object_or_404(
             Entry,
-            id=entry_id,
-            author_id=author_id,
-            is_deleted=False,
+            author__external_id=author_id,
+            external_id=entry_id,
         )
-        return entryView._serve_entry_image(request, entry)
+
+        # If the entry does not have an image attached, return 404
+        if not entry.image:
+            raise Http404("No image associated with this entry")
+
+        # Attempt to infer the MIME type from the image file name (optional)
+        import mimetypes
+        content_type, _ = mimetypes.guess_type(entry.image.name)
+        if content_type is None:
+            # Fallback to a generic binary content type if detection fails
+            content_type = "application/octet-stream"
+
+        # Return the image file as a streaming HTTP response.
+        # entry.image is expected to be an ImageField or FileField.
+        return FileResponse(entry.image.open("rb"), content_type=content_type)
 
 
 

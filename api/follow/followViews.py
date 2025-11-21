@@ -61,11 +61,11 @@ def build_inbox_url(author_url: str) -> str:
 def _remote_basic_auth_for(url: str):
     netloc = urlparse(url or "").netloc
     # Try settings-based mapping
-    user = os.getenv("REMOTE_NODE_B_USER") if os.getenv("REMOTE_NODE_B_HOST") == netloc else None
-    pwd  = os.getenv("REMOTE_NODE_B_PASS") if os.getenv("REMOTE_NODE_B_HOST") == netloc else None
+    # user = os.getenv("REMOTE_NODE_B_USER") if os.getenv("REMOTE_NODE_B_HOST") == netloc else None
+    # pwd  = os.getenv("REMOTE_NODE_B_PASS") if os.getenv("REMOTE_NODE_B_HOST") == netloc else None
 
-    if user and pwd:
-        return HTTPBasicAuth(user, pwd)
+    # if user and pwd:
+    #     return HTTPBasicAuth(user, pwd)
 
     # Optional: resolve from Node model if you have one
     try:
@@ -74,7 +74,8 @@ def _remote_basic_auth_for(url: str):
         if node and node.username and node.password:
             return HTTPBasicAuth(node.username, node.password)
     except Exception:
-        pass
+        print("No Node model available for auth lookup in followViews.py.")
+
     return None
 
 def send_follow_to_remote(actor, target, request):

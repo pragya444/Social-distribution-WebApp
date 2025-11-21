@@ -166,7 +166,6 @@ class InboxView(APIView):
             user.save(update_fields=['password'])
 
         return user
-            return user
         
     
     def handle_like(self, request, author, data, is_local):

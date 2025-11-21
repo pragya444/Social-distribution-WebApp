@@ -57,7 +57,7 @@ urlpatterns = [
 
 
 
-    # # Comment routes
+    
     # path('authors/<str:author_id>/entries/<str:entry_id>/comments', views.CommentListCreateView.as_view(), name='comments-list-create'),
     # path('entries/<path:entry_id>/comments/', views.CommentListCreateView.as_view(), name='comments-list-fqid'),  # for FQID
     # path('authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_id>/', views.CommentDetailView.as_view(), name='comment-detail'),
@@ -67,9 +67,54 @@ urlpatterns = [
 
     path('authors/<str:author_id>/entries/<str:entry_id>/likes', views.EntryLikesView.as_view(), name='entry-likes'), # Local access
     path('entries/<path:entry_fqid>/likes', views.EntryLikesView.as_view(), name='entry-likes-fqid'),  # for FQID
-    # TODO: The comment Section
-    path('authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/likes', views.CommentLikesView.as_view(), name='comment-likes-fqid'),  # for FQID
-    path('authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/', views.CommentLikesView.as_view(), name='comment-likes'), # Local access
+    
+    # # Comment routes
+    path(
+    "authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/",
+    views.CommentLikesView.as_view(),
+    name="comment-likes",
+    ),
+    # Remote/local FQID, with and without trailing slash
+    path(
+    "authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/likes/",
+    views.CommentLikesView.as_view(),
+    name="comment-likes-fqid-slash",
+    ),
+    path(
+    "authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/likes",
+    views.CommentLikesView.as_view(),
+    name="comment-likes-fqid",
+    ),
+
+    # --- Comments list/create (both slash/no-slash) ---
+    path(
+    "authors/<str:author_id>/entries/<str:entry_id>/comments",
+    views.CommentListCreateView.as_view(),
+    name="comments-list-create",
+    ),
+    path(
+    "authors/<str:author_id>/entries/<str:entry_id>/comments/",
+    views.CommentListCreateView.as_view(),
+    name="comments-list-create-slash",
+    ),
+
+    # --- Entry comments by FQID (e.g., entries/{ENTRY_FQID}/comments) ---
+    path(
+    "entries/<path:entry_fqid>/comments",
+    views.EntryCommentsByFQIDView.as_view(),
+    name="entry-comments-by-fqid",
+    ),
+
+    # --- Single comment by FQID 
+    path(
+    "authors/<str:author_id>/entries/<str:entry_id>/comments/<path:remote_comment_fqid>",
+    views.EntryCommentByFQIDView.as_view(),
+    name="entry-comment-by-fqid",
+    ),
+
+     
+
+
     
     
     
@@ -125,52 +170,12 @@ urlpatterns = [
 
 
 
-    path('authors/<str:author_id>/entries/<str:entry_id>/comments',views.CommentListCreateView.as_view(),name='comments-list-create',),
-    # path('authors/<str:author_id>/entries/<str:entry_id>/likes',views.EntryLikesView.as_view(),name='entry-likes',),
-    path('authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/',views.CommentLikesView.as_view(),name='comment-likes',),
-
-    # JSON API endpoints 
-    path("authors/<str:author_id>/entries/<str:entry_id>/comments",views.CommentListCreateView.as_view(),name="api-comments-list-create",),
-    path("authors/<str:author_id>/entries/<str:entry_id>/likes",views.EntryLikesView.as_view(),name="api-entry-likes",),
-    path("authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/",views.CommentLikesView.as_view(),name="api-comment-likes",),
     
+    # path('authors/<str:author_id>/entries/<str:entry_id>/likes',views.EntryLikesView.as_view(),name='entry-likes',),
+    
+   
 
-     # === Comments API ===
-     path(
-     "authors/<str:author_id>/inbox/",
-     inboxView.InboxView.as_view(),
-     name="author-inbox",
-     ),
-     path("entries/<path:entry_fqid>/comments",
-     views.EntryCommentsByFQIDView.as_view(),
-     name="entry-comments-by-fqid"),
-
-
-     path("authors/<str:author_id>/entries/<str:entry_id>/comments/<path:remote_comment_fqid>",
-     views.EntryCommentByFQIDView.as_view(),
-     name="entry-comment-by-fqid"),
-
-     # === Commented API ===
-     path("authors/<str:author_id>/commented",
-     views.CommentedListView.as_view(),
-     name="commented-list"),
-
-     path("authors/<path:author_id>/commented",
-     views.CommentedListView.as_view(),
-     name="commented-list-fqid"),
-
-     path("authors/<str:author_id>/commented/<str:comment_id>",
-     views.CommentedDetailView.as_view(),
-     name="commented-detail"),
-
-     path("commented/<path:comment_fqid>",
-     views.CommentedByFQIDView.as_view(),
-     name="commented-by-fqid"),
-
-
-    # path("commented/<path:comment_fqid>/likes",
-    #  views.CommentedByFQIDView.as_view(),
-    #  name="commented-by-fqid"),
+    
 
     path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),
 

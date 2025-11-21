@@ -39,7 +39,66 @@ except Exception:
     UnidentifiedImageError = Exception  # Fallback to a generic exception type
 
 
+# --- FQID helpers ---
+from urllib.parse import urlparse, unquote
+from django.http import Http404
 
+def _normalize_local_id(s):
+    """Return the last path segment (decoded), e.g. .../commented/ABC -> ABC."""
+    return unquote(str(s or "")).strip().rstrip("/").split("/")[-1]
+
+def _resolve_local_entry_from_fqid(entry_fqid):
+    """
+    Accepts a local FQID like:
+      http://<host>/api/authors/<AUTHOR_ID>/entries/<ENTRY_ID>
+    Returns the Entry or raises Http404.
+    """
+    u = urlparse(unquote(str(entry_fqid)))
+    parts = u.path.strip("/").split("/")
+    try:
+        api_i = parts.index("api")
+        authors_i = parts.index("authors", api_i + 1)
+        entries_i = parts.index("entries", authors_i + 1)
+        author_id = parts[authors_i + 1]
+        entry_id = parts[entries_i + 1]
+    except (ValueError, IndexError):
+        raise Http404("Invalid entry FQID")
+    from .models import Entry  # local import to avoid cycles
+    return get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+
+def _resolve_local_comment_from_fqid(comment_fqid):
+    """
+    Accepts a local comment FQID like:
+      http://<host>/api/authors/<AUTHOR_ID>/commented/<COMMENT_ID>
+    Returns the Comment or raises Http404.
+    """
+    u = urlparse(unquote(str(comment_fqid)))
+    parts = u.path.strip("/").split("/")
+    try:
+        api_i = parts.index("api")
+        authors_i = parts.index("authors", api_i + 1)
+        # allow both 'commented/<id>' and 'comments/<id>'
+        if "commented" in parts[authors_i + 2:]:
+            commented_i = parts.index("commented", authors_i + 2)
+            author_id = parts[authors_i + 1]
+            comment_id = parts[commented_i + 1]
+        elif "comments" in parts[authors_i + 2:]:
+            comments_i = parts.index("comments", authors_i + 2)
+            author_id = parts[authors_i + 1]
+            comment_id = parts[comments_i + 1]
+        else:
+            raise ValueError
+    except (ValueError, IndexError):
+        # fallback: last segment
+        comment_id = _normalize_local_id(comment_fqid)
+        author_id = None  # unknown here
+    from .models import Comment  # local import to avoid cycles
+    if author_id:
+        return get_object_or_404(Comment, id=comment_id, author_id=author_id)
+    return get_object_or_404(Comment, id=comment_id)
+
+
+    
 # class EntryCommentsByFQIDView(APIView):
 #     permission_classes = [AllowAny]
 #     renderer_classes = [JSONRenderer]

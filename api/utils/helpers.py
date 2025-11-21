@@ -139,17 +139,17 @@ def comment_to_json(c):
     base = a.url.split('/authors/')[0] if a and a.url else ''
     return {
         "type": "comment",
-        "id": f"{base}/api/authors/{e.author_id}/entries/{e.id}/comments/{c.id}",
-        "entry": f"{base}/api/authors/{e.author_id}/entries/{e.id}",
+        "id": f"{base}/authors/{e.author_id}/entries/{e.id}/comments/{c.id}",
+        "entry": f"{base}/authors/{e.author_id}/entries/{e.id}",
         "comment": c.comment,
         "contentType": c.content_type or "text/plain",
         "published": c.created.isoformat(),
         "author": {
             "type": "author",
             "id": a.url if a else "",
-            "host": f"{base}api/" if base else "",
+            "host": f"{base}/" if base else "",
             "displayName": a.username if a else "",
-            "web": f"/authors/{a.id}" if a else "",
+            "web": a.url if a else "",
             "github": a.github if a else "",
             "profileImage": a.profile_picture if a else "",
         },

@@ -98,6 +98,10 @@ urlpatterns = [
     name="comments-list-create-slash",
     ),
 
+    path("authors/<str:author_id>/comments",
+     views.AuthorCommentsFlatListView.as_view(),
+     name="author-comments-flat"),
+
     # --- Entry comments by FQID (e.g., entries/{ENTRY_FQID}/comments) ---
     path(
     "entries/<path:entry_fqid>/comments",

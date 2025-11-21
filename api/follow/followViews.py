@@ -23,6 +23,7 @@ from api.serializers import (
     FollowersSerializer,
     FollowingSerializer,
     AuthorSerializer,
+    AuthorsSerializer,
 )
 
 

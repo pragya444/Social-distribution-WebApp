@@ -98,7 +98,7 @@ def _resolve_local_comment_from_fqid(comment_fqid):
     return get_object_or_404(Comment, id=comment_id)
 
 
-    
+
 # class EntryCommentsByFQIDView(APIView):
 #     permission_classes = [AllowAny]
 #     renderer_classes = [JSONRenderer]
@@ -636,7 +636,7 @@ class CommentListCreateView(APIView):
         )
 
         base = request.build_absolute_uri('/api')
-        comments_id = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}/comments"
+        comments_id = f"{base}/authors/{entry.author.id}/entries/{entry.id}/comments"
         web = f"{base}/authors/{entry.author.id}/entries/{entry.id}"
 
         data = {

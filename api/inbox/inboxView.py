@@ -13,6 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 import requests
 import pprint
 from urllib.parse import urlparse
+from requests.auth import HTTPBasicAuth
 
 
 User = get_user_model()
@@ -342,8 +343,10 @@ class InboxView(APIView):
                 print(f"Node for host {formatted_host} is not connected.")
                 return
             
+
+            auth = HTTPBasicAuth(node.username, node.password)
+
             headers = {
-                'Authorization': f"{node.token}",
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
             }
@@ -354,7 +357,8 @@ class InboxView(APIView):
                     url=remote_inbox_url, 
                     json=entryLike, 
                     headers=headers, 
-                    timeout=5
+                    timeout=5,
+                    auth=auth
                 )
                 if resp.status_code not in [200, 201]:
                     print(f"Failed to send like to remote inbox. Status code: {resp.status_code}, Response: {resp.text}")
@@ -380,18 +384,19 @@ class InboxView(APIView):
                 continue
 
             headers = {
-                "Authorization": f"{node.token}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             }
 
             base = node.host.rstrip('/')
+            auth = HTTPBasicAuth(node.username, node.password)
 
             try:
                 authors_response = requests.get(
                     url=f"{base}/api/authors/",
                     headers=headers,
                     timeout=5,
+                    auth=auth
                 )
                 if authors_response.status_code != 200:
                     print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")

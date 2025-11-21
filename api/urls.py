@@ -126,13 +126,13 @@ urlpatterns = [
 
 
     path('authors/<str:author_id>/entries/<str:entry_id>/comments',views.CommentListCreateView.as_view(),name='comments-list-create',),
-    path('authors/<str:author_id>/entries/<str:entry_id>/likes',views.EntryLikesView.as_view(),name='entry-likes',),
+    # path('authors/<str:author_id>/entries/<str:entry_id>/likes',views.EntryLikesView.as_view(),name='entry-likes',),
     path('authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/',views.CommentLikesView.as_view(),name='comment-likes',),
 
     # JSON API endpoints 
-    path("api/authors/<str:author_id>/entries/<str:entry_id>/comments",views.CommentListCreateView.as_view(),name="api-comments-list-create",),
-    path("api/authors/<str:author_id>/entries/<str:entry_id>/likes",views.EntryLikesView.as_view(),name="api-entry-likes",),
-    path("api/authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/",views.CommentLikesView.as_view(),name="api-comment-likes",),
+    path("authors/<str:author_id>/entries/<str:entry_id>/comments",views.CommentListCreateView.as_view(),name="api-comments-list-create",),
+    path("authors/<str:author_id>/entries/<str:entry_id>/likes",views.EntryLikesView.as_view(),name="api-entry-likes",),
+    path("authors/<str:author_id>/entries/<str:entry_id>/comments/<str:comment_id>/likes/",views.CommentLikesView.as_view(),name="api-comment-likes",),
     
 
      # === Comments API ===
@@ -166,6 +166,11 @@ urlpatterns = [
      path("commented/<path:comment_fqid>",
      views.CommentedByFQIDView.as_view(),
      name="commented-by-fqid"),
+
+
+    # path("commented/<path:comment_fqid>/likes",
+    #  views.CommentedByFQIDView.as_view(),
+    #  name="commented-by-fqid"),
 
     path('entries/<path:entry_fqid>', entryView.EntryByFQIDView.as_view(), name='entry-by-fqid'),
 

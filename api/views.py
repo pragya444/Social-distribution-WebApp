@@ -201,19 +201,20 @@ class CommentedListView(APIView):
         local_author_id = _normalize_local_id(author_id)
         author = get_object_or_404(User, id=local_author_id)
 
-        comment = Comment.objects.filter(author=author).select_related("entry", "entry__author").order_by("created")
+        qs = Comment.objects.filter(author=author).select_related("entry", "entry__author").order_by("created")
 
         
-        # data = {
-        #     "type": "comments",
-        #     "id": request.build_absolute_uri(),
-        #     "page_number": 1,
-        #     "size": len(items),
-        #     "count": qs.count(),
-        #     "src": items,
-        # }
-        serializer = CommentMinimalSerializer(comment, context={"request": request})
-        return Response(serializer.data, status=200)
+        
+        serializer = CommentMinimalSerializer(qs, many=True, context={"request": request})
+        data = {
+            "type": "comments",
+            "id": request.build_absolute_uri(),
+            "page_number": 1,
+            "size": len(serializer.data),
+            "count": qs.count(),
+            "src": serializer.data,
+        }
+        return Response(data, status=200)
 
     def post(self, request, author_id):
         # Local author POSTs a comment object here

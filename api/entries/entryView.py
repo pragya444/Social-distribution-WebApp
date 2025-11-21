@@ -583,6 +583,16 @@ def normalize_host(host):
     parsed = urlparse(host)
     return f"{parsed.scheme}://{parsed.netloc}/"
 
+def node_has_follower_from_this_node(node):
+    all_follows = Follow.objects.filter(status=Follow.Status.APPROVED)
+
+    for follow in all_follows:
+        follower_host = normalize_host(follow.follower.host)
+        node_host = normalize_host(node.host)
+        if follower_host == node_host:
+            return True
+    return False
+
 
 def send_entry_to_node(node, entry_data, request):
     auth = HTTPBasicAuth(node.username, node.password)
@@ -666,12 +676,3 @@ def send_entry_to_node(node, entry_data, request):
         print(f"Error sending entry to node {node.host}: {str(e)}")
 
     
-    def node_has_follower_from_this_node(node):
-        all_follows = Follow.objects.filter(status=Follow.Status.APPROVED)
-
-        for follow in all_follows:
-            follower_host = normalize_host(follow.follower.host)
-            node_host = normalize_host(node.host)
-            if follower_host == node_host:
-                return True
-        return False

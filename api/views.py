@@ -175,7 +175,7 @@ class CommentedDetailView(APIView):
             id=comment_id,
             author_id=author_id,
         )
-        return Response(helpers.comment_to_json(comment), status=200)
+        return Response(helpers.comment_to_json_version2(comment), status=200)
 
 
 class CommentedByFQIDView(APIView):
@@ -203,14 +203,16 @@ class CommentedListView(APIView):
 
         qs = Comment.objects.filter(author=author).select_related("entry", "entry__author").order_by("created")
 
-        items = [helpers.comment_to_json(c) for c in qs]
+        
+        
+        serializer = CommentMinimalSerializer(qs, many=True, context={"request": request})
         data = {
             "type": "comments",
             "id": request.build_absolute_uri(),
             "page_number": 1,
-            "size": len(items),
+            "size": len(serializer.data),
             "count": qs.count(),
-            "src": items,
+            "src": serializer.data,
         }
         return Response(data, status=200)
 

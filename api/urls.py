@@ -112,6 +112,23 @@ urlpatterns = [
     name="entry-comment-by-fqid",
     ),
 
+    # === Commented API ===
+     path("authors/<str:author_id>/commented",
+     views.CommentedListView.as_view(),
+     name="commented-list"),
+
+     path("authors/<path:author_id>/commented",
+     views.CommentedListView.as_view(),
+     name="commented-list-fqid"),
+
+     path("authors/<str:author_id>/commented/<str:comment_id>",
+     views.CommentedDetailView.as_view(),
+     name="commented-detail"),
+
+     path("commented/<path:comment_fqid>",
+     views.CommentedByFQIDView.as_view(),
+     name="commented-by-fqid"),
+
      
 
 

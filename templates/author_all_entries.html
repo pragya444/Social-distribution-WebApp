@@ -74,14 +74,16 @@
         <div class="name">
           <div class="display">{{ e.author.name }}</div>
           <div class="handle">
-          <a href="{% url 'profile' author_id=e.author.id %}"
-              style="text-decoration:none;">
-            {% if e.author.username|slice:":7" == "remote_" %}
-              {{ e.author.host|cut:"/api/" }}
-            {% else %}
-              @{{ e.author.username|lower }}
-            {% endif %}
-          </a>
+          <div class="handle">
+            <a href="{% url 'profile' author_id=e.author.id %}"
+                style="text-decoration:none;">
+              {% if e.author.username|slice:":7" == "remote_" and e.author.host %}
+                {{ e.author.host|cut:"/api/" }}
+              {% else %}
+                @{{ e.author.username|lower }}
+              {% endif %}
+            </a>
+          </div>
           </div>
           </div>
         </div>

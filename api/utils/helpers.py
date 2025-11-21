@@ -171,7 +171,7 @@ def comment_to_json_version2(c):
             "github": a.github if a else "",
             "profileImage": a.profile_picture if a else "",
         },
-        "id": f"{base}/authors/{e.author_id}/entries/{e.id}/comments/{c.id}",
+        "id": f"{base}/authors/{e.author_id}/commented/{c.id}",
         "entry": f"{base}/authors/{e.author_id}/entries/{e.id}",
         "web": f"{base}/authors/{e.author_id}/entries/{e.id}",
         "comment": c.comment,

@@ -204,14 +204,14 @@ class CommentedListView(APIView):
         qs = Comment.objects.filter(author=author).select_related("entry", "entry__author").order_by("created")
 
         
-        data = {
-            "type": "comments",
-            "id": request.build_absolute_uri(),
-            "page_number": 1,
-            "size": len(items),
-            "count": qs.count(),
-            "src": items,
-        }
+        # data = {
+        #     "type": "comments",
+        #     "id": request.build_absolute_uri(),
+        #     "page_number": 1,
+        #     "size": len(items),
+        #     "count": qs.count(),
+        #     "src": items,
+        # }
         serializer = CommentMinimalSerializer(qs, context={"request": request})
         return Response(serializer.data, status=200)
 

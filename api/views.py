@@ -175,8 +175,7 @@ class CommentedDetailView(APIView):
             id=comment_id,
             author_id=author_id,
         )
-        serializer = CommentMinimalSerializer(comment, context={"request": request})
-        return Response(serializer.data, status=200)
+        return Response(helpers.comment_to_json_version2(comment), status=200)
 
 
 class CommentedByFQIDView(APIView):

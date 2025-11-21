@@ -156,7 +156,29 @@ def comment_to_json(c):
     }
 
 
-
+def comment_to_json_version2(c):
+    a = c.author
+    e = c.entry
+    base = a.url.split('/authors/')[0] if a and a.url else ''
+    return {
+        "type": "comment",
+        "author": {
+            "type": "author",
+            "id": a.url if a else "",
+            "host": f"{base}/" if base else "",
+            "displayName": a.username if a else "",
+            "web": a.url if a else "",
+            "github": a.github if a else "",
+            "profileImage": a.profile_picture if a else "",
+        },
+        "id": f"{base}/authors/{e.author_id}/entries/{e.id}/comments/{c.id}",
+        "entry": f"{base}/authors/{e.author_id}/entries/{e.id}",
+        "web": f"{base}/authors/{e.author_id}/entries/{e.id}",
+        "comment": c.comment,
+        "contentType": c.content_type or "text/plain",
+        "published": c.created.isoformat(),
+        
+    }
 
 def _looks_like_markdown(t: str) -> bool:
     # normalize to empty string when none

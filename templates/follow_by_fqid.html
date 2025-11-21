@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .wrap { max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+  h2 { margin-bottom: .5rem; font-size: 1.25rem; }
+  p.note { color: #555; margin-bottom: 1rem; }
+  label { display: block; font-weight: 600; margin: .5rem 0 .25rem; }
+  input[type="url"] {
+    width: 100%; padding: .65rem .75rem; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 1rem;
+  }
+  .actions { margin-top: .75rem; }
+  button {
+    padding: .55rem .9rem; border: 1px solid #eb821f; background: #ef8e4d; color: #fff;
+    border-radius: 6px; font-weight: 600; cursor: pointer;
+  }
+  .alert { margin-top: .75rem; padding: .6rem .75rem; border-radius: 6px; }
+  .ok { background: #eef9f1; border: 1px solid #bfe7c9; color: #1b6a3b; }
+  .err { background: #fff2f2; border: 1px solid #ffd6d6; color: #8f1d1d; }
+  .example { margin-top: .5rem; font-size: .9rem; color: #666; word-break: break-all; }
+</style>
+
+<div class="wrap">
+  <h2>Follow a Remote Author</h2>
+  <p class="note">Paste the author’s FQID (their <code>/api/authors/{id}</code> URL) and submit.</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <label for="fqid">Author FQID</label>
+    <input
+      type="url"
+      id="fqid"
+      name="fqid"
+      required
+      placeholder="https://some-node.herokuapp.com/api/authors/ABC123"
+      value="{{ fqid|default:'' }}"
+    />
+
+    <div class="actions">
+      <button type="submit">Send follow request</button>
+    </div>
+
+    <div class="example">
+      Example: https://example-node.com/api/authors/tSODgJmgWgww9IOgGNVNaQ
+    </div>
+
+    {% if message %}
+      <div class="alert ok"><strong>{{ message }}</strong></div>
+    {% endif %}
+    {% if error %}
+      <div class="alert err"><strong>{{ error }}</strong></div>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

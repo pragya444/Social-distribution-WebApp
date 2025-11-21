@@ -396,7 +396,6 @@ class InboxView(APIView):
                     url=f"{base}/api/authors/",
                     headers=headers,
                     timeout=5,
-                    auth=auth
                 )
                 if authors_response.status_code != 200:
                     print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")
@@ -422,6 +421,7 @@ class InboxView(APIView):
 
                 response = requests.post(
                     url=inbox_url,
+                    auth=auth,
                     json=like_data,
                     headers=headers,
                     timeout=5,

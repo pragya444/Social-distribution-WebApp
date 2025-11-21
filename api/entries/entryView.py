@@ -587,12 +587,12 @@ def normalize_host(host):
 def send_entry_to_node(node, entry_data, request):
     auth = HTTPBasicAuth(node.username, node.password)
 
-    user = request.user
-    followers = Follow.objects.filter(followee=user, status=Follow.Status.APPROVED)
+    # user = request.user
+    # followers = Follow.objects.filter(followee=user, status=Follow.Status.APPROVED)
 
-    remote_followers = [f for f in followers if normalize_host(f.follower.host) == normalize_host(node.host)]
+    # remote_followers = [f for f in followers if normalize_host(f.follower.host) == normalize_host(node.host)]
     
-    if not remote_followers:
+    if not node_has_follower_from_this_node(node):
         print(f"No followers on node {node.host}, skipping send.")
         return
 
@@ -604,24 +604,51 @@ def send_entry_to_node(node, entry_data, request):
     base = node.host.rstrip('/')
 
     try:
-        # authors_response = requests.get(
-        #     url=f"{base}/api/authors/",
-        #     headers=headers,
-        #     auth=auth,
-        #     timeout=10,
-        # )
-        # if authors_response.status_code != 200:
-        #     print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")
-        #     return
+        authors_response = requests.get(
+            url=f"{base}/api/authors/",
+            headers=headers,
+            auth=auth,
+            timeout=10,
+        )
+        if authors_response.status_code != 200:
+            print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")
+            return
         
-        # data = authors_response.json()
-        # authors = data.get("authors", [])
+        data = authors_response.json()
+        authors = data.get("authors", [])
+
+        target_author = None
+        for author in authors:
+            if normalize_host(author.get("id", "")) == node.host:
+                target_author = author
+                break
 
         # for author in authors:
-        #     author_id = author.get("id")
-        #     if not author_id:
-        #         continue
-        #     inbox_url = f"{author_id.rstrip('/')}/inbox/"
+        author_id = target_author.get("id")
+        if not author_id:
+            print(f"No matching author found on node {node.host} for broadcasting entry.")
+            return
+        inbox_url = f"{author_id.rstrip('/')}/inbox/"
+
+        response = requests.post(
+            url=inbox_url,
+            json=entry_data,
+            headers=headers,
+            auth=auth,
+            timeout=10,
+        )
+        if response.status_code not in [200, 201]:
+            print(f"Failed to send entry to {inbox_url}: {response.status_code}")
+        else:
+            print(f"Successfully sent entry to {inbox_url}")
+
+        # for follower in remote_followers:
+        #     remote_user = follower.follower
+        #     author_fqid = remote_user.fqid
+        #     if not author_fqid:
+        #         print(f"Remote user {remote_user.id} has no FQID, skipping.")
+
+        #     inbox_url = f"{author_fqid.rstrip('/')}/inbox/"
 
         #     response = requests.post(
         #         url=inbox_url,
@@ -635,25 +662,16 @@ def send_entry_to_node(node, entry_data, request):
         #     else:
         #         print(f"Successfully sent entry to {inbox_url}")
 
-        for follower in remote_followers:
-            remote_user = follower.follower
-            author_fqid = remote_user.fqid
-            if not author_fqid:
-                print(f"Remote user {remote_user.id} has no FQID, skipping.")
-
-            inbox_url = f"{author_fqid.rstrip('/')}/inbox/"
-
-            response = requests.post(
-                url=inbox_url,
-                json=entry_data,
-                headers=headers,
-                auth=auth,
-                timeout=10,
-            )
-            if response.status_code not in [200, 201]:
-                print(f"Failed to send entry to {inbox_url}: {response.status_code}")
-            else:
-                print(f"Successfully sent entry to {inbox_url}")
-
     except Exception as e:
         print(f"Error sending entry to node {node.host}: {str(e)}")
+
+    
+    def node_has_follower_from_this_node(node):
+        all_follows = Follow.objects.filter(status=Follow.Status.APPROVED)
+
+        for follow in all_follows:
+            follower_host = normalize_host(follow.follower.host)
+            node_host = normalize_host(node.host)
+            if follower_host == node_host:
+                return True
+        return False

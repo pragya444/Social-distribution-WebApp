@@ -342,19 +342,17 @@ class EntryImageFQIDView(APIView):
     """
     GET /api/entries/{ENTRY_FQID}/image
 
-    {ENTRY_FQID} is the *full* URL of an entry, for example:
-
+    {ENTRY_FQID} is the full URL of an entry, for example:
         http://127.0.0.1:8000/api/authors/<AUTHOR_ID>/entries/<ENTRY_ID>
-
     This view only handles local entries. It parses the FQID to get
     author_id and entry_id, then reuses the same image-serving helper
-    used by the /authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image endpoint.
+    used by the /authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image endpoint
     """
     permission_classes = [AllowAny]
 
     def get(self, request, entry_fqid):
-        # Parse the FQID into its components
-        parsed = urlparse(entry_fqid)
+        
+        parsed = urlparse(entry_fqid)    # Parse the FQID into its components
 
         # Expected local path format:
         #   /api/authors/<author_id>/entries/<entry_id>

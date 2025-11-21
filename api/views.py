@@ -1107,27 +1107,39 @@ class CommentLikesView(APIView):
         if not comment:
             return JsonResponse({"error": "comment not found"}, status=404)
 
-        user_liked = (
-            request.user.is_authenticated
-            and CommentLike.objects.filter(user=request.user, comment=comment).exists()
+         # Paging (newest first)
+        page_number = int(request.GET.get("page", 1))
+        page_size = int(request.GET.get("size", 50))
+        page_size = max(1, min(page_size, 50))
+
+        likes_qs = CommentLike.objects.filter(comment=comment).select_related("user").order_by("-created")
+        count = likes_qs.count()
+        src = list(likes_qs[:page_size])
+
+        class LikeListObject:
+            # This wrapper gives LikesSerializer exactly the attributes it expects.
+            def __init__(self, entry, comment, page_number, size, count, src):
+                self.author = entry.author   # used by entry case, harmless here
+                self.id = entry.id           # used by entry case, harmless here
+                self.entry = entry
+                self.comment = comment
+                self.page_number = page_number
+                self.size = size
+                self.count = count
+                self.src = src
+                self._like_model = CommentLike
+
+        data_obj = LikeListObject(
+            entry=entry,
+            comment=comment,
+            page_number=page_number,
+            size=page_size,
+            count=count,
+            src=src,
         )
 
-        src = [
-            {
-                "type": "author",
-                "id": like.user.url,
-                "displayName": like.user.username,
-                "web": f"/authors/{like.user.id}",
-            }
-            for like in comment.likes.select_related("user").all()
-        ]
-
-        return JsonResponse({"type": "likes", "count": len(src), "liked": user_liked, "src": src}, status=200)
-
-
-
-
-
+        ser = LikesSerializer(data_obj, context={"request": request})
+        return Response(ser.data, status=200)
 
 
 

@@ -368,6 +368,10 @@ from .serializers import AuthorSerializer  # existing one
 from .serializers import LikeSerializer    # from above
 
 
+
+
+
+
 class CommentSerializer(serializers.ModelSerializer):
     type = serializers.SerializerMethodField()
     author = AuthorSerializer(read_only=True)
@@ -561,9 +565,21 @@ class LikesSerializer(serializers.Serializer):
     count = serializers.IntegerField()
     src = LikeSerializer(many=True)
 
+    def _base(self):
+        req = self.context.get("request")
+        return f"{req.scheme}://{req.get_host()}"
+
     def get_id(self, obj):
-        request = self.context.get('request')
-        return f"{request.scheme}://{request.get_host()}/api/authors/{obj.author.id}/entries/{obj.id}/likes"
+        base = self._base()
+
+        # If this Likes payload is for a **comment**, use /commented/{comment_id}/likes
+        if getattr(obj, "comment", None) is not None:
+            author_id = obj.comment.author.id
+            comment_id = obj.comment.id
+            return f"{base}/api/authors/{author_id}/commented/{comment_id}/likes"
+
+        # Fallback: entry likes
+        return f"{base}/api/authors/{obj.author.id}/entries/{obj.id}/likes"
 
     def get_web(self, obj):
         # For comment likes

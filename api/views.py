@@ -323,46 +323,18 @@ class EntryEditView(APIView):
 
 
 class EntryImageView(APIView):
-    """
-    Return the image file associated with a given entry.
+    permission_classes = [AllowAny]
 
-    Endpoint:
-        GET /api/authors/<author_id>/entries/<entry_id>/image/
-    """
-
-    # Disable DRF renderers because this view returns a plain HttpResponse
-    # (a file response), not a DRF Response that needs content negotiation.
-    renderer_classes = []
-
-    def get(self, request, author_id, entry_id, *args, **kwargs):
-        """
-        Look up the entry by author and entry identifiers and return the
-        associated image file as a streaming HTTP response.
-        """
-
-        # Adjust the lookup fields to match your actual Entry/Author model fields:
-        # - author__external_id may instead be author_id / author__id / author__uuid
-        # - external_id may instead be pk / uuid / slug / etc.
+    def get(self, request, author_id, entry_id):
+        # Fetch the entry by author and id, ensure it is not deleted
         entry = get_object_or_404(
             Entry,
-            author__external_id=author_id,
-            external_id=entry_id,
+            id=entry_id,
+            author_id=author_id,
+            is_deleted=False,
         )
+        return entryView._serve_entry_image(request, entry)
 
-        # If the entry does not have an image attached, return 404
-        if not entry.image:
-            raise Http404("No image associated with this entry")
-
-        # Attempt to infer the MIME type from the image file name (optional)
-        import mimetypes
-        content_type, _ = mimetypes.guess_type(entry.image.name)
-        if content_type is None:
-            # Fallback to a generic binary content type if detection fails
-            content_type = "application/octet-stream"
-
-        # Return the image file as a streaming HTTP response.
-        # entry.image is expected to be an ImageField or FileField.
-        return FileResponse(entry.image.open("rb"), content_type=content_type)
 
 
 

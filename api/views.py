@@ -8,7 +8,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
-from .serializers import EntrySerializer, AuthorsSerializer, FollowRequestSerializer, FollowersSerializer, FollowingSerializer, LikeSerializer,LikesSerializer
+from .serializers import EntrySerializer, AuthorsSerializer, FollowRequestSerializer, FollowersSerializer, FollowingSerializer, LikeSerializer,LikesSerializer, CommentSerializer, CommentMinimalSerializer
+from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseForbidden, HttpResponse, Http404
+
 from .utils import helpers
 from django.core.paginator import Paginator
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
@@ -37,6 +39,84 @@ except Exception:
     UnidentifiedImageError = Exception  # Fallback to a generic exception type
 
 
+# --- FQID helpers ---
+from urllib.parse import urlparse, unquote
+from django.http import Http404
+
+def _normalize_local_id(s):
+    """Return the last path segment (decoded), e.g. .../commented/ABC -> ABC."""
+    return unquote(str(s or "")).strip().rstrip("/").split("/")[-1]
+
+def _resolve_local_entry_from_fqid(entry_fqid):
+    """
+    Accepts a local FQID like:
+      http://<host>/api/authors/<AUTHOR_ID>/entries/<ENTRY_ID>
+    Returns the Entry or raises Http404.
+    """
+    u = urlparse(unquote(str(entry_fqid)))
+    parts = u.path.strip("/").split("/")
+    try:
+        api_i = parts.index("api")
+        authors_i = parts.index("authors", api_i + 1)
+        entries_i = parts.index("entries", authors_i + 1)
+        author_id = parts[authors_i + 1]
+        entry_id = parts[entries_i + 1]
+    except (ValueError, IndexError):
+        raise Http404("Invalid entry FQID")
+    from .models import Entry  # local import to avoid cycles
+    return get_object_or_404(Entry, id=entry_id, author_id=author_id, is_deleted=False)
+
+def _resolve_local_comment_from_fqid(comment_fqid):
+    """
+    Accepts a local comment FQID like:
+      http://<host>/api/authors/<AUTHOR_ID>/commented/<COMMENT_ID>
+    Returns the Comment or raises Http404.
+    """
+    u = urlparse(unquote(str(comment_fqid)))
+    parts = u.path.strip("/").split("/")
+    try:
+        api_i = parts.index("api")
+        authors_i = parts.index("authors", api_i + 1)
+        # allow both 'commented/<id>' and 'comments/<id>'
+        if "commented" in parts[authors_i + 2:]:
+            commented_i = parts.index("commented", authors_i + 2)
+            author_id = parts[authors_i + 1]
+            comment_id = parts[commented_i + 1]
+        elif "comments" in parts[authors_i + 2:]:
+            comments_i = parts.index("comments", authors_i + 2)
+            author_id = parts[authors_i + 1]
+            comment_id = parts[comments_i + 1]
+        else:
+            raise ValueError
+    except (ValueError, IndexError):
+        # fallback: last segment
+        comment_id = _normalize_local_id(comment_fqid)
+        author_id = None  # unknown here
+    from .models import Comment  # local import to avoid cycles
+    if author_id:
+        return get_object_or_404(Comment, id=comment_id, author_id=author_id)
+    return get_object_or_404(Comment, id=comment_id)
+
+
+
+# class EntryCommentsByFQIDView(APIView):
+#     permission_classes = [AllowAny]
+#     renderer_classes = [JSONRenderer]
+
+#     def get(self, request, entry_fqid):
+#         entry = Entry.objects.get(url= entry_fqid, is_deleted=False)
+#         comments = Comment.objects.filter(entry=entry).order_by("created")
+
+#         items = [helpers.comment_to_json(c) for c in comments]
+#         data = {
+#             "type": "comments",
+#             "id": request.build_absolute_uri(),  # URL for this list
+#             "page_number": 1,
+#             "size": len(items),
+#             "count": len(items),
+#             "src": items,
+#         }
+#         return Response(data, status=200)
 
 class EntryCommentsByFQIDView(APIView):
     permission_classes = [AllowAny]
@@ -44,18 +124,40 @@ class EntryCommentsByFQIDView(APIView):
 
     def get(self, request, entry_fqid):
         entry = Entry.objects.get(url= entry_fqid, is_deleted=False)
-        comments = Comment.objects.filter(entry=entry).order_by("created")
 
-        items = [helpers.comment_to_json(c) for c in comments]
+        # sort newest(first) → oldest(last)
+        qs = Comment.objects.filter(entry=entry).order_by("-created")
+
+        # pagination params (default ~5 comments)
+        page_number = int(request.GET.get("page", 1))
+        size = int(request.GET.get("size", 5))
+
+        paginator = Paginator(qs, size)
+        page = paginator.get_page(page_number)
+
+        # serialize comments (each comment includes its likes wrapper)
+        serializer = CommentSerializer(
+            page.object_list,
+            many=True,
+            context={"request": request},
+        )
+
+        base = request.build_absolute_uri("/").rstrip("/")
+
+        comments_id = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}/comments"
+        web = f"{base}/authors/{entry.author.id}/entries/{entry.id}"
+
         data = {
             "type": "comments",
-            "id": request.build_absolute_uri(),  # URL for this list
-            "page_number": 1,
-            "size": len(items),
-            "count": len(items),
-            "src": items,
+            "id": comments_id,
+            "web": web,
+            "page_number": page.number,
+            "size": size,
+            "count": qs.count(),   # total across all pages
+            "src": serializer.data,
         }
-        return Response(data, status=200)
+
+        return Response(data, status=200)        
 
 
 
@@ -73,8 +175,36 @@ class CommentedDetailView(APIView):
             id=comment_id,
             author_id=author_id,
         )
-        return Response(helpers.comment_to_json(comment), status=200)
+        return Response(helpers.comment_to_json_version2(comment), status=200)
 
+
+# This view was generated by ChatGPT on 2025-11-21        
+class AuthorCommentsFlatListView(APIView):
+    """
+    GET /api/authors/{AUTHOR}/comments  ->  [ {comment}, {comment}, ... ]
+    Matches the spec's flat-array example.
+    """
+    permission_classes = [AllowAny]
+    renderer_classes = [JSONRenderer]
+
+    def get(self, request, author_id):
+        # If you support FQIDs elsewhere, normalize here if needed:
+        # local_author_id = _normalize_local_id(author_id)
+        author = get_object_or_404(User, id=author_id)
+
+        # Choose an order; spec examples are newest -> oldest
+        qs = Comment.objects.filter(author=author).order_by("-created")
+
+        # Optional paging (keeps response light, still returns a flat array)
+        try:
+            size = int(request.GET.get("size", 50))
+        except ValueError:
+            size = 50
+        size = max(1, min(size, 100))
+        qs = qs[:size]
+
+        data = CommentSerializer(qs, many=True, context={"request": request}).data
+        return Response(data, status=200)
 
 class CommentedByFQIDView(APIView):
     """
@@ -87,7 +217,7 @@ class CommentedByFQIDView(APIView):
 
     def get(self, request, comment_fqid):
         comment = _resolve_local_comment_from_fqid(comment_fqid)
-        data = helpers.comment_to_json(comment)
+        data = helpers.comment_to_json_version2(comment)
         return Response(data, status=200)
         
 
@@ -101,14 +231,16 @@ class CommentedListView(APIView):
 
         qs = Comment.objects.filter(author=author).select_related("entry", "entry__author").order_by("created")
 
-        items = [helpers.comment_to_json(c) for c in qs]
+        
+        
+        serializer = CommentMinimalSerializer(qs, many=True, context={"request": request})
         data = {
             "type": "comments",
             "id": request.build_absolute_uri(),
             "page_number": 1,
-            "size": len(items),
+            "size": len(serializer.data),
             "count": qs.count(),
-            "src": items,
+            "src": serializer.data,
         }
         return Response(data, status=200)
 
@@ -200,7 +332,8 @@ class EntryCommentByFQIDView(APIView):
         if not comment or comment.entry_id != entry.id:
             raise Http404("comment not found")
 
-        return Response(helpers.comment_to_json(comment), status=200)
+        serializer = CommentMinimalSerializer(comment, context={"request": request})
+        return Response(serializer.data, status=200)
 
 
 class AuthorStreamView(APIView):
@@ -516,27 +649,42 @@ class CommentListCreateView(APIView):
         if not helpers.can_view_entry(request.user, entry):
             return Response({"error": "You do not have permission to view comments on this entry"}, status=403)
 
-        # Paging
-        try:
-            page = int(request.GET.get("page", 1))
-            size = int(request.GET.get("size", 10))
-        except ValueError:
-            page, size = 1, 10
-        start = (page - 1) * size
-        end = start + size
+        # sort newest(first) → oldest(last)
+        qs = Comment.objects.filter(entry=entry).order_by("-created")
 
-        qs = entry.comments.all().order_by("-created")
-        items = [helpers.comment_to_json(c) for c in qs[start:end]]  
+        # pagination params (default ~5 comments)
+        page_number = int(request.GET.get("page", 1))
+        size = int(request.GET.get("size", 5))
 
-        base_url = request.build_absolute_uri('/api/')
-        return Response({
+        paginator = Paginator(qs, size)
+        page = paginator.get_page(page_number)
+         # serialize comments (each comment includes its likes wrapper)
+        serializer = CommentSerializer(
+            page.object_list,
+            many=True,
+            context={"request": request},
+        )
+
+        base = request.build_absolute_uri('/api')
+        comments_id = f"{base}/authors/{entry.author.id}/entries/{entry.id}/comments"
+        web = f"{base}/authors/{entry.author.id}/entries/{entry.id}"
+
+        data = {
             "type": "comments",
-            "id": f"{base_url}authors/{entry.author.id}/entries/{entry.id}/comments",
-            "page_number": page,
+            "id": comments_id,
+            "web": web,
+            "page_number": page.number,
             "size": size,
-            "count": entry.comment_count,
-            "src": items
-        })
+            "count": qs.count(),   # total across all pages
+            "src": serializer.data,
+        }
+
+        return Response(data, status=200)        
+
+
+
+
+    
 
     def post(self, request, author_id=None, entry_id=None):
         if not request.user.is_authenticated:
@@ -958,27 +1106,39 @@ class CommentLikesView(APIView):
         if not comment:
             return JsonResponse({"error": "comment not found"}, status=404)
 
-        user_liked = (
-            request.user.is_authenticated
-            and CommentLike.objects.filter(user=request.user, comment=comment).exists()
+         # Paging (newest first)
+        page_number = int(request.GET.get("page", 1))
+        page_size = int(request.GET.get("size", 50))
+        page_size = max(1, min(page_size, 50))
+
+        likes_qs = CommentLike.objects.filter(comment=comment).select_related("user").order_by("-created")
+        count = likes_qs.count()
+        src = list(likes_qs[:page_size])
+
+        class LikeListObject:
+            # This wrapper gives LikesSerializer exactly the attributes it expects.
+            def __init__(self, entry, comment, page_number, size, count, src):
+                self.author = entry.author   # used by entry case, harmless here
+                self.id = entry.id           # used by entry case, harmless here
+                self.entry = entry
+                self.comment = comment
+                self.page_number = page_number
+                self.size = size
+                self.count = count
+                self.src = src
+                self._like_model = CommentLike
+
+        data_obj = LikeListObject(
+            entry=entry,
+            comment=comment,
+            page_number=page_number,
+            size=page_size,
+            count=count,
+            src=src,
         )
 
-        src = [
-            {
-                "type": "author",
-                "id": like.user.url,
-                "displayName": like.user.username,
-                "web": f"/authors/{like.user.id}",
-            }
-            for like in comment.likes.select_related("user").all()
-        ]
-
-        return JsonResponse({"type": "likes", "count": len(src), "liked": user_liked, "src": src}, status=200)
-
-
-
-
-
+        ser = LikesSerializer(data_obj, context={"request": request})
+        return Response(ser.data, status=200)
 
 
 
@@ -1040,228 +1200,4 @@ class CommentLikesView(APIView):
         return JsonResponse({"ok": True, "liked": False, "count": count}, status=200)
 
 
-        
-
-
-# class FollowersPageView(APIView):
-#     permission_classes = [IsAuthenticated]
-#     renderer_classes = [TemplateHTMLRenderer]
-
-#     def get(self, request, author_id):
-#         owner = get_object_or_404(User, id=author_id)
-#         qs = helpers.followers_of(owner).order_by("name", "username")
-#         return Response({
-#             "title": f"Followers of {owner.username}",
-#             "owner": owner,
-#             "users": qs,
-#         }, template_name="author/user_list.html")
-
-
-# class FollowingPageView(APIView):
-#     permission_classes = [IsAuthenticated]
-#     renderer_classes = [TemplateHTMLRenderer]
-
-#     def get(self, request, author_id):
-#         owner = get_object_or_404(User, id=author_id)
-#         qs = helpers.users_i_follow(owner).order_by("name", "username")
-#         return Response({
-#             "title": f"{owner.username} is Following",
-#             "owner": owner,
-#             "users": qs,
-#         }, template_name="author/user_list.html")
-
-
-# class FriendsPageView(APIView):
-#     permission_classes = [IsAuthenticated]
-#     renderer_classes = [TemplateHTMLRenderer]
-
-#     def get(self, request, author_id):
-#         owner = get_object_or_404(User, id=author_id)
-#         qs = helpers.friends_of(owner).order_by("name", "username")
-#         return Response({
-#             "title": f"Friends of {owner.username}",
-#             "owner": owner,
-#             "users": qs,
-#         }, template_name="author/user_list.html")
-
-
-# class FollowRequestListView(APIView):
-#     permission_classes = [IsAuthenticated]
-#     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
-
-#     def get(self, request, author_id):
-#         if str(request.user.id) != str(author_id):
-#             return Response({"error": "Not authorized"}, status=403)
-
-#         pendings = Follow.objects.filter(followee=request.user, status=Follow.Status.PENDING) \
-#             .select_related("follower").order_by("-created_at")
-
-#         if request.accepted_renderer.format == 'html':
-#             return Response({"requests": pendings}, template_name="follow_requests.html")
-
-#         serializer = FollowRequestSerializer(pendings, many=True)
-#         return Response(serializer.data)
-
-
-# class FollowRequestCreateView(APIView):
-#     permission_classes = [IsAuthenticated]
-#     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
-#     authentication_classes = [SessionAuthentication]
-
-#     def post(self, request, author_id):
-#         if str(request.user.id) != str(author_id):
-#             return Response({"error": "Not authorized"}, status=403)
-
-#         target = get_object_or_404(User, id=request.data.get("target_id"))
-#         if target == request.user:
-#             return Response({"error": "Cannot follow yourself"}, status=400)
-
-#         follow, created = Follow.objects.get_or_create(
-#             follower=request.user,
-#             followee=target,
-#             defaults={"status": Follow.Status.PENDING}
-#         )
-#         if not created and follow.status == Follow.Status.REJECTED:
-#             follow.status = Follow.Status.PENDING
-#             follow.save()
-
-#         if request.accepted_renderer.format == 'html':
-#             return redirect('profile', author_id=target.id)
-
-#         serializer = FollowRequestSerializer(follow)
-#         return Response(serializer.data, status=201)
-
-
-# class FollowersListView(APIView):
-#     permission_classes = [IsAuthenticated]
-#     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
-
-#     def get(self, request, author_id):
-#         owner = get_object_or_404(User, id=author_id)
-#         followers = helpers.followers_of(owner).order_by("name", "username")
-
-#         if request.accepted_renderer.format == 'html':
-#             return Response({
-#                 "title": f"Followers of {owner.username}",
-#                 "owner": owner,
-#                 "users": followers,
-#             }, template_name="author/user_list.html")
-
-#         serializer = FollowersSerializer({"type": "followers", "followers": followers})
-#         return Response(serializer.data)
-
-
-# class FollowingListView(APIView):
-#     permission_classes = [IsAuthenticated]
-#     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
-
-#     def get(self, request, author_id):
-#         owner = get_object_or_404(User, id=author_id)
-#         following = helpers.users_i_follow(owner).order_by("name", "username")
-
-#         if request.accepted_renderer.format == 'html':
-#             return Response({
-#                 "title": f"{owner.username} is Following",
-#                 "owner": owner,
-#                 "users": following,
-#             }, template_name="author/user_list.html")
-
-#         serializer = AuthorsSerializer({"type": "authors", "authors": following})
-#         return Response(serializer.data)
-
-
-# class FriendsListView(APIView):
-#     permission_classes = [IsAuthenticated]
-#     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
-
-#     def get(self, request, author_id):
-#         owner = get_object_or_404(User, id=author_id)
-#         friends = helpers.friends_of(owner).order_by("name", "username")
-
-#         if request.accepted_renderer.format == 'html':
-#             return Response({
-#                 "title": f"Friends of {owner.username}",
-#                 "owner": owner,
-#                 "users": friends,
-#             }, template_name="author/user_list.html")
-
-#         serializer = AuthorsSerializer({"type": "authors", "authors": friends})
-#         return Response(serializer.data)
-
-
-# class InboxView(APIView):
-  
-#     permission_classes = [AllowAny]  
-#     authentication_classes = [] 
-
-#     @csrf_exempt  
-#     def post(self, request, author_id):
-#         """
-#         Inbox receives objects from other nodes:
-
-#         """
-#         data = request.data
-#         item_type = (data.get("type") or "").lower()
-
-#         # handle FOLLOW objects
-#         if item_type == "follow":
-#             actor_obj = data.get("actor") or {}
-#             object_obj = data.get("object") or {}
-
-#             actor_id_fqid = actor_obj.get("id")
-#             object_id_fqid = object_obj.get("id")
-
-#             if not actor_id_fqid or not object_id_fqid:
-#                 return Response(
-#                     {"error": "actor.id and object.id are required for follow"},
-#                     status=400,
-#                 )
-
-#             # object.id should be the FQID of the *local* author whose inbox this is
-        
-#             cleaned_object = object_id_fqid.rstrip("/")
-#             cleaned_actor = actor_id_fqid.rstrip("/")
-
-#             try:
-#                 # local followee (the author whose inbox we're addressing)
-#                 followee = User.objects.get(url__in=[cleaned_object, cleaned_object + "/"])
-#             except User.DoesNotExist:
-#                 return Response(
-#                     {"error": f"Unknown local author for object.id: {object_id_fqid}"},
-#                     status=404,
-#                 )
-
-#             try:
-#                 # follower (may be remote or local, but must already exist in our DB as a User with url)
-#                 follower = User.objects.get(url__in=[cleaned_actor, cleaned_actor + "/"])
-#             except User.DoesNotExist:
-#                 # we require the remote actor
-#                 # to have a User row already.
-#                 return Response(
-#                     {"error": f"Unknown follower for actor.id: {actor_id_fqid}"},
-#                     status=404,
-#                 )
-
-#             follow, created = Follow.objects.get_or_create(
-#                 follower=follower,
-#                 followee=followee,
-#                 defaults={"status": Follow.Status.PENDING},
-#             )
-
-#             # Represent it back in the standard follow-request shape
-#             resp_data = FollowRequestSerializer(
-#                 follow, context={"request": request}
-#             ).data
-#             return Response(resp_data, status=201 if created else 200)
-
-#         # (optional) minimal stubs for other types, so you don't crash
-#         if item_type == "entry":
-#             return Response({"error": "Inbox handling for entries not implemented yet"}, status=501)
-
-#         if item_type == "like":
-#             return Response({"error": "Inbox handling for likes not implemented yet"}, status=501)
-
-#         if item_type == "comment":
-#             return Response({"error": "Inbox handling for comments not implemented yet"}, status=501)
-
-#         return Response({"error": f"Invalid or unsupported item type: {item_type}"}, status=400)
+     

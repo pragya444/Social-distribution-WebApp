@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from api.serializers import EntrySerializer, FollowRequestSerializer, EntryLikeSerializer, CommentSerializer
-from api.models import Entry, EntryLike, Follow, Comment, Nodes
+from api.models import Entry, EntryLike, Follow, Comment, Node
 from django.contrib.auth import get_user_model
 from django.utils.text import slugify
 from django.db.models import F
@@ -13,6 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 import requests
 import pprint
 from urllib.parse import urlparse
+from requests.auth import HTTPBasicAuth
 
 
 User = get_user_model()
@@ -25,7 +26,7 @@ def get_host_from_object(object_fqid: str) -> str:
 
 
 class InboxView(APIView):
-    authentication_classes = [BasicAuthentication, SessionAuthentication]
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
     permission_classes = [AllowAny]
 
     @method_decorator(csrf_exempt)
@@ -33,13 +34,14 @@ class InboxView(APIView):
         return super().dispatch(*args, **kwargs)
 
     def post(self, request, author_id):
-        if request.user.is_authenticated:
+        auth = getattr(request, "successful_authenticator", None)
+
+        if isinstance(auth, SessionAuthentication):
             is_local = True
-        else:
-            # auth = request.headers.get('Authorization', '')
-            # if auth != "SecretToken":
-            #     return Response({"error": "Invalid or missing authorization token."}, status=401)
+        elif isinstance(auth, BasicAuthentication):
             is_local = False
+        else:
+            return Response({"error": "Invalid or missing authorization."}, status=401)
         
         data = request.data
         item_type = data.get('type', '').lower()
@@ -125,7 +127,7 @@ class InboxView(APIView):
     def get_or_create_remote_user(self, user_data):
         def make_remote_username(fqid):
             slug = slugify(fqid)
-            return f"remote_{slug}"[:150]  # Limit to 150 chars
+            return f"remote_{slug}"[:150]
 
         user_fqid = user_data.get('id', '')
 
@@ -136,14 +138,33 @@ class InboxView(APIView):
                 'name': user_data.get('displayName', 'Remote User'),
                 'host': user_data.get('host', ''),
                 'github': user_data.get('github', ''),
-                'profile_picture': (user_data.get('profileImage') or user_data.get('profilePicture') or ''),
+                'profile_picture': user_data.get('profileImage', ''),
             }
         )
 
+        # --- UPDATE LOGIC ---
+        # Map incoming data -> model fields
+        update_fields = {
+            'name': user_data.get('displayName'),
+            'host': user_data.get('host'),
+            'github': user_data.get('github'),
+            'profile_picture': user_data.get('profileImage'),
+        }
+
+        updated = False
+        for field, value in update_fields.items():
+            if value not in (None, '') and getattr(user, field) != value:
+                setattr(user, field, value)
+                updated = True
+
+        if updated:
+            user.save(update_fields=list(update_fields.keys()))
+
+        # Set unusable password only if newly created
         if created:
             user.set_unusable_password()
-            user.save()
-        
+            user.save(update_fields=['password'])
+
         return user
         
     
@@ -331,7 +352,7 @@ class InboxView(APIView):
             
             formatted_host = remote_host.rstrip('api/') + '/'
 
-            node = Nodes.objects.filter(host=formatted_host).first()
+            node = Node.objects.filter(host=formatted_host).first()
 
             if not node:
                 print(f"No node configuration found for host: {formatted_host}")
@@ -341,8 +362,10 @@ class InboxView(APIView):
                 print(f"Node for host {formatted_host} is not connected.")
                 return
             
+
+            auth = HTTPBasicAuth(node.username, node.password)
+
             headers = {
-                'Authorization': f"{node.token}",
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
             }
@@ -353,7 +376,8 @@ class InboxView(APIView):
                     url=remote_inbox_url, 
                     json=entryLike, 
                     headers=headers, 
-                    timeout=5
+                    timeout=5,
+                    auth=auth
                 )
                 if resp.status_code not in [200, 201]:
                     print(f"Failed to send like to remote inbox. Status code: {resp.status_code}, Response: {resp.text}")
@@ -365,7 +389,7 @@ class InboxView(APIView):
 
 
     def broadcast_like_to_all_nodes(self, like_data, remote_host=None):
-        nodes = Nodes.objects.filter(is_connected=True)
+        nodes = Node.objects.filter(is_connected=True)
 
         if not nodes.exists():
             print("No connected nodes to broadcast like to.")
@@ -379,12 +403,12 @@ class InboxView(APIView):
                 continue
 
             headers = {
-                "Authorization": f"{node.token}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             }
 
             base = node.host.rstrip('/')
+            auth = HTTPBasicAuth(node.username, node.password)
 
             try:
                 authors_response = requests.get(
@@ -416,6 +440,7 @@ class InboxView(APIView):
 
                 response = requests.post(
                     url=inbox_url,
+                    auth=auth,
                     json=like_data,
                     headers=headers,
                     timeout=5,

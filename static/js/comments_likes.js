@@ -1,11 +1,4 @@
 
-/* === Comments + Comment-Likes (single source of truth) ===
-   Drop-in script to avoid double-binding and duplicate renders.
-   - One-time guard
-   - In-flight lock to prevent concurrent loads
-   - De-duplication of comments by id
-*/
-
 (function () {
   // ---- one-time guard ----
   if (window.__COMMENT_MODAL_BOUND__) return;

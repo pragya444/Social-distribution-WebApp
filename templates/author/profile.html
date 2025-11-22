@@ -193,17 +193,35 @@
         {% endif %}
     </div>
 
-    <div class="profile-main">
-      <div class="name-row">
-      <div class="name">{{ user.name }}</div>
-      <div class="username">
-      {% if user.host %}
-        {{ user.host }}
+    
+  <div class="profile-main">
+  <div class="name-row">
+    <div class="name">{{ user.name }}</div>
+    <div class="username">
+      {# Local user: their host contains our current host #}
+      {% if user.host and request.get_host in user.host %}
+        @{{ user.username|lower }}
+
+      {# Remote user: show their host without /api #}
+      {% elif user.host %}
+        {% if "/api" in user.host %}
+          {{ user.host|cut:"/api" }}
+        {% else %}
+          {{ user.host }}
+        {% endif %}
+
+      {# No host set → treat as local #}
+
+
+
+
+
       {% else %}
-        @{{ user.username }}
+        @{{ user.username|lower }}
       {% endif %}
-      </div>
-      </div>
+    </div>
+  </div>
+
 
 
       <div class="bio">{{ user.description }}</div>
@@ -298,15 +316,34 @@
               {% endif %}
             </div>
               <div class="name">
-                <div class="display">{{ e.author.name }}</div>
-                <div class="handle">
-                  {% if e.author.host %}
-                    {{ e.author.host }}
+                  <div class="display">{{ e.author.name }}</div>
+                  <div class="handle">
+                  {% if e.author.host and request.get_host in e.author.host %}
+                    <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                      @{{ e.author.username|lower }}
+                    </a>
+
+                  {% elif e.author.host %}
+                    {% if "/api" in e.author.host %}
+                      {% with clean_host=e.author.host|cut:"/api" %}
+                        <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                          {{ clean_host }}
+                        </a>
+                      {% endwith %}
+                    {% else %}
+                      <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                        {{ e.author.host }}
+                      </a>
+                    {% endif %}
+
                   {% else %}
-                    @{{ e.author.username|lower }}
+                    <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                      @{{ e.author.username|lower }}
+                    </a>
                   {% endif %}
-                </div>
-              </div>
+                  </div>
+                  </div>
+
 
         </div>
 

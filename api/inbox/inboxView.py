@@ -774,6 +774,11 @@ class InboxView(APIView):
 
                 inbox_url = f"{author_id.rstrip('/')}/inbox/"
 
+                print("###############")
+                print("Broadcasting comment-like to:", inbox_url)
+                print(like_payload)
+                print("###############")
+
                 resp = requests.post(
                     url=inbox_url,
                     auth=auth,

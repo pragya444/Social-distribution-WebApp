@@ -124,6 +124,12 @@ def send_comment_like_to_remote(remote_host, remote_author_id, like_payload):
     remote_inbox_url = f"{remote_author.fqid.rstrip('/')}/inbox/"
 
     try:
+
+        print("###############")
+        print("Sending comment-like to:", remote_inbox_url)
+        print(like_payload)
+        print("###############")
+
         resp = requests.post(
             url=remote_inbox_url,
             json=like_payload,

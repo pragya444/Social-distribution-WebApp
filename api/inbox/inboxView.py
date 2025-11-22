@@ -254,6 +254,7 @@ class InboxView(APIView):
         entry_fqid = data.get('object') or data.get('entry') or ''
         remote_host = data.get('remote_host', '')
         remote_author_id = data.get('remote_author_id', '')
+        print("InboxView: Handling comment for entry_fqid:", entry_fqid)
 
         # e.g. "http://nodebbbb/" from "http://nodebbbb/api/authors/222/entries/249"
         remote_host_from_req = get_host_from_object(entry_fqid)
@@ -261,7 +262,10 @@ class InboxView(APIView):
         try:
             entry = Entry.objects.get(url=entry_fqid)
         except Entry.DoesNotExist:
-            return Response({"error": "Entry not found"}, status=404)
+            return Response({"error": "Entry not found grrrr"}, status=404)
+
+        print("InboxView: Found entry:", entry)    
+    
         
         if is_local:
             user = request.user

@@ -18,6 +18,8 @@ from urllib.parse import urlparse, unquote
 from .entries import entryView
 import urllib.parse
 import pprint
+from requests.auth import HTTPBasicAuth
+
 
 
 

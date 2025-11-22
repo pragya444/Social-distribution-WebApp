@@ -17,8 +17,10 @@ from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from urllib.parse import urlparse, unquote
 from .entries import entryView
 import urllib.parse
+from urllib.parse import urlparse
 import pprint
 from requests.auth import HTTPBasicAuth
+import requests
 
 
 

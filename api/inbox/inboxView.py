@@ -113,15 +113,15 @@ class InboxView(APIView):
         elif item_type == 'like':
             return self.handle_like(request, author_id, data, is_local)
         elif item_type == 'comment':
-            serializer = CommentSerializer(data=data)
+            return self._handle_comment(request, author_id, data, is_local)
         else:
             return Response({"error": f"Invalid item type: {item_type}"}, status=400)
 
-        if serializer.is_valid():
-            obj = serializer.save()
-            return Response(serializer.data, status=201)
+        # if serializer.is_valid():
+        #     obj = serializer.save()
+        #     return Response(serializer.data, status=201)
 
-        return Response(serializer.errors, status=400)
+        # return Response(serializer.errors, status=400)
     
 
     def get_or_create_remote_user(self, user_data):
@@ -249,6 +249,71 @@ class InboxView(APIView):
         return Response({**serializer.data, "liked": True, "count": entry.like_count}, status=201)
 
     
+
+    def _handle_comment(self, request, author, data, is_local):
+        entry_fqid = data.get('object') or data.get('entry') or ''
+        remote_host = data.get('remote_host', '')
+        remote_author_id = data.get('remote_author_id', '')
+
+        # e.g. "http://nodebbbb/" from "http://nodebbbb/api/authors/222/entries/249"
+        remote_host_from_req = get_host_from_object(entry_fqid)
+
+        try:
+            entry = Entry.objects.get(url=entry_fqid)
+        except Entry.DoesNotExist:
+            return Response({"error": "Entry not found"}, status=404)
+        
+        if is_local:
+            user = request.user
+        else:
+            user_data = data.get('author', {})
+            if not user_data.get('id'):
+                return Response({"error": "author.id required for remote comment"}, status=400)
+
+            user = self.get_or_create_remote_user(user_data)
+
+        #  Validate payload
+        text = (data.get('comment') or '').strip()
+        if not text:
+            return Response({"error": "Comment text required"}, status=400)
+
+        content_type = data.get('contentType') or data.get('content_type') or 'text/plain'
+        published_iso = data.get('published')
+
+        defaults = {
+            "entry": entry,
+            "author": user,
+            "comment": text,
+            "content_type": content_type,
+        }
+        if published_iso:
+            dt = parse_datetime(published_iso)
+            if dt is not None:
+                defaults["created"] = dt  
+
+        comment = Comment.objects.create(**defaults)
+        Entry.objects.filter(id=entry.id).update(comment_count=F('comment_count') + 1)
+        entry.refresh_from_db(fields=['comment_count'])
+
+        ser = CommentSerializer(comment, context={'request': request})
+        comment_data = dict(ser.data)  
+        comment_data["type"] = "comment"           # ensure federated payload includes the type
+        comment_data["object"] = entry_fqid        # the entry URL we commented on
+     
+        if is_local:
+            if remote_host and remote_author_id:
+                # Local user commented on a REMOTE entry -> send to that remote author's inbox
+                self.send_comment_to_remote(remote_host, remote_author_id, comment_data)
+            else:
+                # Local user commented on a LOCAL entry -> broadcast to all nodes
+                self.broadcast_comment_to_all_nodes(comment_data, remote_host=remote_host_from_req)
+
+        # Remote comment sent to us 
+
+        return Response(comment_data, status=201)
+
+
+
     def handle_entry(self, is_local, request, data):
         if is_local:
             return
@@ -388,6 +453,50 @@ class InboxView(APIView):
                 print(f"Failed to send like to remote inbox: {e}")
 
 
+    def send_comment_to_remote(self, remote_host, remote_author_id, comment_payload):
+            print()
+            print("Received comment to send to remote:")
+            pprint.pprint(comment_payload)
+            print()
+            try:
+                remote_author = User.objects.get(id=remote_author_id)
+            except User.DoesNotExist:
+                print(f"Remote author with id {remote_author_id} does not exist.")
+                return
+
+            formatted_host = remote_host.rstrip('api/') + '/'
+
+            node = Node.objects.filter(host=formatted_host).first()
+            if not node:
+                print(f"No node configuration found for host: {formatted_host}")
+                return
+            if not node.is_connected:
+                print(f"Node for host {formatted_host} is not connected.")
+                return
+
+            auth = HTTPBasicAuth(node.username, node.password)
+            headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+            remote_inbox_url = f"{remote_author.fqid.rstrip('/')}/inbox/"
+
+            try:
+                resp = requests.post(
+                    url=remote_inbox_url,
+                    json=comment_payload,
+                    headers=headers,
+                    timeout=10,
+                    auth=auth
+                )
+                if resp.status_code not in [200, 201, 202]:
+                    print(f"Failed to send comment to remote inbox. Status: {resp.status_code}, Body: {resp.text[:1000]}")
+                else:
+                    print(f"Successfully sent comment to {remote_inbox_url}")
+            except Exception as e:
+                print(f"Failed to send comment to remote inbox: {e}")             
+
+
     def broadcast_like_to_all_nodes(self, like_data, remote_host=None):
         nodes = Node.objects.filter(is_connected=True)
 
@@ -451,3 +560,66 @@ class InboxView(APIView):
                     print(f"Successfully sent like to {inbox_url}: {response.status_code} {response.text}")
             except Exception as e:
                 print(f"Error sending like to node {node.host}: {str(e)}")
+
+    def broadcast_comment_to_all_nodes(self, comment_data, remote_host=None):
+        """
+        Fan-out a local comment to every connected node's owner/inbox,
+        skipping the origin `remote_host` if given (same as likes).
+        """
+        nodes = Node.objects.filter(is_connected=True)
+        if not nodes.exists():
+            print("No connected nodes to broadcast comment to.")
+            return
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        for node in nodes:
+            if node.host == remote_host:
+                print(f"Skipping broadcasting comment to origin node: {node.host}")
+                continue
+
+            base = node.host.rstrip('/')
+            auth = HTTPBasicAuth(node.username, node.password)
+
+            try:
+                # Find that node’s "owner" author to target its inbox (same approach as likes)
+                authors_response = requests.get(
+                    url=f"{base}/api/authors/",
+                    headers=headers,
+                    timeout=5,
+                )
+                if authors_response.status_code != 200:
+                    print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")
+                    continue
+
+                data = authors_response.json()
+                authors = data.get("authors", [])
+                target_author = None
+                for author in authors:
+                    if get_host_from_object(author.get("id", "")) == node.host:
+                        target_author = author
+                        break
+
+                author_id = target_author.get("id") if target_author else None
+                if not author_id:
+                    print(f"No matching author found on node {node.host} for broadcasting comment.")
+                    continue
+
+                inbox_url = f"{author_id.rstrip('/')}/inbox/"
+
+                resp = requests.post(
+                    url=inbox_url,
+                    auth=auth,
+                    json=comment_data,
+                    headers=headers,
+                    timeout=10,
+                )
+                if resp.status_code not in [200, 201, 202]:
+                    print(f"Failed to send comment to {inbox_url}: {resp.status_code} {resp.text[:1000]}")
+                else:
+                    print(f"Successfully sent comment to {inbox_url}: {resp.status_code}")
+            except Exception as e:
+                print(f"Error sending comment to node {node.host}: {str(e)}")            

@@ -1208,6 +1208,25 @@ class CommentLikesView(APIView):
         if not comment:
             return JsonResponse({"error": "comment not found"}, status=404)
 
+
+        
+        user_liked = (
+            request.user.is_authenticated
+            and CommentLike.objects.filter(user=request.user, comment=comment).exists()
+        )
+
+        src = [
+            {
+                "type": "author",
+                "id": like.user.url,
+                "displayName": like.user.username,
+                "web": f"/authors/{like.user.id}",
+            }
+            for like in comment.likes.select_related("user").all()
+        ]
+
+        return JsonResponse({"type": "likes", "count": len(src), "liked": user_liked, "src": src}, status=200)    
+
          # Paging (newest first)
         page_number = int(request.GET.get("page", 1))
         page_size = int(request.GET.get("size", 50))

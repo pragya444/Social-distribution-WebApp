@@ -4,6 +4,8 @@ from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import linebreaksbr
 from django.urls import reverse
+from urllib.parse import urlparse
+
 
 # Developed with assistance from ChatGPT (GPT-5), October 2025
 

@@ -870,7 +870,7 @@ class CommentListCreateView(APIView):
 
                 comment_payload = dict(out) 
                 comment_payload["type"] = "comment"
-                comment_payload["object"] = entry_fqid  
+                comment_payload["entry"] = entry_fqid  
 
                 if their_host.rstrip('/') != my_host.rstrip('/'):
                     print("[comment-federation] Sending comment to remote inbox...")

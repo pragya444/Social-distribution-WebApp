@@ -329,10 +329,11 @@ class InboxView(APIView):
     
 
     def _handle_comment(self, request, author, data, is_local):
-        entry_fqid = data.get('object') or data.get('entry') or ''
+        entry_fqid = data.get('entry') or ''
         remote_host = data.get('remote_host', '')
         remote_author_id = data.get('remote_author_id', '')
         print("InboxView: Handling comment for entry_fqid:", entry_fqid)
+        comment_fqid = data.get('id', '')
 
         # e.g. "http://nodebbbb/" from "http://nodebbbb/api/authors/222/entries/249"
         remote_host_from_req = get_host_from_object(entry_fqid)
@@ -373,7 +374,8 @@ class InboxView(APIView):
             if dt is not None:
                 defaults["created"] = dt  
 
-        comment = Comment.objects.create(**defaults)
+        comment = Comment.objects.create(fqid=comment_fqid, **defaults)
+
         Entry.objects.filter(id=entry.id).update(comment_count=F('comment_count') + 1)
         entry.refresh_from_db(fields=['comment_count'])
 

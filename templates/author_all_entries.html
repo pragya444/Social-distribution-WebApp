@@ -74,12 +74,16 @@
         <div class="name">
           <div class="display">{{ e.author.name }}</div>
           <div class="handle">
-      <a href="{% url 'profile' author_id=e.author.id %}"
-      style="text-decoration:none;">
-        @{{ e.author.username|lower }}
-      </a>
+            <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+              {% if e.author.host %}
+                {{ e.author.host }}
+              {% else %}
+                @{{ e.author.username|lower }}
+              {% endif %}
+            </a>
           </div>
         </div>
+
       </div>
 
       <div class="meta">
@@ -274,6 +278,5 @@
 </script>
 
 {% endblock %}
-
 
 

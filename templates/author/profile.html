@@ -195,9 +195,16 @@
 
     <div class="profile-main">
       <div class="name-row">
-        <div class="name">{{ user.name }}</div>
-        <div class="username">@{{ user.username }}</div>
+      <div class="name">{{ user.name }}</div>
+      <div class="username">
+      {% if user.host %}
+        {{ user.host }}
+      {% else %}
+        @{{ user.username }}
+      {% endif %}
       </div>
+      </div>
+
 
       <div class="bio">{{ user.description }}</div>
 
@@ -290,10 +297,17 @@
                 <a class="avatar" href="{% url 'profile' author_id=e.author.id %}" aria-label="View profile">👤</a>
               {% endif %}
             </div>
-            <div class="name">
-            <div class="display">{{ e.author.name }}</div>
-            <div class="handle">@{{ e.author.username|lower }}</div>
-            </div>
+              <div class="name">
+                <div class="display">{{ e.author.name }}</div>
+                <div class="handle">
+                  {% if e.author.host %}
+                    {{ e.author.host }}
+                  {% else %}
+                    @{{ e.author.username|lower }}
+                  {% endif %}
+                </div>
+              </div>
+
         </div>
 
         <div class="meta">

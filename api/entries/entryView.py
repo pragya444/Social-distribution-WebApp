@@ -139,8 +139,7 @@ def _serve_entry_image(request, entry):
     """
     # First check if the current user has permission to view this entry
     if not helpers.can_view_entry(request.user, entry):
-        # If not allowed, return 403 instead of leaking whether it is an image
-        return Response({"error": "no access to this image"}, status=403)
+        return HttpResponseForbidden("no access to this image")
 
     # Normalize / read the content_type, default to empty string if missing
     ct = (getattr(entry, "content_type", "") or "").lower()

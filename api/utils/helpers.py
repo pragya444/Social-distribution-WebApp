@@ -4,6 +4,8 @@ from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import linebreaksbr
 from django.urls import reverse
+from urllib.parse import urlparse
+
 
 # Developed with assistance from ChatGPT (GPT-5), October 2025
 
@@ -159,7 +161,7 @@ def comment_to_json(c):
 def comment_to_json_version2(c):
     a = c.author
     e = c.entry
-    base = a.url.split('/authors/')[0] if a and a.url else ''
+    base = base.replace('//api', '/api').rstrip('/')
     return {
         "type": "comment",
         "author": {
@@ -179,6 +181,76 @@ def comment_to_json_version2(c):
         "published": c.created.isoformat(),
         
     }
+
+def comment_to_json_version3(c, request=None):
+    a = c.author
+    e = c.entry
+
+    if request:
+        base = request.build_absolute_uri('/').rstrip('/') + '/api'   # e.g. http://127.0.0.1:8000/api
+    else:
+        u = urlparse(getattr(a, 'url', '') or '')
+        base = f"{u.scheme}://{u.netloc}/api" if u.scheme and u.netloc else '/api'
+
+    return {
+        "type": "comment",
+        "author": {
+            "type": "author",
+            "id": getattr(a, "url", "") or "",
+            "host": base + "/",                      # ends with single '/'
+            "displayName": getattr(a, "username", "") or "",
+            "web": getattr(a, "url", "") or "",
+            "github": getattr(a, "github", "") or "",
+            "profileImage": getattr(a, "profile_picture", "") or "",
+        },
+        "id":    f"{base}/authors/{e.author_id}/commented/{c.id}",
+        "entry": f"{base}/authors/{e.author_id}/entries/{e.id}",
+        "web":   f"{base}/authors/{e.author_id}/entries/{e.id}",
+        "comment": c.comment,
+        "contentType": c.content_type or "text/plain",
+        "published": c.created.isoformat(),
+    }
+
+
+def comment_to_json_version2(c):
+    a = getattr(c, "author", None)
+    e = getattr(c, "entry", None)
+
+    # Derive scheme://host from author.url or entry.url
+    host = ""
+    url_hint = (getattr(a, "url", None) or getattr(e, "url", None) or "").strip()
+    if url_hint:
+        u = urlparse(url_hint)
+        if u.scheme and u.netloc:
+            host = f"{u.scheme}://{u.netloc}"
+
+    BASE = host.rstrip("/")                     # e.g. http://127.0.0.1:8000
+    API  = f"{BASE}/api" if BASE else ""        # e.g. http://127.0.0.1:8000/api
+
+    # Prefer stored FQIDs if present
+    entry_fqid = getattr(e, "url", None) or (f"{API}/authors/{e.author_id}/entries/{e.id}" if e else "")
+    comment_fqid = getattr(c, "fqid", None) or (f"{API}/authors/{e.author_id}/commented/{c.id}" if e else "")
+
+    return {
+        "type": "comment",
+        "author": {
+            "type": "author",
+            "id": getattr(a, "url", "") or "",
+            "host": f"{API}/" if API else "",
+            "displayName": getattr(a, "username", "") or "",
+            "web": getattr(a, "url", "") or "",
+            "github": getattr(a, "github", "") or "",
+            "profileImage": getattr(a, "profile_picture", "") or "",
+        },
+        "id": comment_fqid,
+        "entry": entry_fqid,
+        "web": entry_fqid,  # or your desired HTML URL
+        "comment": getattr(c, "comment", "") or "",
+        "contentType": getattr(c, "content_type", "") or "text/plain",
+        "published": c.created.isoformat() if getattr(c, "created", None) else "",
+    }
+
+
 
 def _looks_like_markdown(t: str) -> bool:
     # normalize to empty string when none

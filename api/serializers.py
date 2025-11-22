@@ -404,21 +404,16 @@ class CommentSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri("/").rstrip("/")
 
     def get_id(self, obj):
-        base = self._base()
-        # http://nodeaaaa/api/authors/111/commented/130
-        return f"{base}/api/authors/{obj.author.id}/commented/{obj.id}"
+        request = self.context.get("request")
+        return helpers.comment_to_json_version3(obj, request=request)["id"]
 
     def get_web(self, obj):
-        base = self._base()
-        entry = obj.entry
-        # http://nodebbbb/authors/222/entries/249
-        return f"{base}/authors/{entry.author.id}/entries/{entry.id}"
+        request = self.context.get("request")
+        return helpers.comment_to_json_version3(obj, request=request)["web"]
 
     def get_entry(self, obj):
-        base = self._base()
-        entry = obj.entry
-        # http://nodebbbb/api/authors/222/entries/249
-        return f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
+        request = self.context.get("request")
+        return helpers.comment_to_json_version3(obj, request=request)["id"]
 
     def get_likes(self, obj):
         """

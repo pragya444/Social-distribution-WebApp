@@ -624,7 +624,7 @@ def send_entry_to_node(node, entry_data, request):
             return
         
         data = authors_response.json()
-        authors = data.get("authors", [])
+        authors = data.get("authors") or data.get("items") or []
 
         target_author = None
         for author in authors:

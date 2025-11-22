@@ -726,3 +726,72 @@ class InboxView(APIView):
                     print(f"Successfully sent comment to {inbox_url}: {resp.status_code}")
             except Exception as e:
                 print(f"Error sending comment to node {node.host}: {str(e)}")            
+
+
+    def broadcast_comment_like_to_all_nodes(self, like_payload, remote_host=None):
+        """
+        Fan-out a local comment-like to every connected node's owner/inbox,
+        skipping the origin `remote_host` if provided.
+        """
+        nodes = Node.objects.filter(is_connected=True)
+        if not nodes.exists():
+            print("No connected nodes to broadcast comment-like to.")
+            return
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        for node in nodes:
+            if node.host == remote_host:
+                print(f"Skipping broadcasting comment-like to origin node: {node.host}")
+                continue
+
+            base = node.host.rstrip('/')
+            auth = HTTPBasicAuth(node.username, node.password)
+
+            try:
+                authors_response = requests.get(
+                    url=f"{base}/api/authors/",
+                    headers=headers,
+                    timeout=5,
+                )
+                if authors_response.status_code != 200:
+                    print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")
+                    continue
+
+                data = authors_response.json()
+                authors = data.get("authors", [])
+                target_author = None
+                for author in authors:
+                    # reuse your existing helper if you prefer:
+                    # if get_host_from_object(author.get("id", "")) == node.host:
+                    from urllib.parse import urlparse
+                    def _host(u: str) -> str:
+                        p = urlparse(u or "")
+                        return f"{p.scheme}://{p.netloc}/" if p.scheme and p.netloc else ""
+                    if _host(author.get("id", "")) == node.host:
+                        target_author = author
+                        break
+
+                author_id = target_author.get("id") if target_author else None
+                if not author_id:
+                    print(f"No matching author found on node {node.host} for broadcasting comment-like.")
+                    continue
+
+                inbox_url = f"{author_id.rstrip('/')}/inbox/"
+
+                resp = requests.post(
+                    url=inbox_url,
+                    auth=auth,
+                    json=like_payload,
+                    headers=headers,
+                    timeout=10,
+                )
+                if resp.status_code not in [200, 201, 202]:
+                    print(f"Failed to send comment-like to {inbox_url}: {resp.status_code} {resp.text[:1000]}")
+                else:
+                    print(f"Successfully sent comment-like to {inbox_url}: {resp.status_code}")
+            except Exception as e:
+                print(f"Error sending comment-like to node {node.host}: {str(e)}")

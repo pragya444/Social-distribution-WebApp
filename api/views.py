@@ -22,8 +22,9 @@ import pprint
 from requests.auth import HTTPBasicAuth
 import requests
 from urllib.parse import urljoin
-
-
+import uuid
+from django.utils import timezone
+from api.inbox.inboxView import InboxView as InboxView
 
 User = get_user_model()
 
@@ -91,7 +92,52 @@ def send_comment_to_remote(remote_host, remote_author_id, comment_payload):
             print(f"Failed to send comment to remote inbox: {e}")             
 
 
+def send_comment_like_to_remote(remote_host, remote_author_id, like_payload):
+    """
+    POST a comment-like payload to a remote author's inbox using node basic auth.
+    """
+    print("\nReceived comment-like to send to remote:")
+    pprint.pprint(like_payload)
+    print()
 
+    try:
+        remote_author = User.objects.get(id=remote_author_id)
+    except User.DoesNotExist:
+        print(f"Remote author with id {remote_author_id} does not exist.")
+        return
+
+    formatted_host = remote_host.rstrip('api/').rstrip('/') + '/'
+
+    node = Node.objects.filter(host=formatted_host).first()
+    if not node:
+        print(f"No node configuration found for host: {formatted_host}")
+        return
+    if not node.is_connected:
+        print(f"Node for host {formatted_host} is not connected.")
+        return
+
+    auth = HTTPBasicAuth(node.username, node.password)
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    }
+    remote_inbox_url = f"{remote_author.fqid.rstrip('/')}/inbox/"
+
+    try:
+        resp = requests.post(
+            url=remote_inbox_url,
+            json=like_payload,
+            headers=headers,
+            timeout=10,
+            auth=auth
+        )
+        if resp.status_code not in [200, 201, 202]:
+            print(f"Failed to send comment-like to remote inbox. "
+                  f"Status: {resp.status_code}, Body: {resp.text[:1000]}")
+        else:
+            print(f"Successfully sent comment-like to {remote_inbox_url}")
+    except Exception as e:
+        print(f"Failed to send comment-like to remote inbox: {e}")
 
 
 
@@ -1305,17 +1351,60 @@ class CommentLikesView(APIView):
             created = False
 
         count = CommentLike.objects.filter(comment=comment).count()
-        return JsonResponse({"ok": True, "liked": True, "count": count}, status=201 if created else 200)
+
+
+        if created:
+            root = request.build_absolute_uri('/')                
+            api_base = urljoin(root, 'api/').rstrip('/')            
+            comment_fqid = (getattr(comment, "fqid", "") or
+                            f"{api_base}/authors/{comment.author_id}/commented/{comment.id}").rstrip('/')
+
+            author_id = (getattr(request.user, "url", "") or
+                        getattr(request.user, "fqid", "") or
+                        f"{api_base}/authors/{request.user.id}")
+            author_web = (getattr(request.user, "url", "") or
+                        f"{root.rstrip('/')}/authors/{request.user.id}")
+
+            author_obj = {
+                "type": "author",
+                "id": author_id,
+                "host": f"{api_base}/",  # trailing slash as in spec examples
+                "displayName": getattr(request.user, "username", "") or getattr(request.user, "name", "") or "User",
+                "web": author_web,
+                "github": getattr(request.user, "github", "") or "",
+                "profileImage": getattr(request.user, "profile_picture", "") or "",
+            }
+
+            like_payload = {
+                "type": "like",
+                "id": f"{api_base}/authors/{request.user.id}/liked/{uuid.uuid4().hex}",
+                "published": timezone.now().isoformat(),
+                "author": author_obj,
+                "object": comment_fqid,  
+            }
+
+            def _host(u: str) -> str:
+                p = urlparse(u or "")
+                return f"{p.scheme}://{p.netloc}/" if p.scheme and p.netloc else ""
+
+            my_host = _host(root)
+            comment_host = _host(comment_fqid)
+
+            if comment_host.rstrip('/') != my_host.rstrip('/'):
+                send_comment_like_to_remote(
+                    remote_host=comment_host,
+                    remote_author_id=comment.author.id,  
+                    like_payload=like_payload
+                )
+            else:
+                InboxView().broadcast_comment_like_to_all_nodes(like_payload, remote_host=comment_host)
+            return JsonResponse({"ok": True, "liked": True, "count": count}, status=201 if created else 200)
+
+
+
+
 
     def delete(self, request, author_id, entry_id, **kwargs):
-
-
-
-
-
-
-
-
         if not request.user.is_authenticated:
             return JsonResponse({"error": "login required"}, status=403)
 
@@ -1325,14 +1414,56 @@ class CommentLikesView(APIView):
         if err:
             return err
 
-
         comment = self._resolve_comment(entry, comment_ref)
         if not comment:
             return JsonResponse({"error": "comment not found"}, status=404)
 
         CommentLike.objects.filter(user=request.user, comment=comment).delete()
         count = CommentLike.objects.filter(comment=comment).count()
+
+        root = request.build_absolute_uri('/')                   
+        api_base = urljoin(root, 'api/').rstrip('/')              
+        comment_fqid = (getattr(comment, "fqid", "") or
+                        f"{api_base}/authors/{comment.author_id}/commented/{comment.id}").rstrip('/')
+
+        liker_id  = (getattr(request.user, "url", "") or
+                     getattr(request.user, "fqid", "") or
+                     f"{api_base}/authors/{request.user.id}")
+        liker_web = (getattr(request.user, "url", "") or
+                     f"{root.rstrip('/')}/authors/{request.user.id}")
+
+        author_obj = {
+            "type": "author",
+            "id": liker_id,
+            "host": f"{api_base}/",  
+            "displayName": getattr(request.user, "username", "") or getattr(request.user, "name", "") or "User",
+            "web": liker_web,
+            "github": getattr(request.user, "github", "") or "",
+            "profileImage": getattr(request.user, "profile_picture", "") or "",
+        }
+
+        like_payload = {
+            "type": "like",
+            "id": f"{api_base}/authors/{request.user.id}/liked/{uuid.uuid4().hex}",
+            "published": timezone.now().isoformat(),
+            "author": author_obj,
+            "object": comment_fqid,   
+        }
+
+        def _host(u: str) -> str:
+            p = urlparse(u or "")
+            return f"{p.scheme}://{p.netloc}/" if p.scheme and p.netloc else ""
+
+        my_host = _host(root)
+        comment_host = _host(comment_fqid)
+
+        if comment_host.rstrip('/') != my_host.rstrip('/'):
+            send_comment_like_to_remote(
+                remote_host=comment_host,
+                remote_author_id=comment.author.id, 
+                like_payload=like_payload
+            )
+        else:
+            InboxView().broadcast_comment_like_to_all_nodes(like_payload, remote_host=comment_host)
+
         return JsonResponse({"ok": True, "liked": False, "count": count}, status=200)
-
-
-     

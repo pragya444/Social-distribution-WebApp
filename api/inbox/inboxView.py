@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from api.serializers import EntrySerializer, FollowRequestSerializer, EntryLikeSerializer, CommentSerializer
-from api.models import Entry, EntryLike, Follow, Comment, Node
+from api.models import Entry, EntryLike, Follow, Comment, Node, CommentLike
 from django.contrib.auth import get_user_model
 from django.utils.text import slugify
 from django.db.models import F
@@ -22,6 +22,39 @@ User = get_user_model()
 def get_host_from_object(object_fqid: str) -> str:
     parsed = urlparse(object_fqid)  # parses protocol, host, path, etc.
     return f"{parsed.scheme}://{parsed.netloc}/"
+
+# def _resolve_local_comment_from_object(self, object_fqid: str):
+#     """
+#     Resolve a local Comment from the incoming like's `object`.
+#     Try, in order:
+#       1) exact match on Comment.fqid (if your model has it)
+#       2) last path segment as local id
+#       3) fqid endswith '/<id>' (handles slight URL variants)
+#     """
+#     if not object_fqid:
+#         return None
+
+#     decoded = unquote(str(object_fqid)).rstrip("/")
+
+#     # 1) exact fqid
+#     if hasattr(Comment, "fqid"):
+#         c = Comment.objects.filter(fqid=decoded).first()
+#         if c:
+#             return c
+
+#     # 2) local id from last path segment
+#     last = decoded.split("/")[-1]
+#     c = Comment.objects.filter(id=last).first()
+#     if c:
+#         return c
+
+#     # 3) fqid endswith '/<id>'
+#     if hasattr(Comment, "fqid"):
+#         c = Comment.objects.filter(fqid__endswith="/" + last).first()
+#         if c:
+#             return c
+
+#     return None
 
 
 
@@ -111,7 +144,15 @@ class InboxView(APIView):
                 return Response(resp_data, status=201 if created else 200)
 
         elif item_type == 'like':
+            # Decide whether it's an entry-like or a comment-like based on object
+            object_fqid = data.get("object", "")
+            comment = self._resolve_local_comment_from_object(object_fqid)
+            if comment:
+                return self._handle_comment_like(request, author_id, data, is_local)
+            # fall back to entry-like handler
             return self.handle_like(request, author_id, data, is_local)
+
+
         elif item_type == 'comment':
             return self._handle_comment(request, author_id, data, is_local)
         else:
@@ -166,6 +207,43 @@ class InboxView(APIView):
             user.save(update_fields=['password'])
 
         return user
+
+    
+
+    def _resolve_local_comment_from_object(self, object_fqid: str):
+        """
+        Accept a comment FQID (preferred) or something that ends with /<comment_id>.
+        Return the local Comment or None.
+        """
+        if not object_fqid:
+            return None
+
+        raw = (object_fqid or "").strip()
+        trimmed = raw.rstrip("/")
+
+        # Try exact fqid match if your Comment model has fqid
+        c = None
+        if hasattr(Comment, "fqid"):
+            c = Comment.objects.filter(fqid__in=[trimmed, trimmed + "/"]).first()
+            if c:
+                return c
+            # endswith '/<id>' fallback
+            last = trimmed.rsplit("/", 1)[-1]
+            c = Comment.objects.filter(fqid__endswith="/" + last).first()
+            if c:
+                return c
+            # also allow direct local id
+            c = Comment.objects.filter(id=last).first()
+            if c:
+                return c
+        else:
+            # If you don't store fqid: try last path segment as local id
+            last = trimmed.rsplit("/", 1)[-1]
+            c = Comment.objects.filter(id=last).first()
+            if c:
+                return c
+
+        return None
         
     
     def handle_like(self, request, author, data, is_local):
@@ -315,6 +393,69 @@ class InboxView(APIView):
         # Remote comment sent to us 
 
         return Response(comment_data, status=201)
+
+
+
+
+    def _handle_comment_like(self, request, author, data, is_local):
+        entry_fqid = data.get('object', '')
+        remote_host = data.get('remote_host', '')
+        remote_author_id = data.get('remote_author_id', '')
+
+        # e.g. "http://nodebbbb/" from "http://nodebbbb/api/authors/222/entries/249"
+        remote_host_from_req = get_host_from_object(entry_fqid)
+
+        object_fqid = data.get("object", "")
+        if not object_fqid:
+            return Response({"error": "object required for comment like"}, status=400)
+
+        comment = self._resolve_local_comment_from_object(object_fqid)
+        if not comment:
+            return Response({"error": "Comment not found"}, status=404)
+
+        # try:
+        #     entry = Entry.objects.get(url=entry_fqid)
+        # except Entry.DoesNotExist:
+        #     return Response({"error": "Entry not found"}, status=404)
+        
+        if is_local:
+            user = request.user
+        else:
+            user_data = data.get('author', {})
+            if not user_data.get('id'):
+                return Response({"error": "Author data required for commentlike"}, status=400)
+
+            user = self.get_or_create_remote_user(user_data)
+
+
+
+        # 3) Toggle the like row
+        existing = CommentLike.objects.filter(user=user, comment=comment).first()
+        if existing:
+            # UNLIKE
+            existing.delete()
+            liked = False
+        else:
+            # LIKE
+            CommentLike.objects.create(user=user, comment=comment)
+            liked = True
+
+        # 4) Compute current count (Comment has no stored count)
+        count = CommentLike.objects.filter(comment=comment).count()
+
+        # 5) Build a concise response (keep consistent with your entry-like return)
+        # If you have a CommentLikeSerializer, you can serialize it; otherwise send a small dict:
+        resp = {
+            "ok": True,
+            "liked": liked,
+            "count": count,
+            # Echo back minimal like info (optional but handy for clients)
+            "type": "like",
+            "object": object_fqid,
+        }
+        # No fan-out/broadcast here. Outbound send happens in your other view.
+        return Response(resp, status=201 if liked else 200)
+
 
 
 

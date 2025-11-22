@@ -381,9 +381,8 @@ class InboxView(APIView):
 
         ser = CommentSerializer(comment, context={'request': request})
         comment_data = dict(ser.data)  
-        comment_data["type"] = "comment"           # ensure federated payload includes the type
-        comment_data["object"] = entry_fqid        # the entry URL we commented on
-     
+        comment_data["type"] = "comment"         
+        comment_data["object"] = entry_fqid        
         if is_local:
             if remote_host and remote_author_id:
                 # Local user commented on a REMOTE entry -> send to that remote author's inbox
@@ -404,7 +403,6 @@ class InboxView(APIView):
         remote_host = data.get('remote_host', '')
         remote_author_id = data.get('remote_author_id', '')
 
-        # e.g. "http://nodebbbb/" from "http://nodebbbb/api/authors/222/entries/249"
         remote_host_from_req = get_host_from_object(entry_fqid)
 
         object_fqid = data.get("object", "")
@@ -431,7 +429,6 @@ class InboxView(APIView):
 
 
 
-        # 3) Toggle the like row
         existing = CommentLike.objects.filter(user=user, comment=comment).first()
         if existing:
             # UNLIKE
@@ -442,20 +439,15 @@ class InboxView(APIView):
             CommentLike.objects.create(user=user, comment=comment)
             liked = True
 
-        # 4) Compute current count (Comment has no stored count)
         count = CommentLike.objects.filter(comment=comment).count()
 
-        # 5) Build a concise response (keep consistent with your entry-like return)
-        # If you have a CommentLikeSerializer, you can serialize it; otherwise send a small dict:
         resp = {
             "ok": True,
             "liked": liked,
             "count": count,
-            # Echo back minimal like info (optional but handy for clients)
             "type": "like",
             "object": object_fqid,
         }
-        # No fan-out/broadcast here. Outbound send happens in your other view.
         return Response(resp, status=201 if liked else 200)
 
 

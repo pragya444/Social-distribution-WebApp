@@ -148,8 +148,10 @@ class InboxView(APIView):
             object_fqid = data.get("object", "")
             comment = self._resolve_local_comment_from_object(object_fqid)
             if comment:
+                print("DETECTED A COMMENT LIKE. HANDLING AS COMMENT LIKE.")
                 return self._handle_comment_like(request, author_id, data, is_local)
             # fall back to entry-like handler
+            print("DETECTED AN ENTRY LIKE. HANDLING AS ENTRY LIKE.")
             return self.handle_like(request, author_id, data, is_local)
 
 

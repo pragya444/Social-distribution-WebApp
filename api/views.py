@@ -1,6 +1,6 @@
 from django.shortcuts import get_object_or_404, redirect
 from django.db.models import F, Q
-from .models import User, Entry, Comment, EntryLike, CommentLike, Follow, Liked
+from .models import User, Entry, Comment, EntryLike, CommentLike, Follow, Liked, Node
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponseForbidden
 from rest_framework.views import APIView

@@ -38,53 +38,11 @@ except Exception:
     Image = None
     UnidentifiedImageError = Exception  # Fallback to a generic exception type
 
-    def send_comment_to_remote(remote_host, remote_author_id, comment_payload):
-            print()
-            print("Received comment to send to remote:")
-            pprint.pprint(comment_payload)
-            print()
-            try:
-                remote_author = User.objects.get(id=remote_author_id)
-            except User.DoesNotExist:
-                print(f"Remote author with id {remote_author_id} does not exist.")
-                return
-
-            formatted_host = remote_host.rstrip('api/') + '/'
-
-            node = Node.objects.filter(host=formatted_host).first()
-            if not node:
-                print(f"No node configuration found for host: {formatted_host}")
-                return
-            if not node.is_connected:
-                print(f"Node for host {formatted_host} is not connected.")
-                return
-
-            auth = HTTPBasicAuth(node.username, node.password)
-            headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            }
-            remote_inbox_url = f"{remote_author.fqid.rstrip('/')}/inbox/"
-
-            try:
-                resp = requests.post(
-                    url=remote_inbox_url,
-                    json=comment_payload,
-                    headers=headers,
-                    timeout=10,
-                    auth=auth
-                )
-                if resp.status_code not in [200, 201, 202]:
-                    print(f"Failed to send comment to remote inbox. Status: {resp.status_code}, Body: {resp.text[:1000]}")
-                else:
-                    print(f"Successfully sent comment to {remote_inbox_url}")
-            except Exception as e:
-                print(f"Failed to send comment to remote inbox: {e}")             
+    
 
 
 
-
-def send_comment_to_remote(self, remote_host, remote_author_id, comment_payload):
+def send_comment_to_remote(remote_host, remote_author_id, comment_payload):
         print()
         print("Received comment to send to remote:")
         pprint.pprint(comment_payload)

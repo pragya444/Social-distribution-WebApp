@@ -38,6 +38,99 @@ except Exception:
     Image = None
     UnidentifiedImageError = Exception  # Fallback to a generic exception type
 
+    def send_comment_to_remote(remote_host, remote_author_id, comment_payload):
+            print()
+            print("Received comment to send to remote:")
+            pprint.pprint(comment_payload)
+            print()
+            try:
+                remote_author = User.objects.get(id=remote_author_id)
+            except User.DoesNotExist:
+                print(f"Remote author with id {remote_author_id} does not exist.")
+                return
+
+            formatted_host = remote_host.rstrip('api/') + '/'
+
+            node = Node.objects.filter(host=formatted_host).first()
+            if not node:
+                print(f"No node configuration found for host: {formatted_host}")
+                return
+            if not node.is_connected:
+                print(f"Node for host {formatted_host} is not connected.")
+                return
+
+            auth = HTTPBasicAuth(node.username, node.password)
+            headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+            remote_inbox_url = f"{remote_author.fqid.rstrip('/')}/inbox/"
+
+            try:
+                resp = requests.post(
+                    url=remote_inbox_url,
+                    json=comment_payload,
+                    headers=headers,
+                    timeout=10,
+                    auth=auth
+                )
+                if resp.status_code not in [200, 201, 202]:
+                    print(f"Failed to send comment to remote inbox. Status: {resp.status_code}, Body: {resp.text[:1000]}")
+                else:
+                    print(f"Successfully sent comment to {remote_inbox_url}")
+            except Exception as e:
+                print(f"Failed to send comment to remote inbox: {e}")             
+
+
+
+
+def send_comment_to_remote(self, remote_host, remote_author_id, comment_payload):
+        print()
+        print("Received comment to send to remote:")
+        pprint.pprint(comment_payload)
+        print()
+        try:
+            remote_author = User.objects.get(id=remote_author_id)
+        except User.DoesNotExist:
+            print(f"Remote author with id {remote_author_id} does not exist.")
+            return
+
+        formatted_host = remote_host.rstrip('api/') + '/'
+
+        node = Node.objects.filter(host=formatted_host).first()
+        if not node:
+            print(f"No node configuration found for host: {formatted_host}")
+            return
+        if not node.is_connected:
+            print(f"Node for host {formatted_host} is not connected.")
+            return
+
+        auth = HTTPBasicAuth(node.username, node.password)
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }
+        remote_inbox_url = f"{remote_author.fqid.rstrip('/')}/inbox/"
+
+        try:
+            resp = requests.post(
+                url=remote_inbox_url,
+                json=comment_payload,
+                headers=headers,
+                timeout=10,
+                auth=auth
+            )
+            if resp.status_code not in [200, 201, 202]:
+                print(f"Failed to send comment to remote inbox. Status: {resp.status_code}, Body: {resp.text[:1000]}")
+            else:
+                print(f"Successfully sent comment to {remote_inbox_url}")
+        except Exception as e:
+            print(f"Failed to send comment to remote inbox: {e}")             
+
+
+
+
+
 
 # --- FQID helpers ---
 from urllib.parse import urlparse, unquote
@@ -666,7 +759,7 @@ class CommentListCreateView(APIView):
             context={"request": request},
         )
 
-        base = request.build_absolute_uri('/api')
+        base = request.build_absolute_uri('api')
         comments_id = f"{base}/authors/{entry.author.id}/entries/{entry.id}/comments"
         web = f"{base}/authors/{entry.author.id}/entries/{entry.id}"
 
@@ -680,7 +773,10 @@ class CommentListCreateView(APIView):
             "src": serializer.data,
         }
 
-        return Response(data, status=200)        
+        return Response(data, status=200)    
+
+
+
 
 
 
@@ -723,7 +819,50 @@ class CommentListCreateView(APIView):
         Entry.objects.filter(id=entry.id).update(comment_count=F('comment_count') + 1)
         entry.refresh_from_db()
 
-        return Response(helpers.comment_to_json(comment), status=201)
+        out = helpers.comment_to_json_version2(comment)
+
+        entry_author_fqid = getattr(entry.author, "fqid", "") or getattr(entry.author, "url", "")
+        if entry_author_fqid:
+            try:
+                from api.inbox.inboxView import InboxView, get_host_from_object
+                from urllib.parse import urlparse
+
+                inbox_view = InboxView()
+
+                # My node host 
+                my_base = f"{request.scheme}://{request.get_host()}/"
+                my_host = f"{urlparse(my_base).scheme}://{urlparse(my_base).netloc}/"
+
+                # Their host from the entry author's fqid
+                their_host = get_host_from_object(entry_author_fqid)
+                remote_author_id = entry.author.id  # DB row for that author on *my* node
+
+                # Entry FQID = what we commented on
+                entry_fqid = getattr(entry, "url", "") or getattr(entry, "fqid", "")
+
+                comment_payload = dict(out) 
+                comment_payload["type"] = "comment"
+                comment_payload["object"] = entry_fqid  
+
+                if their_host.rstrip('/') != my_host.rstrip('/'):
+                    print("[comment-federation] Sending comment to remote inbox...")
+                    inbox_view.send_comment_to_remote(
+                        remote_host=their_host,
+                        remote_author_id=remote_author_id,
+                        comment_payload=comment_payload,
+                    )
+                else:
+                    inbox_view.broadcast_comment_to_all_nodes(
+                        comment_payload,
+                        remote_host=their_host,
+                    )
+
+            except Exception as e:
+                print(f"[comment-federation] Skipped sending to remote: {e}")
+
+        out["comment_count"] = entry.comment_count
+        return Response(out, status=201)
+
 
 class EntryLikesView(APIView):
     '''

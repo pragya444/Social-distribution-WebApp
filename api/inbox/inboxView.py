@@ -622,6 +622,7 @@ class InboxView(APIView):
                 authors_response = requests.get(
                     url=f"{base}/api/authors/",
                     headers=headers,
+                    auth=auth,
                     timeout=5,
                 )
                 if authors_response.status_code != 200:
@@ -688,6 +689,7 @@ class InboxView(APIView):
                 authors_response = requests.get(
                     url=f"{base}/api/authors/",
                     headers=headers,
+                    auth=auth,
                     timeout=5,
                 )
                 if authors_response.status_code != 200:
@@ -751,6 +753,7 @@ class InboxView(APIView):
                 authors_response = requests.get(
                     url=f"{base}/api/authors/",
                     headers=headers,
+                    auth=auth,
                     timeout=5,
                 )
                 if authors_response.status_code != 200:

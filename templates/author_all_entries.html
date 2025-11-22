@@ -71,18 +71,34 @@
         {% else %}
           <a class="avatar" href="{% url 'profile' author_id=e.author.id %}" aria-label="View profile">👤</a>
         {% endif %}
-        <div class="name">
-          <div class="display">{{ e.author.name }}</div>
-          <div class="handle">
-            <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
-              {% if e.author.host %}
-                {{ e.author.host }}
-              {% else %}
-                @{{ e.author.username|lower }}
-              {% endif %}
+    <div class="name">
+      <div class="display">{{ e.author.name }}</div>
+      <div class="handle">
+      {% if e.author.host and request.get_host in e.author.host %}
+        <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+          @{{ e.author.username|lower }}
+        </a>
+
+      {% elif e.author.host %}
+        {% if "/api" in e.author.host %}
+          {% with clean_host=e.author.host|cut:"/api" %}
+            <a href="{{ e.author.fqid|default:e.author.url }}" style="text-decoration:none;">
+              {{ clean_host }}
             </a>
-          </div>
-        </div>
+          {% endwith %}
+        {% else %}
+          <a href="{{ e.author.fqid|default:e.author.url }}" style="text-decoration:none;">
+            {{ e.author.host }}
+          </a>
+        {% endif %}
+
+      {% else %}
+        <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+          @{{ e.author.username|lower }}
+        </a>
+      {% endif %}
+    </div>
+    </div>
 
       </div>
 

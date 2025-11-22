@@ -846,7 +846,7 @@ class CommentListCreateView(APIView):
 
                 if their_host.rstrip('/') != my_host.rstrip('/'):
                     print("[comment-federation] Sending comment to remote inbox...")
-                    inbox_view.send_comment_to_remote(
+                    send_comment_to_remote(
                         remote_host=their_host,
                         remote_author_id=remote_author_id,
                         comment_payload=comment_payload,

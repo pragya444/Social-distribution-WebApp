@@ -39,15 +39,36 @@ def build_web_url(request, path):
     return build_api_url(request, path)
 
 def author_obj(request, author):
-    base_api = f"api/authors/{author.id}"
+    """
+    Build an author object. If the author is remote (has a host different from our own),
+    prefer that host and any fully-qualified author.id.
+    """
+    local_root = _site_root(request)
+    host = (getattr(author, "host", "") or "").rstrip("/")
+
+    if host and host not in local_root:
+        # Remote author
+        host_url = host + "/"
+        author_id_val = str(author.id)
+        if author_id_val.startswith("http://") or author_id_val.startswith("https://"):
+            author_id_url = author_id_val.rstrip("/")
+        else:
+            author_id_url = urljoin(host_url, f"api/authors/{author.id}")
+        web_url = urljoin(host_url, f"authors/{author.id}")
+    else:
+        # Local author (fallback)
+        host_url = local_root
+        author_id_url = build_api_url(request, f"api/authors/{author.id}")
+        web_url = build_web_url(request, f"authors/{author.id}")
+
     return {
         "type": "author",
-        "id": build_api_url(request, base_api),
-        "host": build_api_url(request, "api/"),
+        "id": author_id_url,
+        "host": host_url,
         "displayName": author.name,
         "github": author.github or "",
         "profileImage": author.profile_picture or "",
-        "web": build_web_url(request, f"authors/{author.id}"),
+        "web": web_url,
     }
 
 def like_page_obj(request, entry, page_number=1, size=50):
@@ -105,14 +126,30 @@ def comment_page_obj(request, entry, page_number=1, size=5):
     }
 
 def entry_obj(request, entry):
+    """
+    Build an entry object. If entry.url is set (remote or canonical URL),
+    use it directly for id; derive web by stripping /api/ if present.
+    """
     published = entry.published
     if is_naive(published):
         published = make_aware(published)
+
+    # Prefer remote URL if provided
+    if getattr(entry, "url", None):
+        entry_id_url = entry.url.rstrip("/")
+        if "/api/" in entry_id_url:
+            web_url = entry_id_url.replace("/api/", "/")
+        else:
+            web_url = entry_id_url
+    else:
+        entry_id_url = build_api_url(request, f"api/authors/{entry.author_id}/entries/{entry.id}")
+        web_url = build_web_url(request, f"authors/{entry.author_id}/entries/{entry.id}")
+
     return {
         "type": "entry",
         "title": entry.title,
-        "id": build_api_url(request, f"api/authors/{entry.author_id}/entries/{entry.id}"),
-        "web": build_web_url(request, f"authors/{entry.author_id}/entries/{entry.id}"),
+        "id": entry_id_url,
+        "web": web_url,
         "description": entry.description or "",
         "contentType": entry.content_type,
         "content": entry.content,

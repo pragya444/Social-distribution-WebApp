@@ -331,7 +331,7 @@ class InboxView(APIView):
     
 
     def _handle_comment(self, request, author, data, is_local):
-        entry_fqid = data.get('object') or data.get('entry') or ''
+        entry_fqid = data.get('entry') or ''
         remote_host = data.get('remote_host', '')
         remote_author_id = data.get('remote_author_id', '')
         print("InboxView: Handling comment for entry_fqid:", entry_fqid)

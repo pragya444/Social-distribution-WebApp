@@ -185,6 +185,8 @@ class InboxView(APIView):
             }
         )
 
+        # --- UPDATE LOGIC ---
+        # Map incoming data -> model fields
         update_fields = {
             'name': user_data.get('displayName'),
             'host': user_data.get('host'),

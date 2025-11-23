@@ -62,7 +62,7 @@ def users_i_follow(me):
     """
     return User.objects.filter(
         followers__follower=me,
-        followers__status=Follow.Status.APPROVED
+        followers__status__in=[Follow.Status.APPROVED, Follow.Status.PENDING]
     )
 
 def followers_of(me):

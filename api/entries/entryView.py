@@ -583,7 +583,7 @@ def normalize_host(host):
     return f"{parsed.scheme}://{parsed.netloc}/"
 
 def node_has_follower_from_this_node(node):
-    all_follows = Follow.objects.filter(status=Follow.Status.APPROVED)
+    all_follows = Follow.objects.filter(status__in=[Follow.Status.APPROVED, Follow.Status.PENDING])
 
     for follow in all_follows:
         follower_host = normalize_host(follow.follower.host)

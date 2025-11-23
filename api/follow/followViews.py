@@ -175,21 +175,14 @@ class FollowRequestActionView(APIView):
             followee=target,
             defaults={"status": Follow.Status.PENDING}
         )
-        # if not created and follow.status == Follow.Status.REJECTED:
-        #     follow.status = Follow.Status.PENDING
-        #     follow.save(update_fields=["status"])
+        if not created and follow.status == Follow.Status.REJECTED:
+            follow.status = Follow.Status.PENDING
+            follow.save(update_fields=["status"])
 
-        if not created:
-            if is_remote and follow.status != Follow.Status.APPROVED:
-                follow.status = Follow.Status.PENDING
-                follow.save(update_fields=["status"])
-            elif not is_remote and follow.status == Follow.Status.REJECTED:
-                # Re-open as pending (so local receiver sees it again)
-                follow.status = Follow.Status.PENDING
-                follow.save(update_fields=["status"])
         # If remote, send to their inbox
         if not is_local_user(target):
             send_follow_to_remote(actor=request.user, target=target, request=request)
+
         return redirect("profile", author_id=target.id)
 
 

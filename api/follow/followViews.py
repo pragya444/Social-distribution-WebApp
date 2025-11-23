@@ -168,21 +168,30 @@ class FollowRequestActionView(APIView):
         target = get_object_or_404(User, id=target_id)
         if target == request.user:
             return JsonResponse({"error": "cannot follow yourself"}, status=400)
+        is_remote = not is_local_user(target)
+        default_status = Follow.Status.APPROVED if is_remote else Follow.Status.PENDING
 
         # Create/refresh local PENDING
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": Follow.Status.PENDING}
+            defaults={"status": default_status}
         )
-        if not created and follow.status == Follow.Status.REJECTED:
-            follow.status = Follow.Status.PENDING
-            follow.save(update_fields=["status"])
+        # if not created and follow.status == Follow.Status.REJECTED:
+        #     follow.status = Follow.Status.PENDING
+        #     follow.save(update_fields=["status"])
 
+        if not created:
+            if is_remote and follow.status != Follow.Status.APPROVED:
+                follow.status = Follow.Status.PENDING
+                follow.save(update_fields=["status"])
+            elif not is_remote and follow.status == Follow.Status.REJECTED:
+                # Re-open as pending (so local receiver sees it again)
+                follow.status = Follow.Status.PENDING
+                follow.save(update_fields=["status"])
         # If remote, send to their inbox
         if not is_local_user(target):
             send_follow_to_remote(actor=request.user, target=target, request=request)
-
         return redirect("profile", author_id=target.id)
 
 
@@ -275,6 +284,17 @@ class ApproveFollowRequestView(APIView):
 
 
 
+# class DenyFollowRequestView(APIView):
+#     permission_classes = [IsAuthenticated]
+#     authentication_classes = [SessionAuthentication]
+
+#     def post(self, request, author_id, follower_id):
+#         if str(request.user.id) != str(author_id):
+#             return HttpResponseForbidden("Not your account")
+
+#         Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
+#         return redirect("follow-requests-page", author_id=author_id)
+
 class DenyFollowRequestView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [SessionAuthentication]
@@ -283,10 +303,53 @@ class DenyFollowRequestView(APIView):
         if str(request.user.id) != str(author_id):
             return HttpResponseForbidden("Not your account")
 
-        Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
+        fr = get_object_or_404(Follow, follower_id=follower_id, followee=request.user)
+        follower = fr.follower
+        followee = fr.followee
+
+        # delete on receiver's node
+        fr.delete()
+
+        # if follower lives on a remote node, notify their inbox
+        if not is_local_user(follower):
+            try:
+                self._send_denial_to_remote(follower, followee, request)
+            except Exception as e:
+                log.warning(f"Failed to notify remote node of denial: {e}")
+
         return redirect("follow-requests-page", author_id=author_id)
+    
+    ## according to spec, it says acceptance or rejection of a follow request does not matter. So I mmight remove this function later
+    def _send_denial_to_remote(self, follower, followee, request):
+        """
+        Tell the remote follower that their request was denied so their node
+        removes the follow row automatically.
+        """
+        actor_data  = AuthorSerializer(follower, context={"request": request}).data  # the follower (remote)
+        object_data = AuthorSerializer(followee, context={"request": request}).data  # the followee (local)
 
+        payload = {
+            "type": "follow",
+            "summary": f"{object_data.get('displayName', followee.username)} denied your follow request",
+            "actor":  {**actor_data,  "type": "author"},
+            "object": {**object_data, "type": "author"},
+            "denied": True,   # Indicate this is a denial
+        }
 
+        inbox_url = build_inbox_url(follower.url)       
+        auth      = _remote_basic_auth_for(follower.url)    
+
+        try:
+            r = requests.post(
+                inbox_url,
+                json=payload,
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                auth=auth,
+                timeout=10,
+                allow_redirects=False,
+            )
+        except Exception as e:
+            log.exception("Failed to post denial to %s: %s", inbox_url, e)
 
 
 class FollowersPageView(APIView):

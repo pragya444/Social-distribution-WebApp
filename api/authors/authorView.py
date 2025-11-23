@@ -38,7 +38,7 @@ class ProfileView(APIView):
         posts_count = Entry.objects.filter(author=user, is_deleted=False).count()
 
         followers_count = Follow.objects.filter(followee=user, status=Follow.Status.APPROVED).count()
-        following_count = Follow.objects.filter(follower=user, status=Follow.Status.APPROVED).count()
+        following_count = Follow.objects.filter(follower=user, status__in=[Follow.Status.APPROVED, Follow.Status.PENDING]).count()
         friends_count = len(helpers.friends_of(user))
         # relationship (viewer -> viewed)
         rel_status = "self"  # self / none / pending / approved / rejected

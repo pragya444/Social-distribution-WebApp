@@ -189,11 +189,9 @@ class FollowRequestActionView(APIView):
                 # Re-open as pending (so local receiver sees it again)
                 follow.status = Follow.Status.PENDING
                 follow.save(update_fields=["status"])
-
         # If remote, send to their inbox
         if not is_local_user(target):
             send_follow_to_remote(actor=request.user, target=target, request=request)
-
         return redirect("profile", author_id=target.id)
 
 

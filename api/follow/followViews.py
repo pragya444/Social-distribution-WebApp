@@ -168,27 +168,16 @@ class FollowRequestActionView(APIView):
         target = get_object_or_404(User, id=target_id)
         if target == request.user:
             return JsonResponse({"error": "cannot follow yourself"}, status=400)
-        is_remote = not is_local_user(target)
-        default_status = Follow.Status.APPROVED if is_remote else Follow.Status.PENDING
 
         # Create/refresh local PENDING
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": default_status}
+            defaults={"status": Follow.Status.PENDING}
         )
-        # if not created and follow.status == Follow.Status.REJECTED:
-        #     follow.status = Follow.Status.PENDING
-        #     follow.save(update_fields=["status"])
-
-        if not created:
-            if is_remote and follow.status != Follow.Status.APPROVED:
-                follow.status = Follow.Status.PENDING
-                follow.save(update_fields=["status"])
-            elif not is_remote and follow.status == Follow.Status.REJECTED:
-                # Re-open as pending (so local receiver sees it again)
-                follow.status = Follow.Status.PENDING
-                follow.save(update_fields=["status"])
+        if not created and follow.status == Follow.Status.REJECTED:
+            follow.status = Follow.Status.PENDING
+            follow.save(update_fields=["status"])
 
         # If remote, send to their inbox
         if not is_local_user(target):

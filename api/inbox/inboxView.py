@@ -85,7 +85,8 @@ class InboxView(APIView):
         elif item_type == 'follow':
             actor_obj = data.get("actor") or {}
             object_obj = data.get("object") or {}
-            is_approved = data.get("approved", False)  # NEW: Check if this is an approval
+            is_approved = data.get("approved", False)  
+            is_denied    = data.get("denied", False)
 
             actor_id_fqid = actor_obj.get("id")
             object_id_fqid = object_obj.get("id")
@@ -109,7 +110,14 @@ class InboxView(APIView):
             except User.DoesNotExist:
                 follower = self.get_or_create_remote_user(actor_obj)
             
-            # NEW: Handle approval notification differently
+
+            if is_denied:
+                Follow.objects.filter(follower=follower, followee=followee).delete()
+                return Response({"ok": True, "status": "denied-removed"}, status=200)
+
+
+
+   
             if is_approved:
                 # This is an approval from the remote node - update our local record
                 follow = Follow.objects.filter(

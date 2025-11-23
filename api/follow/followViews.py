@@ -30,6 +30,7 @@ from api.serializers import (
 import logging
 import requests
 from urllib.parse import urlparse, urlunparse
+from api.inbox.inboxView import InboxView as InboxView
 
 log = logging.getLogger(__name__)
 

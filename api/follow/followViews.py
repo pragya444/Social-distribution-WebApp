@@ -173,8 +173,8 @@ class FollowRequestActionView(APIView):
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": Follow.Status.PENDING}
-        )
+            defaults={"status": Follow.Status.APPROVED},
+\
         if not created and follow.status == Follow.Status.REJECTED:
             follow.status = Follow.Status.PENDING
             follow.save(update_fields=["status"])

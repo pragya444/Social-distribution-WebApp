@@ -722,16 +722,24 @@ class FollowByFQIDPageView(APIView):
         try:
             target = User.objects.get(url__in=[cleaned, cleaned + "/"])
         except User.DoesNotExist:
-            return Response(
-                {
-                    "message": None,
-                    "error": "No local record for that remote author FQID. "
-                             "They must exist in our database first.",
-                    "fqid": fqid,
-                },
-                template_name="follow_by_fqid.html",
-                status=404,
-            )
+
+            parsed = urlparse(cleaned)
+
+            # host WITHOUT path, e.g. "https://pragyanode-....herokuapp.com"
+            base_host = f"{parsed.scheme}://{parsed.netloc}/"
+
+            author_data = {
+                "id": cleaned,                # full FQID
+                "displayName": cleaned,       # fallback; remote node may send nicer name later
+                "host": base_host + "api/",   # matches how you store host (…/api/)
+                "github": "",
+                "profileImage": "",
+            }
+
+            # Reuse the same helper you use for remote users in the inbox
+            inbox_view = InboxView()
+            target = inbox_view.get_or_create_remote_user(author_data)
+            
 
         if target == request.user:
             return Response(

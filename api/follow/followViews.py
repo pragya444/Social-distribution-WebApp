@@ -173,10 +173,10 @@ class FollowRequestActionView(APIView):
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": Follow.Status.PENDING}
+            defaults={"status": Follow.Status.APPROVED},
         )
-        if not created and follow.status == Follow.Status.REJECTED:
-            follow.status = Follow.Status.PENDING
+        if not created and follow.status == Follow.Status.PENDING:
+            follow.status = Follow.Status.APPROVED
             follow.save(update_fields=["status"])
 
         # If remote, send to their inbox
@@ -365,11 +365,15 @@ class FollowRequestCreateView(APIView):
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": Follow.Status.PENDING}
+            defaults={"status": Follow.Status.APPROVED}
         )
-        if not created and follow.status == Follow.Status.REJECTED:
-            follow.status = Follow.Status.PENDING
-            follow.save()
+        if not created and follow.status != Follow.Status.APPROVED:
+            follow.status = Follow.Status.APPROVED
+            follow.save(update_fields=["status"])
+
+        if not is_local_user(target):
+            send_follow_to_remote(actor=request.user, target=target, request=request)
+
 
         if request.accepted_renderer.format == 'html':
             return redirect('profile', author_id=target.id)
@@ -726,7 +730,7 @@ class FollowByFQIDPageView(APIView):
 
             parsed = urlparse(cleaned)
 
-            # host WITHOUT path, e.g. "https://pragyanode-....herokuapp.com"
+            # host WITHOUT path
             base_host = f"{parsed.scheme}://{parsed.netloc}/"
 
             author_data = {
@@ -737,7 +741,6 @@ class FollowByFQIDPageView(APIView):
                 "profileImage": "",
             }
 
-            # Reuse the same helper you use for remote users in the inbox
             inbox_view = InboxView()
             target = inbox_view.get_or_create_remote_user(author_data)
             

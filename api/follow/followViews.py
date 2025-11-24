@@ -93,6 +93,9 @@ def send_follow_to_remote(actor, target, request):
     inbox_url = build_inbox_url(target.url)
     auth = _remote_basic_auth_for(target.url)
 
+    print("Sending follow to remote inbox:", inbox_url)
+    print("Payload:", json.dumps(payload, indent=2))
+
     try:
         r = requests.post(
             inbox_url, json=payload,

@@ -23,38 +23,11 @@ def get_host_from_object(object_fqid: str) -> str:
     parsed = urlparse(object_fqid)  # parses protocol, host, path, etc.
     return f"{parsed.scheme}://{parsed.netloc}/"
 
-# def _resolve_local_comment_from_object(self, object_fqid: str):
-#     """
-#     Resolve a local Comment from the incoming like's `object`.
-#     Try, in order:
-#       1) exact match on Comment.fqid (if your model has it)
-#       2) last path segment as local id
-#       3) fqid endswith '/<id>' (handles slight URL variants)
-#     """
-#     if not object_fqid:
-#         return None
-
-#     decoded = unquote(str(object_fqid)).rstrip("/")
-
-#     # 1) exact fqid
-#     if hasattr(Comment, "fqid"):
-#         c = Comment.objects.filter(fqid=decoded).first()
-#         if c:
-#             return c
-
-#     # 2) local id from last path segment
-#     last = decoded.split("/")[-1]
-#     c = Comment.objects.filter(id=last).first()
-#     if c:
-#         return c
-
-#     # 3) fqid endswith '/<id>'
-#     if hasattr(Comment, "fqid"):
-#         c = Comment.objects.filter(fqid__endswith="/" + last).first()
-#         if c:
-#             return c
-
-#     return None
+def is_host_followed(remote_host):
+    return Follow.objects.filter(
+        status=Follow.Status.APPROVED,
+        followee_host_icontains=remote_host
+    ).exists()
 
 
 
@@ -81,6 +54,20 @@ class InboxView(APIView):
 
         if item_type == 'entry':
             print("InboxView: Handling entry...")
+
+            if not is_local:
+                try:
+                    remote_host = data.get("author", {}).get("host", "")
+                    if not remote_host:
+                        print("InboxView: Remote host missing in entry author data")
+                except Exception as e:
+                    print("InboxView: Error extracting remote host:", str(e))
+                    remote_host = ""
+                
+                if not is_host_followed(remote_host):
+                    print(f"InboxView: Ignoring entry from host with no following: {remote_host}")
+                    return Response({"error": "No authors follow remote author from your host"}, status=403)
+
             return self.handle_entry(is_local, request, data)
 
         elif item_type == 'follow':

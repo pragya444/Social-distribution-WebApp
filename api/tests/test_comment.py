@@ -189,7 +189,7 @@ class LikesCommentsEdgeTests(TestCase):
         """Deleting a non-existing like should not error."""
         url = reverse("entry-likes", kwargs={"author_id": self.alice.id, "entry_id": self.entry.id})
 
-        self.client.delete(url)  # no like yet
+        self.client.delete(url)  
         r = self.client.delete(url)
 
         self.assertIn(r.status_code, [200])

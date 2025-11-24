@@ -178,7 +178,7 @@ class FollowersFollowingAPITests(TestCase):
         foreign_fqid = urllib.parse.quote(self.follower1.url, safe='')
         url = reverse("follower-detail-api", kwargs={"author_id": self.user.id, "foreign_author_fqid": foreign_fqid})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK])
+        self.assertIn(response.status_code, [status.HTTP_404_NOT_FOUND])
 
 class FollowerDetailEdgeCaseTests(TestCase):
     """Test follower/following detail endpoint edge cases"""

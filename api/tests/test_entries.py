@@ -49,7 +49,6 @@ class EntryEdgeCaseTests(TestCase):
             "visibility": "PUBLIC"
         }
         response = self.client.post(url, data, format="json")
-        # If description is not a valid field, expect 400
         if response.status_code != status.HTTP_201_CREATED:
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
     

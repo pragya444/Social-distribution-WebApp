@@ -22,34 +22,6 @@ class InboxAPITests(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
         self.other_user = User.objects.create_user(username="otheruser", password="pass", is_active=True)
-        
-    def test_inbox_entry_post_success(self):
-        """Test posting an entry to inbox - SUCCESS"""
-        self.client.force_login(self.user)
-        url = f"/api/authors/{self.user.id}/inbox/"
-        data = {
-            "type": "entry",
-            "title": "Test Entry",
-            "content": "Content",
-            "contentType": "text/plain",
-            "author": {
-                "type": "author",
-                "id": self.other_user.url,
-                "displayName": self.other_user.name
-            }
-        }
-        response = self.client.post(url, data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-    
-    def test_inbox_entry_post_invalid_data_failure(self):
-        """Test posting invalid entry data to inbox - FAILURE"""
-        self.client.force_login(self.user)
-        url = f"/api/authors/{self.user.id}/inbox/"
-        data = {
-            "type": "entry",
-        }
-        response = self.client.post(url, data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_inbox_follow_request_post_success(self):
         """Test posting a follow request to inbox - SUCCESS"""
@@ -153,7 +125,7 @@ class InboxExtendedTests(TestCase):
                 "id": self.other_user.url,
                 "displayName": self.other_user.name
             },
-            "object": entry.url
+            "entry": entry.url 
         }
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)

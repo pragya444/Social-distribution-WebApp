@@ -410,7 +410,7 @@ class EntryLikesAPIEdgeTests(TestCase):
         
         entry_fqid = self.entry.fqid
         url = reverse("entry-likes-fqid", kwargs={"entry_fqid": entry_fqid})
-        response = self.client.get(url)     # endpoint may not support POST yet
+        response = self.client.get(url)   
         response = self.client.get(url)
         self.assertIn(response.status_code, [
             status.HTTP_200_OK,
@@ -453,7 +453,6 @@ class LikedAPITests(TestCase):
         """Test getting specific liked entry"""
         like = EntryLike.objects.create(user=self.user, entry=self.entry)
         
-        # Create a Liked object
         from api.models import Liked
         liked_obj = Liked.objects.create(user=self.user, entry=self.entry)
         
@@ -489,7 +488,8 @@ class PaginationEdgeCaseTests(TestCase):
                 status.HTTP_400_BAD_REQUEST,
             ])
         except (ValueError, ZeroDivisionError) as e:
-            print("Caught expected exception for zero page size pagination:", e)
+            pass
+            #print("Caught expected exception for zero page size pagination:", e)
     
     def test_author_list_huge_page_number(self):
         """Test author list with extremely large page number"""
@@ -510,4 +510,5 @@ class PaginationEdgeCaseTests(TestCase):
 
             ])
         except (ValueError, EmptyPage) as e:
-            print("Caught expected exception for negative page size pagination:", e)
+            pass
+            # print("Caught expected exception for negative page size pagination:", e)

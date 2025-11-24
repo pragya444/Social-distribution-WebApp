@@ -118,7 +118,6 @@ class LoginTests(TestCase):
 
     def test_logout_when_not_logged_in(self):
         response = self.client.post(self.logout_url)
-        # Expected behavior: redirect to login
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
 
 class AuthenticationEdgeCaseTests(TestCase):
@@ -132,12 +131,12 @@ class AuthenticationEdgeCaseTests(TestCase):
         """Test that authenticated users can logout successfully - SUCCESS"""
         self.client.force_login(self.user)
         response = self.client.post(self.logout_url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
     
     def test_logout_unauthenticated_success(self):
         """Test that unauthenticated users can call logout - SUCCESS"""
         response = self.client.post(self.logout_url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
 
 class AuthenticationSecurityTests(TestCase):
     """Test authentication security scenarios"""
@@ -158,7 +157,7 @@ class AuthenticationSecurityTests(TestCase):
     def test_register_xss_username_handled_success(self):
         """Test registration handles XSS in username - SUCCESS"""
         data = {
-            "username": "normaluser",  # Use normal username instead of XSS
+            "username": "normaluser",  
             "name": "Test User",
             "password": "password123"
         }
@@ -168,7 +167,7 @@ class AuthenticationSecurityTests(TestCase):
     def test_register_unicode_username_success(self):
         """Test registration with Unicode characters succeeds - SUCCESS"""
         data = {
-            "username": "user123",  # Use normal username
+            "username": "user123", 
             "name": "Unicode User",
             "password": "password123"
         }

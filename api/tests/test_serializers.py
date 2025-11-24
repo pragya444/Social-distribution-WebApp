@@ -33,9 +33,9 @@ class AuthorAPIValidationTests(TestCase):
         """Test that API normalizes GitHub usernames to full URLs - SUCCESS"""
         url = reverse("profile", kwargs={"author_id": self.user.id})
         data = {"github": "octocat"}
-        response = self.client.put(url, data, format="json")
+        response = self.client.put(url, data, format="json", HTTP_ACCEPT='application/json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Verify normalization happened
+
         self.user.refresh_from_db()
         self.assertTrue(self.user.github.startswith("https://github.com/"))
 
@@ -48,7 +48,8 @@ class AuthorAPIValidationTests(TestCase):
             "profileImage": "https://example.com/pic.jpg",
             "github": "https://github.com/testuser"
         }
-        response = self.client.put(url, data, format="json")
+
+        response = self.client.put(url, data, format="json", HTTP_ACCEPT='application/json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user.refresh_from_db()
         self.assertEqual(self.user.name, "New Name")
@@ -56,7 +57,7 @@ class AuthorAPIValidationTests(TestCase):
     def test_get_author_includes_required_fields_success(self):
         """Test that author API includes required fields - SUCCESS"""
         url = reverse("profile", kwargs={"author_id": self.user.id})
-        response = self.client.get(url)
+        response = self.client.get(url, HTTP_ACCEPT='application/json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("type", response.data)
         self.assertIn("id", response.data)
@@ -71,7 +72,7 @@ class EntryAPIValidationTests(TestCase):
     def test_create_entry_missing_fields_failure(self):
         """Test that API rejects entries with missing required fields - FAILURE"""
         url = reverse("entries-list-create", kwargs={"author_id": self.user.id})
-        data = {"title": "x"}  # Missing content, contentType, visibility
+        data = {"title": "x"}  
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 

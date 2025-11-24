@@ -55,10 +55,9 @@ class EntryAPIModelsTests(TestCase):
         }
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        
-        # Verify defaults are set in API response
-        entry_id = response.data["id"]
-        entry = Entry.objects.get(id=entry_id)
+    
+        entry = Entry.objects.filter(author=self.user, title="Hello").order_by('-created').first()
+        self.assertIsNotNone(entry)
         self.assertFalse(entry.is_deleted)
         self.assertIsNotNone(entry.created)
 
@@ -66,7 +65,6 @@ class EntryAPIModelsTests(TestCase):
         '''
         Test that deleted entries are not returned via entries API - SUCCESS
         '''
-        # Create visible entry
         Entry.objects.create(
             author=self.user,
             title="Visible",
@@ -74,7 +72,6 @@ class EntryAPIModelsTests(TestCase):
             content_type="text/plain",
             is_deleted=False,
         )
-        # Create deleted entry
         Entry.objects.create(
             author=self.user,
             title="Deleted",

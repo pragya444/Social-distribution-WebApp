@@ -88,7 +88,6 @@ class EntryVisibilityAccessTests(TestCase):
         url = reverse("entries-list-create", kwargs={"author_id": self.author.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Only test API response, not content rendering
 
     def test_entries_list_shows_all_to_author_success(self):
         """Test that authors see all their own entries including private ones - SUCCESS"""
@@ -98,7 +97,6 @@ class EntryVisibilityAccessTests(TestCase):
         url = reverse("entries-list-create", kwargs={"author_id": self.author.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Only test API response, not content rendering
 
     def test_image_endpoint_respects_friends_visibility_failure(self):
         """Test that image endpoint respects authorization for friends-only images - FAILURE"""
@@ -122,7 +120,6 @@ class EntrySharingVisibilityTests(TestCase):
         self.reader = User.objects.create_user(username="reader", password="reader123", is_active=True)
         self.friend = User.objects.create_user(username="friend", password="friend123", is_active=True)
         
-        # Create mutual friendship
         Follow.objects.create(follower=self.author, followee=self.friend, status=Follow.Status.APPROVED)
         Follow.objects.create(follower=self.friend, followee=self.author, status=Follow.Status.APPROVED)
 
@@ -136,11 +133,9 @@ class EntrySharingVisibilityTests(TestCase):
         )
         url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": entry.id})
         
-        # Test anonymous access
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
-        # Test authenticated non-friend access
         self.client.force_login(self.reader)
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -155,7 +150,6 @@ class EntrySharingVisibilityTests(TestCase):
         )
         url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": entry.id})
         
-        # Test authenticated non-friend access (with link)
         self.client.force_login(self.reader)
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -170,7 +164,7 @@ class EntrySharingVisibilityTests(TestCase):
         )
         url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": entry.id})
         
-        # Test authenticated non-friend access
+
         self.client.force_login(self.reader)
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -185,7 +179,6 @@ class EntrySharingVisibilityTests(TestCase):
         )
         url = reverse("entry-retrieve-update", kwargs={"author_id": self.author.id, "entry_id": entry.id})
         
-        # Test friend access
         self.client.force_login(self.friend)
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)

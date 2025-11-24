@@ -7,7 +7,7 @@ from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.authentication import SessionAuthentication
 import urllib.parse
-from api.models import Follow  
+from api.models import Follow, Node 
 from api.utils import helpers
 from django.conf import settings          
 import logging                           
@@ -30,6 +30,7 @@ from api.serializers import (
 import logging
 import requests
 from urllib.parse import urlparse, urlunparse
+from api.inbox.inboxView import InboxView as InboxView
 
 log = logging.getLogger(__name__)
 
@@ -92,6 +93,9 @@ def send_follow_to_remote(actor, target, request):
     inbox_url = build_inbox_url(target.url)
     auth = _remote_basic_auth_for(target.url)
 
+    print("Sending follow to remote inbox:", inbox_url)
+    print("Payload:", json.dumps(payload, indent=2))
+
     try:
         r = requests.post(
             inbox_url, json=payload,
@@ -107,10 +111,11 @@ def send_follow_to_remote(actor, target, request):
             )
         #if r.status_code not in (200, 201, 202, 204):
             #log.warning("Remote inbox %s returned %s: %.200s", inbox_url, r.status_code, r.text)
+        return True
     except Exception as e:
         log.exception("Failed to post follow to %s: %s", inbox_url, e)
 
-
+        return False
 
 
 # class FollowRequestActionView(APIView):
@@ -167,21 +172,30 @@ class FollowRequestActionView(APIView):
         target = get_object_or_404(User, id=target_id)
         if target == request.user:
             return JsonResponse({"error": "cannot follow yourself"}, status=400)
+        is_remote = not is_local_user(target)
+        default_status = Follow.Status.APPROVED if is_remote else Follow.Status.PENDING
 
         # Create/refresh local PENDING
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": Follow.Status.PENDING}
+            defaults={"status": default_status}
         )
-        if not created and follow.status == Follow.Status.REJECTED:
-            follow.status = Follow.Status.PENDING
-            follow.save(update_fields=["status"])
+        # if not created and follow.status == Follow.Status.REJECTED:
+        #     follow.status = Follow.Status.PENDING
+        #     follow.save(update_fields=["status"])
 
+        if not created:
+            if is_remote and follow.status != Follow.Status.APPROVED:
+                follow.status = Follow.Status.PENDING
+                follow.save(update_fields=["status"])
+            elif not is_remote and follow.status == Follow.Status.REJECTED:
+                # Re-open as pending (so local receiver sees it again)
+                follow.status = Follow.Status.PENDING
+                follow.save(update_fields=["status"])
         # If remote, send to their inbox
         if not is_local_user(target):
             send_follow_to_remote(actor=request.user, target=target, request=request)
-
         return redirect("profile", author_id=target.id)
 
 
@@ -274,6 +288,17 @@ class ApproveFollowRequestView(APIView):
 
 
 
+# class DenyFollowRequestView(APIView):
+#     permission_classes = [IsAuthenticated]
+#     authentication_classes = [SessionAuthentication]
+
+#     def post(self, request, author_id, follower_id):
+#         if str(request.user.id) != str(author_id):
+#             return HttpResponseForbidden("Not your account")
+
+#         Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
+#         return redirect("follow-requests-page", author_id=author_id)
+
 class DenyFollowRequestView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [SessionAuthentication]
@@ -282,10 +307,53 @@ class DenyFollowRequestView(APIView):
         if str(request.user.id) != str(author_id):
             return HttpResponseForbidden("Not your account")
 
-        Follow.objects.filter(follower_id=follower_id, followee=request.user).delete()
+        fr = get_object_or_404(Follow, follower_id=follower_id, followee=request.user)
+        follower = fr.follower
+        followee = fr.followee
+
+        # delete on receiver's node
+        fr.delete()
+
+        # if follower lives on a remote node, notify their inbox
+        if not is_local_user(follower):
+            try:
+                self._send_denial_to_remote(follower, followee, request)
+            except Exception as e:
+                log.warning(f"Failed to notify remote node of denial: {e}")
+
         return redirect("follow-requests-page", author_id=author_id)
+    
+    ## according to spec, it says acceptance or rejection of a follow request does not matter. So I mmight remove this function later
+    def _send_denial_to_remote(self, follower, followee, request):
+        """
+        Tell the remote follower that their request was denied so their node
+        removes the follow row automatically.
+        """
+        actor_data  = AuthorSerializer(follower, context={"request": request}).data  # the follower (remote)
+        object_data = AuthorSerializer(followee, context={"request": request}).data  # the followee (local)
 
+        payload = {
+            "type": "follow",
+            "summary": f"{object_data.get('displayName', followee.username)} denied your follow request",
+            "actor":  {**actor_data,  "type": "author"},
+            "object": {**object_data, "type": "author"},
+            "denied": True,   # Indicate this is a denial
+        }
 
+        inbox_url = build_inbox_url(follower.url)       
+        auth      = _remote_basic_auth_for(follower.url)    
+
+        try:
+            r = requests.post(
+                inbox_url,
+                json=payload,
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                auth=auth,
+                timeout=10,
+                allow_redirects=False,
+            )
+        except Exception as e:
+            log.exception("Failed to post denial to %s: %s", inbox_url, e)
 
 
 class FollowersPageView(APIView):
@@ -360,11 +428,13 @@ class FollowRequestCreateView(APIView):
         target = get_object_or_404(User, id=request.data.get("target_id"))
         if target == request.user:
             return Response({"error": "Cannot follow yourself"}, status=400)
+        is_remote = not is_local_user(target)
+        default_status = Follow.Status.APPROVED if is_remote else Follow.Status.PENDING
 
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": Follow.Status.PENDING}
+            defaults={"status": default_status}
         )
         if not created and follow.status == Follow.Status.REJECTED:
             follow.status = Follow.Status.PENDING
@@ -722,16 +792,70 @@ class FollowByFQIDPageView(APIView):
         try:
             target = User.objects.get(url__in=[cleaned, cleaned + "/"])
         except User.DoesNotExist:
-            return Response(
-                {
-                    "message": None,
-                    "error": "No local record for that remote author FQID. "
-                             "They must exist in our database first.",
-                    "fqid": fqid,
-                },
-                template_name="follow_by_fqid.html",
-                status=404,
+
+            parsed = urlparse(cleaned)
+
+            # host WITHOUT path, e.g. "https://pragyanode-....herokuapp.com"
+            base_host = f"{parsed.scheme}://{parsed.netloc}/"
+            print("Base host for remote author:", base_host)
+
+            connected_node = Node.objects.filter(host=base_host, is_connected=True).first()
+            if not connected_node:
+                return Response(
+                    {
+                        "message": None,
+                        "error": "Cannot follow author from an unconnected node.",
+                        "fqid": fqid,
+                    },
+                    template_name="follow_by_fqid.html",
+                    status=400,
+                )
+            
+            auth = HTTPBasicAuth(connected_node.username, connected_node.password)
+
+
+            author_data = requests.get(
+                url=cleaned,
+                headers={"Accept": "application/json"},
+                auth=auth,
+                timeout=10,
             )
+
+            if author_data.status_code != 200:
+                print("Failed to retrieve remote author data:", author_data.status_code, author_data.text)
+                return Response(
+                    {
+                        "message": None,
+                        "error": "Failed to retrieve remote author data.",
+                        "fqid": fqid,
+                    },
+                    template_name="follow_by_fqid.html",
+                    status=400,
+                )
+            
+            author_data = author_data.json()
+
+            author_to_create = {
+                "id": author_data.get("id", cleaned),                # full FQID
+                "displayName": author_data.get("displayName", cleaned),       # used cleaned as a fallback
+                "host": author_data.get("host", base_host + "api/").rstrip("/") + "/",   # matches how you store host (…/api/)
+                "github": author_data.get("github", ""),
+                "profileImage": author_data.get("profileImage", ""),
+            }
+
+            # author_data = {
+            #     "id": cleaned,                # full FQID
+            #     "displayName": cleaned,       # fallback; remote node may send nicer name later
+            #     "host": base_host + "api/",   # matches how you store host (…/api/)
+            #     "github": "",
+            #     "profileImage": "",
+            # }
+
+            # Reuse the same helper you use for remote users in the inbox
+            inbox_view = InboxView()
+            target = inbox_view.get_or_create_remote_user(author_to_create)
+            
+            
 
         if target == request.user:
             return Response(
@@ -743,26 +867,46 @@ class FollowByFQIDPageView(APIView):
                 template_name="follow_by_fqid.html",
                 status=400,
             )
+        is_remote = not is_local_user(target)
+        default_status = Follow.Status.APPROVED if is_remote else Follow.Status.PENDING
 
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": Follow.Status.PENDING},
+            defaults={"status": default_status},
         )
-        if not created and follow.status == Follow.Status.REJECTED:
-            follow.status = Follow.Status.PENDING
-            follow.save(update_fields=["status"])
+        if not created:
+            if is_remote and follow.status != Follow.Status.APPROVED:
+                follow.status = Follow.Status.PENDING
+                follow.save(update_fields=["status"])
+            elif not is_remote and follow.status == Follow.Status.REJECTED:
+                # Re-open as pending (so local receiver sees it again)
+                follow.status = Follow.Status.PENDING
+                follow.save(update_fields=["status"])
+        # If remote, send to their inbox
 
-        # If target is remote, send follow activity to their /inbox
+        sent_request = True
         if not is_local_user(target):
-            send_follow_to_remote(actor=request.user, target=target, request=request)
+            sent_request = send_follow_to_remote(actor=request.user, target=target, request=request)
 
         display_name = getattr(target, "username", None) or cleaned
-        return Response(
-            {
-                "message": f"Follow request sent to {display_name}.",
-                "error": None,
-                "fqid": fqid,
-            },
-            template_name="follow_by_fqid.html",
-        )
+
+        if sent_request:
+            return Response(
+                {
+                    "message": f"Follow request sent to {display_name}.",
+                    "error": None,
+                    "fqid": fqid,
+                },
+                template_name="follow_by_fqid.html",
+            )
+        else:
+            return Response(
+                {
+                    "message": None,
+                    "error": f"Failed to send follow request to {display_name}.",
+                    "fqid": fqid,
+                },
+                template_name="follow_by_fqid.html",
+                status=500,
+            )

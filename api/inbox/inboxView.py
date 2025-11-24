@@ -80,9 +80,11 @@ class InboxView(APIView):
         item_type = data.get('type', '').lower()
 
         if item_type == 'entry':
+            print("InboxView: Handling entry...")
             return self.handle_entry(is_local, request, data)
 
         elif item_type == 'follow':
+            print("InboxView: Handling follow...")
             actor_obj = data.get("actor") or {}
             object_obj = data.get("object") or {}
             is_approved = data.get("approved", False)  # NEW: Check if this is an approval
@@ -144,6 +146,7 @@ class InboxView(APIView):
                 return Response(resp_data, status=201 if created else 200)
 
         elif item_type == 'like':
+            print("InboxView: Handling like...")
             # Decide whether it's an entry-like or a comment-like based on object
             object_fqid = data.get("object", "")
             comment = self._resolve_local_comment_from_object(object_fqid)
@@ -156,6 +159,7 @@ class InboxView(APIView):
 
 
         elif item_type == 'comment':
+            print("InboxView: Handling comment...")
             return self._handle_comment(request, author_id, data, is_local)
         else:
             return Response({"error": f"Invalid item type: {item_type}"}, status=400)
@@ -259,6 +263,7 @@ class InboxView(APIView):
         try:
             entry = Entry.objects.get(url=entry_fqid)
         except Entry.DoesNotExist:
+            print("InboxView: Entry not found for like:", entry_fqid)
             return Response({"error": "Entry not found"}, status=404)
         
         if is_local:
@@ -643,7 +648,7 @@ class InboxView(APIView):
                 author_id = target_author.get("id") if target_author else None
                 if not author_id:
                     print(f"No matching author found on node {node.host} for broadcasting like.")
-                    return
+                    continue
 
                 inbox_url = f"{author_id.rstrip('/')}/inbox/"
 

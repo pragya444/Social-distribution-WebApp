@@ -11,153 +11,118 @@ import base64
 import warnings
 from api.models import Entry, Follow, Comment, EntryLike, CommentLike, Node
 
-warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')
-warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')
+'''
+The test refactoring was assited by OpenAI ChatGPT-5, 2025-11-23
+'''
+
+warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
+warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
 
 User = get_user_model()
 
 class UserRegisterAPITests(TestCase):
     def setUp(self):
-        """Set up API client and registration URL for tests"""
         self.client = APIClient()
         self.register_url = reverse("register")
-    
+
     def test_register_user_success(self):
-        """Test that user registration succeeds with valid data - SUCCESS"""
-        payload = {
-            "username": "newuser",
-            "name": "New User",
-            "password": "newpass123",
-        }
+        payload = {"username": "newuser", "name": "New User", "password": "newpass123"}
         response = self.client.post(self.register_url, payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(User.objects.filter(username="newuser").exists())
-    
-    def test_register_user_missing_username_failure(self):
-        """Test that registration fails when username is missing - FAILURE"""
-        payload = {
-            "name": "Test User",
-            "password": "password123"
-        }
-        response = self.client.post(self.register_url, payload, format="json")
+        
+    def test_register_missing_all_fields(self):
+        response = self.client.post(self.register_url, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-    
-    def test_register_user_missing_name_failure(self):
-        """Test that registration fails when name is missing - FAILURE"""
-        payload = {
-            "username": "testuser",
-            "password": "password123"
-        }
-        response = self.client.post(self.register_url, payload, format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-    
-    def test_register_user_missing_password_failure(self):
-        """Test that registration fails when password is missing - FAILURE"""
-        payload = {
-            "username": "testuser",
-            "name": "Test User"
-        }
-        response = self.client.post(self.register_url, payload, format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-    
-    def test_register_user_duplicate_username_failure(self):
-        """Test that registration fails with duplicate username - FAILURE"""
-        User.objects.create_user(username="existinguser", password="pass1234", is_active=True)
-        payload = {
-            "username": "existinguser",
-            "name": "Existing User",
-            "password": "newpass123",
-        }
-        response = self.client.post(self.register_url, payload, format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-    
-    def test_register_user_inactive_by_default_success(self):
-        """Test that newly registered users require activation - SUCCESS"""
-        payload = {
-            "username": "inactiveuser",
-            "name": "Inactive User",
-            "password": "pass1234",
-        }
-        response = self.client.post(self.register_url, payload, format="json")
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        user = User.objects.get(username="inactiveuser")
-        self.assertFalse(user.is_active)
-    
-    def test_register_user_short_password_failure(self):
-        """Test that registration fails with password that's too short - FAILURE"""
-        payload = {
-            "username": "shortpassuser",
-            "name": "Short Pass User",
-            "password": "123",
-        }
+
+    def test_register_missing_name(self):
+        payload = {"username": "abc", "password": "pass123"}
         response = self.client.post(self.register_url, payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-class LoginAPITests(TestCase):
+    def test_register_missing_password(self):
+        payload = {"username": "abc", "name": "User"}
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_missing_username(self):
+        payload = {"name": "User", "password": "pass123"}
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_duplicate_username(self):
+        User.objects.create_user(username="existing", password="pass", is_active=True)
+        payload = {"username": "existing", "name": "New", "password": "pass123"}
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_requires_activation(self):
+        payload = {"username": "inactive", "name": "User", "password": "pass1234567"}
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(username="inactive")
+        self.assertFalse(user.is_active)
+
+    def test_register_short_password(self):
+        payload = {"username": "short", "name": "User", "password": "123"}
+        response = self.client.post(self.register_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+class LoginTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.login_url = reverse("login")
-        self.active_user = User.objects.create_user(username="activeUser", password="pass1234", is_active=True)
-        self.inactive_user = User.objects.create_user(username="inactiveUser", password="pass1234", is_active=False)
+        self.logout_url = reverse("logout")
+        self.active = User.objects.create_user(username="active", password="pass1234", is_active=True)
+        self.inactive = User.objects.create_user(username="inactive", password="pass1234")
 
-    def test_login_missing_username_failure(self):
-        """Test that login fails when username is missing - FAILURE"""
-        payload = {"password": "pass1234"}
-        response = self.client.post(self.login_url, payload, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-    
-    def test_login_missing_password_failure(self):
-        """Test that login fails when password is missing - FAILURE"""
-        payload = {"username": "activeUser"}
-        response = self.client.post(self.login_url, payload, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-    
-    def test_login_short_password_failure(self):
-        """Test that login fails with password that's too short - FAILURE"""
-        payload = {
-            "username": "activeUser",
-            "password": "pas"
-        }
-        response = self.client.post(self.login_url, payload, format='json')
+    def test_login_missing_all_fields(self):
+        response = self.client.post(self.login_url, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_login_active_user_success(self):
-        """Test that active users can login successfully - SUCCESS"""
-        payload = {
-            "username": "activeUser",
-            "password": "pass1234"
-        }
-        response = self.client.post(self.login_url, payload, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-    
-    def test_login_inactive_user_failure(self):
-        """Test that inactive users cannot login - FAILURE"""
-        payload = {
-            "username": "inactiveUser",
-            "password": "pass1234"
-        }
-        response = self.client.post(self.login_url, payload, format='json')
+    def test_login_missing_password(self):
+        response = self.client.post(self.login_url, {"username": "active"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_login_missing_username(self):
+        response = self.client.post(self.login_url, {"password": "pass1234"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_login_short_password(self):
+        response = self.client.post(self.login_url, {"username": "active", "password": "12"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_login_success_active(self):
+        response = self.client.post(self.login_url, {"username": "active", "password": "pass1234"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn("jwt", response.cookies)
+
+    def test_login_inactive_user_fails(self):
+        response = self.client.post(self.login_url, {"username": "inactive", "password": "pass1234"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-    
-    def test_login_wrong_password_failure(self):
-        """Test that login fails with wrong password - FAILURE"""
-        payload = {
-            "username": "activeUser",
-            "password": "wrongpassword"
-        }
-        response = self.client.post(self.login_url, payload, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-    
-    def test_login_wrong_username_failure(self):
-        """Test that login fails with wrong username - FAILURE"""
-        payload = {
-            "username": "nonexistentuser",
-            "password": "pass1234"
-        }
-        response = self.client.post(self.login_url, payload, format='json')
+        self.assertNotIn("jwt", response.cookies)
+
+    def test_login_wrong_password(self):
+        response = self.client.post(self.login_url, {"username": "active", "password": "wrongpass"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-class LogoutAPITests(TestCase):
+    def test_login_wrong_username(self):
+        response = self.client.post(self.login_url, {"username": "doesnotexist", "password": "pass1234"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+    def test_logout_clears_cookie(self):
+        self.client.post(self.login_url, {"username": "active", "password": "pass1234"}, format="json")
+        response = self.client.post(self.logout_url)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertEqual(response.cookies["jwt"].value, "")
+
+    def test_logout_when_not_logged_in(self):
+        response = self.client.post(self.logout_url)
+        # Expected behavior: redirect to login
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+
+class AuthenticationEdgeCaseTests(TestCase):
+    """Test authentication edge cases"""
     def setUp(self):
         self.client = APIClient()
         self.logout_url = reverse("logout")

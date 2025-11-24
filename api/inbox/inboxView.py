@@ -263,6 +263,7 @@ class InboxView(APIView):
         try:
             entry = Entry.objects.get(url=entry_fqid)
         except Entry.DoesNotExist:
+            print("InboxView: Entry not found for like:", entry_fqid)
             return Response({"error": "Entry not found"}, status=404)
         
         if is_local:

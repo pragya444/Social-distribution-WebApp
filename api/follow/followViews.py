@@ -814,7 +814,7 @@ class FollowByFQIDPageView(APIView):
             auth = HTTPBasicAuth(connected_node.username, connected_node.password)
 
 
-            author_data = request.get(
+            author_data = requests.get(
                 url=cleaned,
                 headers={"Accept": "application/json"},
                 auth=auth,

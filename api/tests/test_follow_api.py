@@ -30,12 +30,12 @@ class FollowAPITests(TestCase):
         data = {"target_id": self.other_user.id}
         response = self.client.post(url, data)
         self.assertIn(response.status_code, [
-        status.HTTP_200_OK, status.HTTP_302_FOUND, status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN ])
+        status.HTTP_302_FOUND ])
         follow = Follow.objects.filter(follower=self.user, followee=self.other_user).first()
         if follow:
             self.assertEqual(follow.status, Follow.Status.PENDING)
         else:
-            self.assertIn(response.status_code, [ status.HTTP_200_OK, status.HTTP_302_FOUND, status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN])
+            self.assertIn(response.status_code, [ status.HTTP_302_FOUND])
 
     def test_approve_follow_request(self):
         """Test user story: Approve follow requests"""
@@ -43,7 +43,7 @@ class FollowAPITests(TestCase):
         self.client.force_login(self.user)
         url = reverse("follow-approve", kwargs={"author_id": self.user.id, "follower_id": self.other_user.id})
         response = self.client.post(url, follow=True)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_302_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK,])
         follow = Follow.objects.get(follower=self.other_user, followee=self.user)
         self.assertEqual(follow.status, Follow.Status.APPROVED)
 
@@ -53,7 +53,7 @@ class FollowAPITests(TestCase):
         self.client.force_login(self.user)
         url = reverse("follow-deny", kwargs={"author_id": self.user.id, "follower_id": self.other_user.id})
         response = self.client.post(url, follow=True)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_302_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
         self.assertFalse(Follow.objects.filter(follower=self.other_user, followee=self.user).exists())
 
     def test_unfollow_author(self):
@@ -62,8 +62,8 @@ class FollowAPITests(TestCase):
         url = reverse("follow-unfollow", kwargs={"author_id": self.user.id})
         data = {"target_id": self.other_user.id}
         response = self.client.post(url, data)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_302_FOUND, status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN])
-        if response.status_code in [status.HTTP_200_OK, status.HTTP_302_FOUND]:
+        self.assertIn(response.status_code, [status.HTTP_302_FOUND])
+        if response.status_code in [status.HTTP_302_FOUND]:
             self.assertFalse(Follow.objects.filter(follower=self.user, followee=self.other_user).exists())
 
 class FollowEdgeTests(TestCase):
@@ -79,7 +79,7 @@ class FollowEdgeTests(TestCase):
         url = reverse("follow-send", kwargs={"author_id": self.a.id})
         data = {"target_id": self.a.id}
         r = self.client.post(url, data)
-        self.assertIn(r.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND])
+        self.assertIn(r.status_code, [status.HTTP_400_BAD_REQUEST])
 
     def test_duplicate_follow_request_unique(self):
         """Test that duplicate follow requests raise an exception due to uniqueness constraint"""
@@ -99,28 +99,28 @@ class FollowEdgeTests(TestCase):
         url = reverse("follow-unfollow", kwargs={"author_id": self.a.id})
         data = {"target_id": self.b.id}
         r = self.client.post(url, data)
-        self.assertIn(r.status_code, [status.HTTP_200_OK, status.HTTP_302_FOUND, status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN])
+        self.assertIn(r.status_code, [status.HTTP_302_FOUND])
 
     def test_approve_flow(self):
         """Test that approving a follow request changes status to approved"""
         Follow.objects.create(follower=self.b, followee=self.a, status=Follow.Status.PENDING)
         url = reverse("follow-approve", kwargs={"author_id": self.a.id, "follower_id": self.b.id})
         r = self.client.post(url)
-        self.assertIn(r.status_code, [status.HTTP_200_OK, status.HTTP_302_FOUND])
+        self.assertIn(r.status_code, [status.HTTP_302_FOUND])
 
     def test_deny_flow(self):
         """Test that denying a follow request removes it"""
         Follow.objects.create(follower=self.b, followee=self.a, status=Follow.Status.PENDING)
         url = reverse("follow-deny", kwargs={"author_id": self.a.id, "follower_id": self.b.id})
         r = self.client.post(url)
-        self.assertIn(r.status_code, [status.HTTP_200_OK, status.HTTP_302_FOUND])
+        self.assertIn(r.status_code, [status.HTTP_302_FOUND])
 
     def test_follow_requests_page_requires_login(self):
         """Test that viewing follow requests requires authentication"""
         self.client.logout()
         url = reverse("follow-requests-page", kwargs={"author_id": self.a.id})
         resp = self.client.get(url)
-        self.assertIn(resp.status_code, [status.HTTP_302_FOUND, status.HTTP_403_FORBIDDEN])
+        self.assertIn(resp.status_code, [status.HTTP_403_FORBIDDEN])
 
     def test_follow_send_requires_login(self):
         """Test that sending follow requests requires authentication"""
@@ -128,7 +128,7 @@ class FollowEdgeTests(TestCase):
         url = reverse("follow-send", kwargs={"author_id": self.a.id})
         data = {"target_id": self.b.id}
         resp = self.client.post(url, data)
-        self.assertIn(resp.status_code, [status.HTTP_302_FOUND, status.HTTP_403_FORBIDDEN])
+        self.assertIn(resp.status_code, [status.HTTP_403_FORBIDDEN])
 
     def test_follow_unique_constraint(self):
         """Test that unique constraint prevents duplicate follow relationships"""
@@ -176,7 +176,7 @@ class FollowersFollowingAPITests(TestCase):
         foreign_fqid = urllib.parse.quote(self.follower1.url, safe='')
         url = reverse("follower-detail-api", kwargs={"author_id": self.user.id, "foreign_author_fqid": foreign_fqid})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
     
     def test_following_detail_api(self):
         """Test checking if following specific user"""
@@ -186,7 +186,7 @@ class FollowersFollowingAPITests(TestCase):
         foreign_fqid = urllib.parse.quote(self.follower1.url, safe='')
         url = reverse("following-detail-api", kwargs={"author_id": self.user.id, "foreign_author_fqid": foreign_fqid})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
 
 class FollowerDetailEdgeCaseTests(TestCase):
     """Test follower/following detail endpoint edge cases"""
@@ -212,9 +212,6 @@ class FollowerDetailEdgeCaseTests(TestCase):
         response = self.client.delete(url)
         self.assertIn(response.status_code, [
             status.HTTP_204_NO_CONTENT,
-            status.HTTP_200_OK,
-            status.HTTP_405_METHOD_NOT_ALLOWED,
-            status.HTTP_404_NOT_FOUND
         ])
     
     def test_delete_non_existent_follower(self):
@@ -228,8 +225,6 @@ class FollowerDetailEdgeCaseTests(TestCase):
         response = self.client.delete(url)
         self.assertIn(response.status_code, [
             status.HTTP_404_NOT_FOUND,
-            status.HTTP_204_NO_CONTENT,
-            status.HTTP_405_METHOD_NOT_ALLOWED
         ])
 
 class FollowRequestAPITests(TestCase):
@@ -249,13 +244,13 @@ class FollowRequestAPITests(TestCase):
         )
         url = reverse("follow-requests-api", kwargs={"author_id": self.user.id})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
     
     def test_list_follow_requests_empty(self):
         """Test follow requests list when empty"""
         url = reverse("follow-requests-api", kwargs={"author_id": self.user.id})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
     
     def test_create_follow_request(self):
         """Test creating a follow request via API"""
@@ -263,11 +258,7 @@ class FollowRequestAPITests(TestCase):
         data = {"target_id": self.other_user.id}
         response = self.client.post(url, data)
         self.assertIn(response.status_code, [
-            status.HTTP_201_CREATED,
-            status.HTTP_200_OK,
             status.HTTP_302_FOUND,
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_404_NOT_FOUND
         ])
     
     def test_create_duplicate_follow_request(self):
@@ -281,8 +272,6 @@ class FollowRequestAPITests(TestCase):
         data = {"target_id": self.other_user.id}
         response = self.client.post(url, data)
         self.assertIn(response.status_code, [
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_409_CONFLICT,
             status.HTTP_302_FOUND,
-            status.HTTP_200_OK
+
         ])

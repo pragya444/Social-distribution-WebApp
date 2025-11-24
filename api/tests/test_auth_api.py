@@ -11,8 +11,8 @@ import base64
 import warnings
 from api.models import Entry, Follow, Comment, EntryLike, CommentLike, Node
 
-warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
-warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
+warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')
+warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')
 
 User = get_user_model()
 
@@ -24,18 +24,40 @@ class AuthorListAPITests(TestCase):
         self.user2 = User.objects.create_user(username="user2", password="pass", is_active=True)
         self.user3 = User.objects.create_user(username="user3", password="pass", is_active=True)
     
-    def test_author_list_get(self):
-        """Test getting paginated author list"""
+    def test_author_list_get_success(self):
+        """Test getting paginated author list - SUCCESS"""
         url = reverse("author-list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
-    def test_author_list_pagination(self):
-        """Test author list pagination parameters"""
+    def test_author_list_pagination_success(self):
+        """Test author list pagination parameters - SUCCESS"""
         url = reverse("author-list") + "?page=1&size=2"
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        if response.accepted_renderer.format == 'json':
-            data = response.data
-            self.assertIn("type", data)
-            self.assertEqual(data.get("type"), "authors")
+        
+    def test_author_list_response_structure_success(self):
+        """Test author list response structure - SUCCESS"""
+        url = reverse("author-list")
+        response = self.client.get(url, HTTP_ACCEPT='application/json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+        self.assertIn("type", data)
+        self.assertEqual(data.get("type"), "authors")
+        
+    def test_author_list_pagination_response_structure_success(self):
+        """Test paginated author list response structure - SUCCESS"""
+        url = reverse("author-list") + "?page=1&size=2"
+        response = self.client.get(url, HTTP_ACCEPT='application/json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+        self.assertIn("type", data)
+        self.assertEqual(data.get("type"), "authors")
+        
+    def test_author_list_unauthenticated_access_failure(self):
+        """Test author list allows unauthenticated access - SUCCESS"""
+        self.client.logout()
+        url = reverse("author-list")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        

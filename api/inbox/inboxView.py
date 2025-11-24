@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from api.serializers import EntrySerializer, FollowRequestSerializer, EntryLikeSerializer, CommentSerializer
-from api.models import Entry, EntryLike, Follow, Comment, Node
+from api.models import Entry, EntryLike, Follow, Comment, Node, CommentLike
 from django.contrib.auth import get_user_model
 from django.utils.text import slugify
 from django.db.models import F
@@ -22,6 +22,39 @@ User = get_user_model()
 def get_host_from_object(object_fqid: str) -> str:
     parsed = urlparse(object_fqid)  # parses protocol, host, path, etc.
     return f"{parsed.scheme}://{parsed.netloc}/"
+
+# def _resolve_local_comment_from_object(self, object_fqid: str):
+#     """
+#     Resolve a local Comment from the incoming like's `object`.
+#     Try, in order:
+#       1) exact match on Comment.fqid (if your model has it)
+#       2) last path segment as local id
+#       3) fqid endswith '/<id>' (handles slight URL variants)
+#     """
+#     if not object_fqid:
+#         return None
+
+#     decoded = unquote(str(object_fqid)).rstrip("/")
+
+#     # 1) exact fqid
+#     if hasattr(Comment, "fqid"):
+#         c = Comment.objects.filter(fqid=decoded).first()
+#         if c:
+#             return c
+
+#     # 2) local id from last path segment
+#     last = decoded.split("/")[-1]
+#     c = Comment.objects.filter(id=last).first()
+#     if c:
+#         return c
+
+#     # 3) fqid endswith '/<id>'
+#     if hasattr(Comment, "fqid"):
+#         c = Comment.objects.filter(fqid__endswith="/" + last).first()
+#         if c:
+#             return c
+
+#     return None
 
 
 
@@ -47,9 +80,11 @@ class InboxView(APIView):
         item_type = data.get('type', '').lower()
 
         if item_type == 'entry':
+            print("InboxView: Handling entry...")
             return self.handle_entry(is_local, request, data)
 
         elif item_type == 'follow':
+            print("InboxView: Handling follow...")
             actor_obj = data.get("actor") or {}
             object_obj = data.get("object") or {}
             is_approved = data.get("approved", False)  # NEW: Check if this is an approval
@@ -111,23 +146,35 @@ class InboxView(APIView):
                 return Response(resp_data, status=201 if created else 200)
 
         elif item_type == 'like':
+            print("InboxView: Handling like...")
+            # Decide whether it's an entry-like or a comment-like based on object
+            object_fqid = data.get("object", "")
+            comment = self._resolve_local_comment_from_object(object_fqid)
+            if comment:
+                print("DETECTED A COMMENT LIKE. HANDLING AS COMMENT LIKE.")
+                return self._handle_comment_like(request, author_id, data, is_local)
+            # fall back to entry-like handler
+            print("DETECTED AN ENTRY LIKE. HANDLING AS ENTRY LIKE.")
             return self.handle_like(request, author_id, data, is_local)
+
+
         elif item_type == 'comment':
-            serializer = CommentSerializer(data=data)
+            print("InboxView: Handling comment...")
+            return self._handle_comment(request, author_id, data, is_local)
         else:
             return Response({"error": f"Invalid item type: {item_type}"}, status=400)
 
-        if serializer.is_valid():
-            obj = serializer.save()
-            return Response(serializer.data, status=201)
+        # if serializer.is_valid():
+        #     obj = serializer.save()
+        #     return Response(serializer.data, status=201)
 
-        return Response(serializer.errors, status=400)
+        # return Response(serializer.errors, status=400)
     
 
     def get_or_create_remote_user(self, user_data):
         def make_remote_username(fqid):
             slug = slugify(fqid)
-            return f"remote_{slug}"[:150]  # Limit to 150 chars
+            return f"remote_{slug}"[:150]
 
         user_fqid = user_data.get('id', '')
 
@@ -138,15 +185,71 @@ class InboxView(APIView):
                 'name': user_data.get('displayName', 'Remote User'),
                 'host': user_data.get('host', ''),
                 'github': user_data.get('github', ''),
-                'profile_picture': user_data.get('profilePicture', ''),
+                'profile_picture': user_data.get('profileImage', ''),
             }
         )
 
+        # --- UPDATE LOGIC ---
+        # Map incoming data -> model fields
+        update_fields = {
+            'name': user_data.get('displayName'),
+            'host': user_data.get('host'),
+            'github': user_data.get('github'),
+            'profile_picture': user_data.get('profileImage'),
+        }
+
+        updated = False
+        for field, value in update_fields.items():
+            if value not in (None, '') and getattr(user, field) != value:
+                setattr(user, field, value)
+                updated = True
+
+        if updated:
+            user.save(update_fields=list(update_fields.keys()))
+
+        # Set unusable password only if newly created
         if created:
             user.set_unusable_password()
-            user.save()
-        
+            user.save(update_fields=['password'])
+
         return user
+
+    
+
+    def _resolve_local_comment_from_object(self, object_fqid: str):
+        """
+        Accept a comment FQID (preferred) or something that ends with /<comment_id>.
+        Return the local Comment or None.
+        """
+        if not object_fqid:
+            return None
+
+        raw = (object_fqid or "").strip()
+        trimmed = raw.rstrip("/")
+
+        # Try exact fqid match if your Comment model has fqid
+        c = None
+        if hasattr(Comment, "fqid"):
+            c = Comment.objects.filter(fqid__in=[trimmed, trimmed + "/"]).first()
+            if c:
+                return c
+            # endswith '/<id>' fallback
+            last = trimmed.rsplit("/", 1)[-1]
+            c = Comment.objects.filter(fqid__endswith="/" + last).first()
+            if c:
+                return c
+            # also allow direct local id
+            c = Comment.objects.filter(id=last).first()
+            if c:
+                return c
+        else:
+            # If you don't store fqid: try last path segment as local id
+            last = trimmed.rsplit("/", 1)[-1]
+            c = Comment.objects.filter(id=last).first()
+            if c:
+                return c
+
+        return None
         
     
     def handle_like(self, request, author, data, is_local):
@@ -230,6 +333,132 @@ class InboxView(APIView):
         return Response({**serializer.data, "liked": True, "count": entry.like_count}, status=201)
 
     
+
+    def _handle_comment(self, request, author, data, is_local):
+        entry_fqid = data.get('entry') or ''
+        remote_host = data.get('remote_host', '')
+        remote_author_id = data.get('remote_author_id', '')
+        print("InboxView: Handling comment for entry_fqid:", entry_fqid)
+        comment_fqid = data.get('id', '')
+
+        # e.g. "http://nodebbbb/" from "http://nodebbbb/api/authors/222/entries/249"
+        remote_host_from_req = get_host_from_object(entry_fqid)
+
+        try:
+            entry = Entry.objects.get(url=entry_fqid)
+        except Entry.DoesNotExist:
+            return Response({"error": "Entry not found grrrr"}, status=404)
+
+        print("InboxView: Found entry:", entry)    
+    
+        
+        if is_local:
+            user = request.user
+        else:
+            user_data = data.get('author', {})
+            if not user_data.get('id'):
+                return Response({"error": "author.id required for remote comment"}, status=400)
+
+            user = self.get_or_create_remote_user(user_data)
+
+        #  Validate payload
+        text = (data.get('comment') or '').strip()
+        if not text:
+            return Response({"error": "Comment text required"}, status=400)
+
+        content_type = data.get('contentType') or data.get('content_type') or 'text/plain'
+        published_iso = data.get('published')
+
+        defaults = {
+            "entry": entry,
+            "author": user,
+            "comment": text,
+            "content_type": content_type,
+        }
+        if published_iso:
+            dt = parse_datetime(published_iso)
+            if dt is not None:
+                defaults["created"] = dt  
+
+        comment = Comment.objects.create(fqid=comment_fqid, **defaults)
+
+        Entry.objects.filter(id=entry.id).update(comment_count=F('comment_count') + 1)
+        entry.refresh_from_db(fields=['comment_count'])
+
+        ser = CommentSerializer(comment, context={'request': request})
+        comment_data = dict(ser.data)  
+        comment_data["type"] = "comment"         
+        comment_data["object"] = entry_fqid        
+        if is_local:
+            if remote_host and remote_author_id:
+                # Local user commented on a REMOTE entry -> send to that remote author's inbox
+                self.send_comment_to_remote(remote_host, remote_author_id, comment_data)
+            else:
+                # Local user commented on a LOCAL entry -> broadcast to all nodes
+                self.broadcast_comment_to_all_nodes(comment_data, remote_host=remote_host_from_req)
+
+        # Remote comment sent to us 
+
+        return Response(comment_data, status=201)
+
+
+
+
+    def _handle_comment_like(self, request, author, data, is_local):
+        entry_fqid = data.get('object', '')
+        remote_host = data.get('remote_host', '')
+        remote_author_id = data.get('remote_author_id', '')
+
+        remote_host_from_req = get_host_from_object(entry_fqid)
+
+        object_fqid = data.get("object", "")
+        if not object_fqid:
+            return Response({"error": "object required for comment like"}, status=400)
+
+        comment = self._resolve_local_comment_from_object(object_fqid)
+        if not comment:
+            return Response({"error": "Comment not found"}, status=404)
+
+        # try:
+        #     entry = Entry.objects.get(url=entry_fqid)
+        # except Entry.DoesNotExist:
+        #     return Response({"error": "Entry not found"}, status=404)
+        
+        if is_local:
+            user = request.user
+        else:
+            user_data = data.get('author', {})
+            if not user_data.get('id'):
+                return Response({"error": "Author data required for commentlike"}, status=400)
+
+            user = self.get_or_create_remote_user(user_data)
+
+
+
+        existing = CommentLike.objects.filter(user=user, comment=comment).first()
+        if existing:
+            # UNLIKE
+            existing.delete()
+            liked = False
+        else:
+            # LIKE
+            CommentLike.objects.create(user=user, comment=comment)
+            liked = True
+
+        count = CommentLike.objects.filter(comment=comment).count()
+
+        resp = {
+            "ok": True,
+            "liked": liked,
+            "count": count,
+            "type": "like",
+            "object": object_fqid,
+        }
+        return Response(resp, status=201 if liked else 200)
+
+
+
+
     def handle_entry(self, is_local, request, data):
         if is_local:
             return
@@ -369,6 +598,8 @@ class InboxView(APIView):
                 print(f"Failed to send like to remote inbox: {e}")
 
 
+
+
     def broadcast_like_to_all_nodes(self, like_data, remote_host=None):
         nodes = Node.objects.filter(is_connected=True)
 
@@ -395,6 +626,7 @@ class InboxView(APIView):
                 authors_response = requests.get(
                     url=f"{base}/api/authors/",
                     headers=headers,
+                    auth=auth,
                     timeout=5,
                 )
                 if authors_response.status_code != 200:
@@ -432,3 +664,142 @@ class InboxView(APIView):
                     print(f"Successfully sent like to {inbox_url}: {response.status_code} {response.text}")
             except Exception as e:
                 print(f"Error sending like to node {node.host}: {str(e)}")
+
+    def broadcast_comment_to_all_nodes(self, comment_data, remote_host=None):
+        """
+        Fan-out a local comment to every connected node's owner/inbox,
+        skipping the origin `remote_host` if given (same as likes).
+        """
+        nodes = Node.objects.filter(is_connected=True)
+        if not nodes.exists():
+            print("No connected nodes to broadcast comment to.")
+            return
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        for node in nodes:
+            if node.host == remote_host:
+                print(f"Skipping broadcasting comment to origin node: {node.host}")
+                continue
+
+            base = node.host.rstrip('/')
+            auth = HTTPBasicAuth(node.username, node.password)
+
+            try:
+                # Find that node’s "owner" author to target its inbox (same approach as likes)
+                authors_response = requests.get(
+                    url=f"{base}/api/authors/",
+                    headers=headers,
+                    auth=auth,
+                    timeout=5,
+                )
+                if authors_response.status_code != 200:
+                    print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")
+                    continue
+
+                data = authors_response.json()
+                authors = data.get("authors", [])
+                target_author = None
+                for author in authors:
+                    if get_host_from_object(author.get("id", "")) == node.host:
+                        target_author = author
+                        break
+
+                author_id = target_author.get("id") if target_author else None
+                if not author_id:
+                    print(f"No matching author found on node {node.host} for broadcasting comment.")
+                    continue
+
+                inbox_url = f"{author_id.rstrip('/')}/inbox/"
+
+                resp = requests.post(
+                    url=inbox_url,
+                    auth=auth,
+                    json=comment_data,
+                    headers=headers,
+                    timeout=10,
+                )
+                if resp.status_code not in [200, 201, 202]:
+                    print(f"Failed to send comment to {inbox_url}: {resp.status_code} {resp.text[:1000]}")
+                else:
+                    print(f"Successfully sent comment to {inbox_url}: {resp.status_code}")
+            except Exception as e:
+                print(f"Error sending comment to node {node.host}: {str(e)}")            
+
+
+    def broadcast_comment_like_to_all_nodes(self, like_payload, remote_host=None):
+        """
+        Fan-out a local comment-like to every connected node's owner/inbox,
+        skipping the origin `remote_host` if provided.
+        """
+        nodes = Node.objects.filter(is_connected=True)
+        if not nodes.exists():
+            print("No connected nodes to broadcast comment-like to.")
+            return
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        for node in nodes:
+            if node.host == remote_host:
+                print(f"Skipping broadcasting comment-like to origin node: {node.host}")
+                continue
+
+            base = node.host.rstrip('/')
+            auth = HTTPBasicAuth(node.username, node.password)
+
+            try:
+                authors_response = requests.get(
+                    url=f"{base}/api/authors/",
+                    headers=headers,
+                    auth=auth,
+                    timeout=5,
+                )
+                if authors_response.status_code != 200:
+                    print(f"Failed to fetch authors from node {node.host}: {authors_response.status_code}")
+                    continue
+
+                data = authors_response.json()
+                authors = data.get("authors", [])
+                target_author = None
+                for author in authors:
+                    # reuse your existing helper if you prefer:
+                    # if get_host_from_object(author.get("id", "")) == node.host:
+                    from urllib.parse import urlparse
+                    def _host(u: str) -> str:
+                        p = urlparse(u or "")
+                        return f"{p.scheme}://{p.netloc}/" if p.scheme and p.netloc else ""
+                    if _host(author.get("id", "")) == node.host:
+                        target_author = author
+                        break
+
+                author_id = target_author.get("id") if target_author else None
+                if not author_id:
+                    print(f"No matching author found on node {node.host} for broadcasting comment-like.")
+                    continue
+
+                inbox_url = f"{author_id.rstrip('/')}/inbox/"
+
+                print("###############")
+                print("Broadcasting comment-like to:", inbox_url)
+                print(like_payload)
+                print("###############")
+
+                resp = requests.post(
+                    url=inbox_url,
+                    auth=auth,
+                    json=like_payload,
+                    headers=headers,
+                    timeout=10,
+                )
+                if resp.status_code not in [200, 201, 202]:
+                    print(f"Failed to send comment-like to {inbox_url}: {resp.status_code} {resp.text[:1000]}")
+                else:
+                    print(f"Successfully sent comment-like to {inbox_url}: {resp.status_code}")
+            except Exception as e:
+                print(f"Error sending comment-like to node {node.host}: {str(e)}")

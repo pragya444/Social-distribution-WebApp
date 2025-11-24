@@ -1,8 +1,8 @@
 from django.shortcuts import get_object_or_404, redirect
 from django.db.models import F, Q
-from .models import User, Entry, Comment, EntryLike, CommentLike, Follow, Liked
+from .models import User, Entry, Comment, EntryLike, CommentLike, Follow, Liked, Node
 from django.contrib.auth import get_user_model
-from django.http import JsonResponse, HttpResponseForbidden
+from django.http import JsonResponse, HttpResponseForbidden, FileResponse
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.authentication import SessionAuthentication
@@ -17,8 +17,14 @@ from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from urllib.parse import urlparse, unquote
 from .entries import entryView
 import urllib.parse
-
-
+from urllib.parse import urlparse
+import pprint
+from requests.auth import HTTPBasicAuth
+import requests
+from urllib.parse import urljoin
+import uuid
+from django.utils import timezone
+from api.inbox.inboxView import InboxView as InboxView
 
 User = get_user_model()
 
@@ -37,6 +43,108 @@ except Exception:
     PIL_AVAILABLE = False
     Image = None
     UnidentifiedImageError = Exception  # Fallback to a generic exception type
+
+    
+
+
+
+def send_comment_to_remote(remote_host, remote_author_id, comment_payload):
+        print()
+        print("Received comment to send to remote:")
+        pprint.pprint(comment_payload)
+        print()
+        try:
+            remote_author = User.objects.get(id=remote_author_id)
+        except User.DoesNotExist:
+            print(f"Remote author with id {remote_author_id} does not exist.")
+            return
+
+        formatted_host = remote_host.rstrip('api/') + '/'
+
+        node = Node.objects.filter(host=formatted_host).first()
+        if not node:
+            print(f"No node configuration found for host: {formatted_host}")
+            return
+        if not node.is_connected:
+            print(f"Node for host {formatted_host} is not connected.")
+            return
+
+        auth = HTTPBasicAuth(node.username, node.password)
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }
+        remote_inbox_url = f"{remote_author.fqid.rstrip('/')}/inbox/"
+
+        try:
+            resp = requests.post(
+                url=remote_inbox_url,
+                json=comment_payload,
+                headers=headers,
+                timeout=10,
+                auth=auth
+            )
+            if resp.status_code not in [200, 201, 202]:
+                print(f"Failed to send comment to remote inbox. Status: {resp.status_code}, Body: {resp.text[:1000]}")
+            else:
+                print(f"Successfully sent comment to {remote_inbox_url}")
+        except Exception as e:
+            print(f"Failed to send comment to remote inbox: {e}")             
+
+
+def send_comment_like_to_remote(remote_host, remote_author_id, like_payload):
+    """
+    POST a comment-like payload to a remote author's inbox using node basic auth.
+    """
+    print("\nReceived comment-like to send to remote:")
+    pprint.pprint(like_payload)
+    print()
+
+    try:
+        remote_author = User.objects.get(id=remote_author_id)
+    except User.DoesNotExist:
+        print(f"Remote author with id {remote_author_id} does not exist.")
+        return
+
+    formatted_host = remote_host.rstrip('api/').rstrip('/') + '/'
+
+    node = Node.objects.filter(host=formatted_host).first()
+    if not node:
+        print(f"No node configuration found for host: {formatted_host}")
+        return
+    if not node.is_connected:
+        print(f"Node for host {formatted_host} is not connected.")
+        return
+
+    auth = HTTPBasicAuth(node.username, node.password)
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    }
+    remote_inbox_url = f"{remote_author.fqid.rstrip('/')}/inbox/"
+
+    try:
+
+        print("###############")
+        print("Sending comment-like to:", remote_inbox_url)
+        print(like_payload)
+        print("###############")
+
+        resp = requests.post(
+            url=remote_inbox_url,
+            json=like_payload,
+            headers=headers,
+            timeout=10,
+            auth=auth
+        )
+        if resp.status_code not in [200, 201, 202]:
+            print(f"Failed to send comment-like to remote inbox. "
+                  f"Status: {resp.status_code}, Body: {resp.text[:1000]}")
+        else:
+            print(f"Successfully sent comment-like to {remote_inbox_url}")
+    except Exception as e:
+        print(f"Failed to send comment-like to remote inbox: {e}")
+
 
 
 # --- FQID helpers ---
@@ -175,7 +283,7 @@ class CommentedDetailView(APIView):
             id=comment_id,
             author_id=author_id,
         )
-        return Response(helpers.comment_to_json_version2(comment), status=200)
+        return Response(helpers.comment_to_json_version3(comment), status=200)
 
 
 # This view was generated by ChatGPT on 2025-11-21        
@@ -217,7 +325,7 @@ class CommentedByFQIDView(APIView):
 
     def get(self, request, comment_fqid):
         comment = _resolve_local_comment_from_fqid(comment_fqid)
-        data = helpers.comment_to_json_version2(comment)
+        data = helpers.comment_to_json_version3(comment)
         return Response(data, status=200)
         
 
@@ -471,23 +579,22 @@ class EntryImageView(APIView):
 
 
 
+
 class EntryImageFQIDView(APIView):
     """
     GET /api/entries/{ENTRY_FQID}/image
 
-    {ENTRY_FQID} is the *full* URL of an entry, for example:
-
+    {ENTRY_FQID} is the full URL of an entry, for example:
         http://127.0.0.1:8000/api/authors/<AUTHOR_ID>/entries/<ENTRY_ID>
-
     This view only handles local entries. It parses the FQID to get
     author_id and entry_id, then reuses the same image-serving helper
-    used by the /authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image endpoint.
+    used by the /authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image endpoint
     """
     permission_classes = [AllowAny]
 
     def get(self, request, entry_fqid):
-        # Parse the FQID into its components
-        parsed = urlparse(entry_fqid)
+        
+        parsed = urlparse(entry_fqid)    # Parse the FQID into its components
 
         # Expected local path format:
         #   /api/authors/<author_id>/entries/<entry_id>
@@ -666,9 +773,11 @@ class CommentListCreateView(APIView):
             context={"request": request},
         )
 
-        base = request.build_absolute_uri('/api')
-        comments_id = f"{base}/authors/{entry.author.id}/entries/{entry.id}/comments"
-        web = f"{base}/authors/{entry.author.id}/entries/{entry.id}"
+        BASE = request.build_absolute_uri('/').rstrip('/')   # e.g. http://127.0.0.1:8000
+        API  = f"{BASE}/api"                                 # e.g. http://127.0.0.1:8000/api
+
+        comments_id = f"{API}/authors/{entry.author.id}/entries/{entry.id}/comments"
+        web         = f"{API}/authors/{entry.author.id}/entries/{entry.id}"
 
         data = {
             "type": "comments",
@@ -680,7 +789,10 @@ class CommentListCreateView(APIView):
             "src": serializer.data,
         }
 
-        return Response(data, status=200)        
+        return Response(data, status=200)    
+
+
+
 
 
 
@@ -720,10 +832,65 @@ class CommentListCreateView(APIView):
             content_type=ctype
         )
 
+        # --- NEW: set a clean, local comment FQID once, then reuse it everywhere ---
+        try:
+            base_host = request.build_absolute_uri('/').rstrip('/')   # e.g. http://127.0.0.1:8000
+            api_base  = f"{base_host}/api"                            # e.g. http://127.0.0.1:8000/api
+            comment_fqid = f"{api_base}/authors/{entry.author_id}/commented/{comment.id}"
+            if hasattr(comment, "fqid"):
+                comment.fqid = comment_fqid
+                comment.save(update_fields=["fqid"])
+        except Exception:
+            # keep going even if fqid can't be saved; serialization will still work
+            pass
+        # --- END NEW ---
         Entry.objects.filter(id=entry.id).update(comment_count=F('comment_count') + 1)
         entry.refresh_from_db()
 
-        return Response(helpers.comment_to_json(comment), status=201)
+        out = helpers.comment_to_json_version3(comment, request=request)
+
+        entry_author_fqid = getattr(entry.author, "fqid", "") or getattr(entry.author, "url", "")
+        if entry_author_fqid:
+            try:
+                from api.inbox.inboxView import InboxView, get_host_from_object
+                from urllib.parse import urlparse
+
+                inbox_view = InboxView()
+
+                # My node host 
+                my_base = f"{request.scheme}://{request.get_host()}/"
+                my_host = f"{urlparse(my_base).scheme}://{urlparse(my_base).netloc}/"
+
+                # Their host from the entry author's fqid
+                their_host = get_host_from_object(entry_author_fqid)
+                remote_author_id = entry.author.id  # DB row for that author on *my* node
+
+                # Entry FQID = what we commented on
+                entry_fqid = getattr(entry, "url", "") or getattr(entry, "fqid", "")
+
+                comment_payload = dict(out) 
+                comment_payload["type"] = "comment"
+                comment_payload["entry"] = entry_fqid  
+
+                if their_host.rstrip('/') != my_host.rstrip('/'):
+                    print("[comment-federation] Sending comment to remote inbox...")
+                    send_comment_to_remote(
+                        remote_host=their_host,
+                        remote_author_id=remote_author_id,
+                        comment_payload=comment_payload,
+                    )
+                else:
+                    inbox_view.broadcast_comment_to_all_nodes(
+                        comment_payload,
+                        remote_host=their_host,
+                    )
+
+            except Exception as e:
+                print(f"[comment-federation] Skipped sending to remote: {e}")
+
+        out["comment_count"] = entry.comment_count
+        return Response(out, status=201)
+
 
 class EntryLikesView(APIView):
     '''
@@ -1107,6 +1274,25 @@ class CommentLikesView(APIView):
         if not comment:
             return JsonResponse({"error": "comment not found"}, status=404)
 
+
+        
+        user_liked = (
+            request.user.is_authenticated
+            and CommentLike.objects.filter(user=request.user, comment=comment).exists()
+        )
+
+        src = [
+            {
+                "type": "author",
+                "id": like.user.url,
+                "displayName": like.user.username,
+                "web": f"/authors/{like.user.id}",
+            }
+            for like in comment.likes.select_related("user").all()
+        ]
+
+        return JsonResponse({"type": "likes", "count": len(src), "liked": user_liked, "src": src}, status=200)    
+
          # Paging (newest first)
         page_number = int(request.GET.get("page", 1))
         page_size = int(request.GET.get("size", 50))
@@ -1171,17 +1357,60 @@ class CommentLikesView(APIView):
             created = False
 
         count = CommentLike.objects.filter(comment=comment).count()
-        return JsonResponse({"ok": True, "liked": True, "count": count}, status=201 if created else 200)
+
+
+        if created:
+            root = request.build_absolute_uri('/')                
+            api_base = urljoin(root, 'api/').rstrip('/')            
+            comment_fqid = (getattr(comment, "fqid", "") or
+                            f"{api_base}/authors/{comment.author_id}/commented/{comment.id}").rstrip('/')
+
+            author_id = (getattr(request.user, "url", "") or
+                        getattr(request.user, "fqid", "") or
+                        f"{api_base}/authors/{request.user.id}")
+            author_web = (getattr(request.user, "url", "") or
+                        f"{root.rstrip('/')}/authors/{request.user.id}")
+
+            author_obj = {
+                "type": "author",
+                "id": author_id,
+                "host": f"{api_base}/",  # trailing slash as in spec examples
+                "displayName": getattr(request.user, "username", "") or getattr(request.user, "name", "") or "User",
+                "web": author_web,
+                "github": getattr(request.user, "github", "") or "",
+                "profileImage": getattr(request.user, "profile_picture", "") or "",
+            }
+
+            like_payload = {
+                "type": "like",
+                "id": f"{api_base}/authors/{request.user.id}/liked/{uuid.uuid4().hex}",
+                "published": timezone.now().isoformat(),
+                "author": author_obj,
+                "object": comment_fqid,  
+            }
+
+            def _host(u: str) -> str:
+                p = urlparse(u or "")
+                return f"{p.scheme}://{p.netloc}/" if p.scheme and p.netloc else ""
+
+            my_host = _host(root)
+            comment_host = _host(comment_fqid)
+
+            if comment_host.rstrip('/') != my_host.rstrip('/'):
+                send_comment_like_to_remote(
+                    remote_host=comment_host,
+                    remote_author_id=comment.author.id,  
+                    like_payload=like_payload
+                )
+            else:
+                InboxView().broadcast_comment_like_to_all_nodes(like_payload, remote_host=comment_host)
+            return JsonResponse({"ok": True, "liked": True, "count": count}, status=201 if created else 200)
+
+
+
+
 
     def delete(self, request, author_id, entry_id, **kwargs):
-
-
-
-
-
-
-
-
         if not request.user.is_authenticated:
             return JsonResponse({"error": "login required"}, status=403)
 
@@ -1191,14 +1420,56 @@ class CommentLikesView(APIView):
         if err:
             return err
 
-
         comment = self._resolve_comment(entry, comment_ref)
         if not comment:
             return JsonResponse({"error": "comment not found"}, status=404)
 
         CommentLike.objects.filter(user=request.user, comment=comment).delete()
         count = CommentLike.objects.filter(comment=comment).count()
+
+        root = request.build_absolute_uri('/')                   
+        api_base = urljoin(root, 'api/').rstrip('/')              
+        comment_fqid = (getattr(comment, "fqid", "") or
+                        f"{api_base}/authors/{comment.author_id}/commented/{comment.id}").rstrip('/')
+
+        liker_id  = (getattr(request.user, "url", "") or
+                     getattr(request.user, "fqid", "") or
+                     f"{api_base}/authors/{request.user.id}")
+        liker_web = (getattr(request.user, "url", "") or
+                     f"{root.rstrip('/')}/authors/{request.user.id}")
+
+        author_obj = {
+            "type": "author",
+            "id": liker_id,
+            "host": f"{api_base}/",  
+            "displayName": getattr(request.user, "username", "") or getattr(request.user, "name", "") or "User",
+            "web": liker_web,
+            "github": getattr(request.user, "github", "") or "",
+            "profileImage": getattr(request.user, "profile_picture", "") or "",
+        }
+
+        like_payload = {
+            "type": "like",
+            "id": f"{api_base}/authors/{request.user.id}/liked/{uuid.uuid4().hex}",
+            "published": timezone.now().isoformat(),
+            "author": author_obj,
+            "object": comment_fqid,   
+        }
+
+        def _host(u: str) -> str:
+            p = urlparse(u or "")
+            return f"{p.scheme}://{p.netloc}/" if p.scheme and p.netloc else ""
+
+        my_host = _host(root)
+        comment_host = _host(comment_fqid)
+
+        if comment_host.rstrip('/') != my_host.rstrip('/'):
+            send_comment_like_to_remote(
+                remote_host=comment_host,
+                remote_author_id=comment.author.id, 
+                like_payload=like_payload
+            )
+        else:
+            InboxView().broadcast_comment_like_to_all_nodes(like_payload, remote_host=comment_host)
+
         return JsonResponse({"ok": True, "liked": False, "count": count}, status=200)
-
-
-     

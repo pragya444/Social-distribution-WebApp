@@ -11,76 +11,119 @@ import base64
 import warnings
 from api.models import Entry, Follow, Comment, EntryLike, CommentLike, Node
 
-warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
-warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
+warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')
+warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')
 
 User = get_user_model()
 
-class SerializerValidationTests(TestCase):
+class AuthorAPIValidationTests(TestCase):
     def setUp(self):
+        self.client = APIClient()
         self.user = User.objects.create_user(username="svt", password="pass", is_active=True)
+        self.client.force_login(self.user)
 
-    def test_user_serializer_blank_name_rejected(self):
-        """Test that user serializer rejects blank display names"""
-        from api.serializers import AuthorSerializer
-        s = AuthorSerializer(self.user, data={"displayName": "   "}, partial=True)
-        self.assertFalse(s.is_valid())
+    def test_update_profile_blank_name_rejected_failure(self):
+        """Test that API rejects blank display names - FAILURE"""
+        url = reverse("profile", kwargs={"author_id": self.user.id})
+        data = {"displayName": "   "}
+        response = self.client.put(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_user_serializer_github_normalization(self):
-        """Test that user serializer normalizes GitHub usernames to full URLs"""
-        from api.serializers import AuthorSerializer
-        s = AuthorSerializer(self.user, data={"github": "octocat"}, partial=True, context={"request": type("obj", (), {"scheme": "http", "get_host": lambda: "testserver"})})
-        self.assertTrue(s.is_valid(), s.errors)
-        u = s.save()
-        self.assertTrue(u.github.startswith("https://github.com/"))
+    def test_update_profile_github_normalization_success(self):
+        """Test that API normalizes GitHub usernames to full URLs - SUCCESS"""
+        url = reverse("profile", kwargs={"author_id": self.user.id})
+        data = {"github": "octocat"}
+        response = self.client.put(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Verify normalization happened
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.github.startswith("https://github.com/"))
 
-    def test_entry_serializer_missing_fields(self):
-        """Test that entry serializer rejects entries with missing required fields"""
-        from api.serializers import EntrySerializer
-        s = EntrySerializer(data={"title": "x"})
-        self.assertFalse(s.is_valid())
+    def test_update_profile_valid_data_success(self):
+        """Test that API accepts valid profile updates - SUCCESS"""
+        url = reverse("profile", kwargs={"author_id": self.user.id})
+        data = {
+            "displayName": "New Name",
+            "description": "New description",
+            "profileImage": "https://example.com/pic.jpg",
+            "github": "https://github.com/testuser"
+        }
+        response = self.client.put(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.name, "New Name")
 
-    def test_entry_serializer_invalid_ct(self):
-        """Test that entry serializer rejects invalid content types"""
-        from api.serializers import EntrySerializer
-        s = EntrySerializer(data={"title":"x","content":"y","contentType":"bad","visibility":"PUBLIC"})
-        self.assertFalse(s.is_valid())
+    def test_get_author_includes_required_fields_success(self):
+        """Test that author API includes required fields - SUCCESS"""
+        url = reverse("profile", kwargs={"author_id": self.user.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("type", response.data)
+        self.assertIn("id", response.data)
+        self.assertIn("displayName", response.data)
 
-    def test_entry_serializer_image_b64_ok(self):
-        """Test that entry serializer accepts valid base64 image content"""
-        from api.serializers import EntrySerializer
-        img = base64.b64encode(b"a").decode()
-        s = EntrySerializer(data={"title":"x","content":img,"contentType":"image/png;base64","visibility":"PUBLIC"}, context={"request": type("obj", (), {"user": self.user, "build_absolute_uri": lambda x: "http://test" + x})})
-        self.assertTrue(s.is_valid(), s.errors)
+class EntryAPIValidationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username="svt", password="pass", is_active=True)
+        self.client.force_login(self.user)
 
-    def test_entry_serializer_image_b64_bad(self):
-        """Test that entry serializer rejects invalid base64 image content"""
-        from api.serializers import EntrySerializer
-        s = EntrySerializer(data={"title":"x","content":"not-b64","contentType":"image/png;base64","visibility":"PUBLIC"})
-        self.assertFalse(s.is_valid())
+    def test_create_entry_missing_fields_failure(self):
+        """Test that API rejects entries with missing required fields - FAILURE"""
+        url = reverse("entries-list-create", kwargs={"author_id": self.user.id})
+        data = {"title": "x"}  # Missing content, contentType, visibility
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_entry_serializer_update_partial(self):
-        """Test that entry serializer supports partial updates"""
-        from api.serializers import EntrySerializer
-        e = Entry.objects.create(author=self.user, title="t", content="c", content_type="text/plain", visibility="PUBLIC")
-        s = EntrySerializer(e, data={"title":"n"}, partial=True)
-        self.assertTrue(s.is_valid(), s.errors)
-        e2 = s.save()
-        self.assertEqual(e2.title, "n")
+    def test_create_entry_invalid_content_type_failure(self):
+        """Test that API rejects invalid content types - FAILURE"""
+        url = reverse("entries-list-create", kwargs={"author_id": self.user.id})
+        data = {
+            "title": "x",
+            "content": "y", 
+            "contentType": "bad",
+            "visibility": "PUBLIC"
+        }
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_user_serializer_update_fields(self):
-        """Test that user serializer can update profile fields"""
-        from api.serializers import AuthorSerializer
-        s = AuthorSerializer(self.user, data={"displayName":"New","description":"d","profileImage":"http://x/y.png","github":"https://github.com/x"}, partial=True, context={"request": type("obj", (), {"scheme": "http", "get_host": lambda: "testserver"})})
-        self.assertTrue(s.is_valid(), s.errors)
-        u = s.save()
-        self.assertEqual(u.name, "New")
+    def test_create_entry_image_valid_base64_success(self):
+        """Test that API accepts valid base64 image content - SUCCESS"""
+        url = reverse("entries-list-create", kwargs={"author_id": self.user.id})
+        img_data = base64.b64encode(b"fake image data").decode()
+        data = {
+            "title": "Image Entry",
+            "content": img_data,
+            "contentType": "image/png;base64",
+            "visibility": "PUBLIC"
+        }
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-    def test_user_serializer_followers_fields_present(self):
-        """Test that user serializer includes required author fields"""
-        from api.serializers import AuthorSerializer
-        s = AuthorSerializer(self.user, context={"request": type("obj", (), {"scheme": "http", "get_host": lambda: "testserver"})})
-        data = s.data
-        self.assertIn("type", data)
-        self.assertIn("id", data)
-        self.assertIn("displayName", data)
+    def test_create_entry_image_invalid_base64_failure(self):
+        """Test that API rejects invalid base64 image content - FAILURE"""
+        url = reverse("entries-list-create", kwargs={"author_id": self.user.id})
+        data = {
+            "title": "Image Entry",
+            "content": "not-valid-base64",
+            "contentType": "image/png;base64",
+            "visibility": "PUBLIC"
+        }
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_entry_partial_success(self):
+        """Test that API supports partial entry updates - SUCCESS"""
+        entry = Entry.objects.create(
+            author=self.user, 
+            title="Original Title", 
+            content="Content", 
+            content_type="text/plain", 
+            visibility="PUBLIC"
+        )
+        url = reverse("entry-retrieve-update", kwargs={"author_id": self.user.id, "entry_id": entry.id})
+        data = {"title": "Updated Title"}
+        response = self.client.put(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entry.refresh_from_db()
+        self.assertEqual(entry.title, "Updated Title")

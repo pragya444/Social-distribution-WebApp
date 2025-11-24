@@ -11,8 +11,8 @@ import base64
 import warnings
 from api.models import Entry, Follow, Comment, EntryLike, CommentLike, Node
 
-warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
-warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
+warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')
+warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')
 
 User = get_user_model()
 
@@ -23,49 +23,53 @@ class ProfileAPITests(TestCase):
         self.other_user = User.objects.create_user(username="otheruser", password="pass", is_active=True)
         self.client.force_login(self.user)
 
-    def test_retrieve_profile(self):
-        """Test user story: Consistent identity per node, public profile page"""
+    def test_retrieve_profile_api_success(self):
+        """Test user story: Consistent identity per node - SUCCESS"""
         url = reverse("profile", kwargs={"author_id": self.user.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(
-            self.user.username in response.content.decode() 
-            or f"@{self.user.username.lower()}" in response.content.decode()
-            or "Anonymous" in response.content.decode(),   # fallback if name empty
-            f"Expected username or displayName in response, got:\n{response.content.decode()}"
-        )
-        self.assertIsNotNone(self.user.url)
-        self.assertIn(str(self.user.id), self.user.url)
+        # Check API response structure, not HTML content
+        self.assertIn("id", response.data)
+        self.assertIn("displayName", response.data)
+        self.assertIn("url", response.data)
+        self.assertIn(str(self.user.id), response.data["id"])
 
-    def test_edit_profile(self):
-        """Test user story: Edit profile (name, description, picture, GitHub), manage profile via browser"""
-        self.client.force_login(self.user)  
+    def test_edit_profile_api_success(self):
+        """Test user story: Edit profile via API - SUCCESS"""
         url = reverse("profile", kwargs={"author_id": self.user.id})
-        csrf_response = self.client.get(url)        
-        csrf_token = csrf_response.cookies.get('csrftoken', '') 
         data = {
             "displayName": "New Name",
             "description": "Updated description",
             "github": "https://github.com/testuser",
             "profileImage": "https://example.com/pic.jpg"
         }
-        response = self.client.put(url, data, format='json', HTTP_X_CSRFTOKEN=csrf_token)
+        response = self.client.put(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user.refresh_from_db()
         self.assertEqual(self.user.name, "New Name")
         self.assertEqual(self.user.description, "Updated description")
         self.assertEqual(self.user.github, "https://github.com/testuser")
         self.assertEqual(self.user.profile_picture, "https://example.com/pic.jpg")
-        
-    
-    def test_profile_edit_no_login(self):
-        """Test user story: Prevent profile editing when not logged in"""
+
+    def test_edit_profile_api_invalid_data_failure(self):
+        """Test user story: Edit profile with invalid data via API - FAILURE"""
+        url = reverse("profile", kwargs={"author_id": self.user.id})
+        data = {
+            "displayName": "",  # Invalid empty name
+            "github": "invalid-url"  # Invalid URL format
+        }
+        response = self.client.put(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_profile_edit_unauthenticated_failure(self):
+        """Test user story: Prevent profile editing when not logged in - FAILURE"""
         self.client.logout()
         url = reverse("profile", kwargs={"author_id": self.user.id})
         response = self.client.put(url, {"displayName": "Hacked"}, format='json')
-        self.assertIn(response.status_code, [status.HTTP_302_FOUND, status.HTTP_403_FORBIDDEN])
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_profile_edit_unauthorized_user(self):
-        """Test user story: Prevent profile editing by other users"""
+    def test_profile_edit_unauthorized_user_failure(self):
+        """Test user story: Prevent profile editing by other users - FAILURE"""
         self.client.force_login(self.other_user)
         url = reverse("profile", kwargs={"author_id": self.user.id})
         data = {
@@ -75,10 +79,59 @@ class ProfileAPITests(TestCase):
             "profileImage": "https://example.com/pic.jpg"
         }
         response = self.client.put(url, data, format='json')
-        self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_302_FOUND])
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def check_user_not_found(self):
-        """Test user story: Handle non-existent users gracefully"""
-        url = reverse("profile", kwargs={"author_id": "nonexistent"})
+    def test_retrieve_nonexistent_profile_failure(self):
+        """Test user story: Handle non-existent users gracefully - FAILURE"""
+        url = reverse("profile", kwargs={"author_id": "999999"})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_retrieve_other_user_profile_success(self):
+        """Test user story: View other user profiles - SUCCESS"""
+        url = reverse("profile", kwargs={"author_id": self.other_user.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("id", response.data)
+        self.assertIn("displayName", response.data)
+        self.assertIn(str(self.other_user.id), response.data["id"])
+
+    def test_partial_profile_update_success(self):
+        """Test user story: Partial profile updates via API - SUCCESS"""
+        url = reverse("profile", kwargs={"author_id": self.user.id})
+        data = {
+            "displayName": "Partial Update Name"
+        }
+        response = self.client.put(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.name, "Partial Update Name")
+
+class AuthorListAPITests(TestCase):
+    """Test author listing API functionality"""
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username="testuser", password="pass", is_active=True)
+        self.other_user = User.objects.create_user(username="otheruser", password="pass", is_active=True)
+        self.client.force_login(self.user)
+
+    def test_get_author_list_success(self):
+        """Test user story: Browse authors via API - SUCCESS"""
+        url = reverse("author-list")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("type", response.data)
+        self.assertEqual(response.data["type"], "authors")
+
+    def test_get_author_list_pagination_success(self):
+        """Test user story: Paginated author list via API - SUCCESS"""
+        url = reverse("author-list") + "?page=1&size=10"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_get_author_list_unauthenticated_failure(self):
+        """Test user story: Author list requires authentication - FAILURE"""
+        self.client.logout()
+        url = reverse("author-list")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

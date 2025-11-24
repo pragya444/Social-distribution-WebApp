@@ -36,7 +36,6 @@ class EntryEdgeCaseTests(TestCase):
         response = self.client.post(url, data, format="json")
         self.assertIn(response.status_code, [
             status.HTTP_201_CREATED,
-            status.HTTP_400_BAD_REQUEST
         ])
     
     def test_create_entry_extremely_long_content(self):
@@ -52,8 +51,6 @@ class EntryEdgeCaseTests(TestCase):
         response = self.client.post(url, data, format="json")
         self.assertIn(response.status_code, [
             status.HTTP_201_CREATED,
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
         ])
     
     def test_update_entry_url_field(self):
@@ -79,7 +76,6 @@ class EntryEdgeCaseTests(TestCase):
         response = self.client.put(url, data, format="json")
         self.assertIn(response.status_code, [
             status.HTTP_200_OK,
-            status.HTTP_400_BAD_REQUEST
         ])
     
     def test_patch_entry_partial_update(self):
@@ -98,8 +94,7 @@ class EntryEdgeCaseTests(TestCase):
         data = {"title": "Patched Title"}
         response = self.client.patch(url, data, format="json")
         self.assertIn(response.status_code, [
-            status.HTTP_200_OK,
-            status.HTTP_405_METHOD_NOT_ALLOWED
+            status.HTTP_405_METHOD_NOT_ALLOWED,
         ])
 
 class LikedEdgeCaseTests(TestCase):
@@ -113,7 +108,7 @@ class LikedEdgeCaseTests(TestCase):
         """Test liked entries when user has no likes"""
         url = reverse("liked-entries", kwargs={"author_id": self.user.id})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
     
     def test_liked_entry_detail_deleted_entry(self):
         """Test getting liked entry detail for deleted entry"""
@@ -135,7 +130,6 @@ class LikedEdgeCaseTests(TestCase):
         })
         response = self.client.get(url)
         self.assertIn(response.status_code, [
-            status.HTTP_200_OK,
             status.HTTP_404_NOT_FOUND
         ])
 
@@ -162,7 +156,6 @@ class ImageEndpointEdgeCaseTests(TestCase):
         response = self.client.get(url)
         self.assertIn(response.status_code, [
             status.HTTP_404_NOT_FOUND,
-            status.HTTP_400_BAD_REQUEST
         ])
     
     def test_image_endpoint_invalid_base64(self):

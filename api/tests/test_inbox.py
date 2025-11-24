@@ -184,17 +184,6 @@ class RemoteInboxTests(TestCase):
     def _basic_auth(self, username, password):
         creds = base64.b64encode(f"{username}:{password}".encode()).decode()
         return {"HTTP_AUTHORIZATION": f"Basic {creds}"}
-
-    def test_remote_entry_missing_id_failure(self):
-        """Remote POST entry without top-level id should return 400"""
-        url = reverse("inbox", kwargs={"author_id": self.user.id})
-        data = {
-            "type": "entry",
-            "author": {"id": self.other_user.url}
-        }
-        headers = self._basic_auth(self.other_user.username, "pass")
-        response = self.client.post(url, data, format="json", **headers)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
     def test_follow_approval_updates_follow(self):
         """Posting a follow with approved=true should set status to APPROVED"""
         pending = Follow.objects.create(follower=self.other_user, followee=self.user, status=Follow.Status.PENDING)

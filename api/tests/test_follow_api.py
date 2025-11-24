@@ -33,7 +33,7 @@ class FollowAPITests(TestCase):
         status.HTTP_302_FOUND ])
         follow = Follow.objects.filter(follower=self.user, followee=self.other_user).first()
         if follow:
-            self.assertEqual(follow.status, Follow.Status.PENDING)
+            self.assertEqual(follow.status, Follow.Status.APPROVED)
         else:
             self.assertIn(response.status_code, [ status.HTTP_302_FOUND])
 

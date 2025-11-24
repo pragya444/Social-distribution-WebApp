@@ -342,11 +342,10 @@ class EntryByFQIDAPITests(TestCase):
         
     def test_entry_by_fqid_get(self):
         """Test getting entry by FQID"""
-        import urllib.parse
-        entry_fqid = urllib.parse.quote(self.entry.url, safe='')
+        entry_fqid = self.entry.fqid
         url = reverse("entry-by-fqid", kwargs={"entry_fqid": entry_fqid})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
 
 class EntryImageAPITests(TestCase):
     """Test entry image endpoints"""
@@ -368,7 +367,7 @@ class EntryImageAPITests(TestCase):
         
         url = reverse("entry-image", kwargs={"author_id": self.user.id, "entry_id": entry.id})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
     
     def test_entry_image_fqid_endpoint(self):
         """Test image entry by FQID"""
@@ -381,11 +380,11 @@ class EntryImageAPITests(TestCase):
             visibility="PUBLIC"
         )
         
-        import urllib.parse
-        entry_fqid = urllib.parse.quote(entry.url, safe='')
+   
+        entry_fqid = entry.fqid
         url = reverse("entry-image-fqid", kwargs={"entry_fqid": entry_fqid})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN, status.HTTP_400_BAD_REQUEST])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
 
 class ImageAPITests(TestCase):
     def setUp(self):
@@ -398,13 +397,13 @@ class ImageAPITests(TestCase):
         entry = Entry.objects.create(
             author=self.user,
             title="Image Entry",
-            content="base64encodeddata",
-            content_type="image/png;base64",
+            content="dGVzdA==",
+            content_type="image/pnga_something;base64",
             visibility="PUBLIC"
         )
         url = reverse("entry-image", kwargs={"author_id": self.user.id, "entry_id": entry.id})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
         self.assertTrue(entry.is_image)
 
 class EntryLikesAPIEdgeTests(TestCase):
@@ -424,27 +423,25 @@ class EntryLikesAPIEdgeTests(TestCase):
         
     def test_like_entry_by_fqid(self):
         """Test liking entry using FQID endpoint"""
-        import urllib.parse
-        entry_fqid = urllib.parse.quote(self.entry.url, safe='')
+        
+        entry_fqid = self.entry.fqid
         url = reverse("entry-likes-fqid", kwargs={"entry_fqid": entry_fqid})
         response = self.client.get(url)     # endpoint may not support POST yet
         response = self.client.get(url)
         self.assertIn(response.status_code, [
             status.HTTP_200_OK,
-            status.HTTP_404_NOT_FOUND,
-            status.HTTP_403_FORBIDDEN,
-            status.HTTP_405_METHOD_NOT_ALLOWED
+            
         ])
     
     def test_get_likes_by_fqid(self):
         """Test getting likes using FQID endpoint"""
         EntryLike.objects.create(user=self.user, entry=self.entry)
         
-        import urllib.parse
-        entry_fqid = urllib.parse.quote(self.entry.url, safe='')
+       
+        entry_fqid = self.entry.fqid
         url = reverse("entry-likes-fqid", kwargs={"entry_fqid": entry_fqid})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
 
 class LikedAPITests(TestCase):
     """Test liked entries API endpoint"""
@@ -479,7 +476,7 @@ class LikedAPITests(TestCase):
         
         url = reverse("liked-entry-detail", kwargs={"author_id": self.user.id, "like_id": liked_obj.id})
         response = self.client.get(url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+        self.assertIn(response.status_code, [status.HTTP_200_OK])
 
 class PaginationEdgeCaseTests(TestCase):
     """Test pagination edge cases"""
@@ -497,9 +494,7 @@ class PaginationEdgeCaseTests(TestCase):
         url = reverse("author-list") + "?page=-1&size=10"
         response = self.client.get(url)
         self.assertIn(response.status_code, [
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_200_OK,
-            status.HTTP_404_NOT_FOUND
+            status.HTTP_200_OK
         ])
     
     def test_author_list_zero_size(self):
@@ -509,18 +504,15 @@ class PaginationEdgeCaseTests(TestCase):
             response = self.client.get(url)
             self.assertIn(response.status_code, [
                 status.HTTP_400_BAD_REQUEST,
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                status.HTTP_200_OK
             ])
-        except (ValueError, ZeroDivisionError):
-            pass  
+        except (ValueError, ZeroDivisionError) as e:
+            print("Caught expected exception for zero page size pagination:", e)
     
     def test_author_list_huge_page_number(self):
         """Test author list with extremely large page number"""
         url = reverse("author-list") + "?page=999999&size=10"
         response = self.client.get(url)
         self.assertIn(response.status_code, [
-            status.HTTP_404_NOT_FOUND,
             status.HTTP_200_OK
         ])
     
@@ -532,8 +524,7 @@ class PaginationEdgeCaseTests(TestCase):
             response = self.client.get(url)
             self.assertIn(response.status_code, [
                 status.HTTP_400_BAD_REQUEST,
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                status.HTTP_200_OK
+
             ])
-        except (ValueError, EmptyPage):
-            pass 
+        except (ValueError, EmptyPage) as e:
+            print("Caught expected exception for negative page size pagination:", e)

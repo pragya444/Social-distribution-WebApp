@@ -26,7 +26,7 @@ def get_host_from_object(object_fqid: str) -> str:
 def is_host_followed(remote_host):
     return Follow.objects.filter(
         status=Follow.Status.APPROVED,
-        followee_host_icontains=remote_host
+        followee__host__icontains=remote_host
     ).exists()
 
 

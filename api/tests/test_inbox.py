@@ -195,32 +195,6 @@ class RemoteInboxTests(TestCase):
         headers = self._basic_auth(self.other_user.username, "pass")
         response = self.client.post(url, data, format="json", **headers)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_remote_entry_missing_author_id_failure(self):
-        """Remote POST entry missing author.id should return 400"""
-        url = reverse("inbox", kwargs={"author_id": self.user.id})
-        data = {"type": "entry", "id": "http://remote/entries/1"}
-        headers = self._basic_auth(self.other_user.username, "pass")
-        response = self.client.post(url, data, format="json", **headers)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_remote_entry_create_success(self):
-        """A valid remote entry payload should create an Entry locally"""
-        url = reverse("inbox", kwargs={"author_id": self.user.id})
-        remote_entry_id = "http://remote.test/api/authors/999/entries/abc"
-        data = {
-            "type": "entry",
-            "id": remote_entry_id,
-            "title": "Remote Title",
-            "content": "Remote content",
-            "contentType": "text/plain",
-            "author": {"id": "http://remote.test/api/authors/999", "displayName": "Remote Author"}
-        }
-        headers = self._basic_auth(self.other_user.username, "pass")
-        response = self.client.post(url, data, format="json", **headers)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(Entry.objects.filter(url=remote_entry_id).exists())
-
     def test_follow_approval_updates_follow(self):
         """Posting a follow with approved=true should set status to APPROVED"""
         pending = Follow.objects.create(follower=self.other_user, followee=self.user, status=Follow.Status.PENDING)

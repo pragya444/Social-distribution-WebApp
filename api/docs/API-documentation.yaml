@@ -35,158 +35,439 @@ components:
   schemas:
     Author:
       type: object
-      description: API author object returned by endpoints
+      description: |
+        API author object representing a user in the distributed social network.
+        
+        **When to use:**
+        - Returned in most API responses that involve users (entries, comments, likes, follows)
+        - Used to identify the author of content across the network
+        - Contains both API URLs (id, host) and human-readable information (displayName, description)
+        
+        **Important notes:**
+        - The `id` field contains the full API URL to access this author
+        - The `host` field indicates which node/server this author belongs to
+        - The `web` field provides a human-friendly URL for browser access
+        - For federated authors, the `id` may point to a different server than the current one
       properties:
         type:
           type: string
-          example: author
-          description: Constant type tag
+          example: "author"
+          description: |
+            Type discriminator field, always set to "author".
+            **Purpose:** Allows API clients to distinguish author objects from other object types in mixed responses.
+            **When to use:** Always present in author objects; use for type checking in generic handlers.
         id:
           type: string
-          example: "550e8400-e29b-41d4-a716-446655440000"
-          description: Unique identifier for the author
-        username:
+          format: uri
+          example: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000"
+          description: |
+            Fully-qualified API URL to access this author's profile.
+            **Purpose:** Unique identifier that can be used as an API endpoint to retrieve author details.
+            **Format:** Complete URL in format: `{host}/authors/{author_uuid}`
+            **When to use:** Use this URL to fetch author details programmatically or as a foreign key reference.
+        host:
           type: string
+          format: uri
           example: "http://127.0.0.1:8000/api/"
-          description: Host base URL for this node
+          description: |
+            Base API URL of the node/server where this author's account exists.
+            **Purpose:** Identifies the home server for this author in the distributed network.
+            **Format:** Always ends with `/api/`
+            **When to use:** Use to determine if an author is local or remote, and to construct API calls to their home server.
         displayName:
           type: string
           example: "John Doe"
-          description: Human-friendly display name
+          minLength: 1
+          maxLength: 255
+          description: |
+            Human-readable display name shown in the UI.
+            **Purpose:** The name shown to other users; can be changed by the author.
+            **When to use:** Display this in UI instead of username for better readability.
+            **Validation:** Required field, cannot be blank, max 255 characters.
         description:
           type: string
           example: "Software developer and open source enthusiast"
-          description: Bio/About text shown on profile
+          maxLength: 500
+          description: |
+            Author's bio or about text.
+            **Purpose:** Self-description displayed on the author's profile page.
+            **When to use:** Optional field for authors to provide additional context about themselves.
+            **Validation:** Max 500 characters, can be empty/blank.
         github:
           type: string
+          format: uri
           example: "https://github.com/johndoe"
-          description: GitHub profile URL (optional)
+          description: |
+            URL to the author's GitHub profile.
+            **Purpose:** Links author to their GitHub account; used to fetch GitHub activity for display.
+            **Format:** Full GitHub URL (e.g., https://github.com/username) or username (auto-converted to URL).
+            **When to use:** Optional field; when provided, system may fetch and display recent GitHub events.
+            **Special behavior:** If only username provided (no http), automatically prepended with https://github.com/
         profileImage:
           type: string
+          format: uri
           example: "https://example.com/images/profile.jpg"
-          description: Absolute URL to profile picture (optional)
+          description: |
+            URL to the author's profile picture.
+            **Purpose:** Avatar/profile image displayed throughout the application.
+            **Format:** Complete URL to an image resource (JPEG, PNG, GIF supported).
+            **When to use:** Optional field; if not provided, application shows default avatar.
+            **Best practices:** Use reasonably-sized images (< 5MB); square aspect ratio recommended.
         web:
           type: string
-          example: "http://127.0.0.1:8000/authors/johndoe"
-          description: Human-facing web URL for the profile
+          format: uri
+          example: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000"
+          description: |
+            Human-facing web URL to view this author's profile in a browser.
+            **Purpose:** URL for sharing profiles with humans (not for API calls).
+            **Format:** Complete URL without `/api/` in path.
+            **When to use:** Use for hyperlinks in web pages, social sharing, or browser redirects.
+            **Difference from `id`:** This is the web interface URL, while `id` is the API endpoint.
       required: [type, id, host, displayName]
       example:
-        type: author
+        type: "author"
         id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000"
         host: "http://127.0.0.1:8000/api/"
         displayName: "John Doe"
         description: "Software developer and open source enthusiast"
         github: "https://github.com/johndoe"
         profileImage: "https://example.com/images/profile.jpg"
-        web: "http://127.0.0.1:8000/authors/johndoe"
+        web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000"
 
     Entry:
       type: object
-      description: Represents a post/entry
+      description: |
+        Represents a post/entry in the social network.
+        
+        **When to use:**
+        - Main content object for the platform
+        - Returned when fetching posts, creating posts, or updating posts
+        - Can contain text content (plain or markdown) or base64-encoded images
+        
+        **Important notes:**
+        - Visibility controls who can see the entry
+        - For image entries, contentType must end with `;base64` and content must be valid base64
+        - The `id` field is the API URL, `web` is the browser URL
+        - Comments and likes are nested objects with pagination metadata
       properties:
         type:
           type: string
           example: "entry"
-          description: Type identifier, always "entry"
+          description: |
+            Type discriminator, always "entry".
+            **Purpose:** Identifies this object as an entry in mixed-type responses.
         title:
           type: string
           example: "My First Post"
-          description: Title of the entry
+          minLength: 1
+          maxLength: 255
+          description: |
+            Title/headline of the entry.
+            **Purpose:** Brief summary displayed in feeds and at top of entry.
+            **Validation:** Required on creation, max 255 characters.
+            **When to use:** Always provide a descriptive title for better UX.
         id:
           type: string
-          example: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
-          description: Fully-qualified API URL for the entry
+          format: uri
+          example: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001"
+          description: |
+            Fully-qualified API URL for this entry.
+            **Purpose:** Unique identifier and API endpoint to retrieve/update this entry.
+            **Format:** `{host}/authors/{author_id}/entries/{entry_id}`
+            **When to use:** Use for API calls, foreign key references, or sharing between nodes.
         web:
           type: string
-          example: "http://127.0.0.1:8000/authors/550e.../entries/660e..."
-          description: Human-facing web URL for the entry
+          format: uri
+          example: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001"
+          description: |
+            Human-facing web URL to view this entry in a browser.
+            **Purpose:** URL for browser navigation and social sharing.
+            **Difference from `id`:** Excludes `/api/` in path; intended for humans, not API calls.
         description:
           type: string
           example: "Short summary of the post"
-          description: Optional short description
+          maxLength: 500
+          description: |
+            Optional brief summary or excerpt.
+            **Purpose:** Can be used for previews, SEO meta descriptions, or feed summaries.
+            **Validation:** Max 500 characters, can be empty.
+            **When to use:** Recommended for longer entries to provide context in feeds.
         contentType:
           type: string
           example: "text/markdown"
+          enum: 
+            - text/plain
+            - text/markdown
+            - image/png;base64
+            - image/jpeg;base64
+            - application/base64
           description: |
-            Content type of the entry content. Supported types:
-            - text/plain: Plain text
-            - text/markdown: Markdown formatted text
-            - image/png;base64: Base64 encoded PNG image
-            - image/jpeg;base64: Base64 encoded JPEG image
+            MIME type indicating the format of the content field.
+            **Purpose:** Tells clients how to render or process the content.
+            **Supported types:**
+            - `text/plain`: Unformatted text, render as-is
+            - `text/markdown`: Markdown-formatted text, requires markdown parser
+            - `image/png;base64`: Base64-encoded PNG image
+            - `image/jpeg;base64`: Base64-encoded JPEG image
+            - `application/base64`: Generic base64-encoded content
+            
+            **When to use:**
+            - Use `text/markdown` for rich text with formatting
+            - Use `text/plain` for simple messages
+            - Use `image/*;base64` when content is a base64-encoded image
+            
+            **Validation:** Required on creation; must be one of the supported types.
         content:
           type: string
           example: "This is my **first post** in the platform!"
-          description: The actual content of the entry
+          description: |
+            The actual content/body of the entry.
+            **Purpose:** Main content displayed to users.
+            **Format depends on contentType:**
+            - For text/plain or text/markdown: UTF-8 text string
+            - For image types: Base64-encoded image data (no data URI prefix)
+            
+            **Validation:**
+            - Required on creation
+            - For image types, must be valid base64
+            - No specific length limit for text, but be reasonable
+            
+            **Examples:**
+            - Text: "Hello world!"
+            - Markdown: "# Heading\n\nThis is **bold**"
+            - Image: "iVBORw0KGgoAAAANSUhEUgAAAAUA..." (base64 string)
         author:
           $ref: '#/components/schemas/Author'
+          description: |
+            Complete author object for the entry's creator.
+            **Purpose:** Provides full author information without additional API calls.
+            **Always included:** Yes, in all entry responses.
         comments:
           type: object
-          description: Comments collection metadata
+          description: |
+            Metadata about comments on this entry.
+            **Purpose:** Provides comment count and URL to fetch comments without including full comment data.
+            **Structure:** Contains type, id, web, page_number, size, count, and empty src array.
+            **When to use:** Check count to display comment count; use id to fetch actual comments.
+          properties:
+            type:
+              type: string
+              example: "comments"
+            id:
+              type: string
+              format: uri
+              example: "http://127.0.0.1:8000/api/authors/550e.../entries/660e.../comments"
+            web:
+              type: string
+              format: uri
+              example: "http://127.0.0.1:8000/authors/550e.../entries/660e.../comments"
+            page_number:
+              type: integer
+              example: 1
+            size:
+              type: integer
+              example: 5
+            count:
+              type: integer
+              example: 12
+              description: "Total number of comments on this entry"
+            src:
+              type: array
+              items: {}
+              example: []
+              description: "Empty in entry response; fetch from `id` URL for actual comments"
         likes:
           type: object
-          description: Likes collection metadata
+          description: |
+            Metadata about likes on this entry.
+            **Purpose:** Provides like count and URL to fetch detailed like information.
+            **Structure:** Contains type, id, web, page_number, size, count, and empty src array.
+            **When to use:** Check count to display like count; use id to fetch who liked the entry.
+          properties:
+            type:
+              type: string
+              example: "likes"
+            id:
+              type: string
+              format: uri
+              example: "http://127.0.0.1:8000/api/authors/550e.../entries/660e.../likes"
+            web:
+              type: string
+              format: uri
+              example: "http://127.0.0.1:8000/authors/550e.../entries/660e.../likes"
+            page_number:
+              type: integer
+              example: 1
+            size:
+              type: integer
+              example: 50
+            count:
+              type: integer
+              example: 42
+              description: "Total number of likes on this entry"
+            src:
+              type: array
+              items: {}
+              example: []
+              description: "Empty in entry response; fetch from `id` URL for actual like details"
         published:
           type: string
           format: date-time
           example: "2023-10-05T15:45:00Z"
-          description: Timestamp when entry was published
+          description: |
+            ISO 8601 timestamp when entry was first created.
+            **Purpose:** Sort entries chronologically, display "posted on" information.
+            **Format:** Always in UTC with 'Z' suffix.
+            **Read-only:** Set automatically on creation, never changes.
         updated:
           type: string
           format: date-time
           example: "2023-10-05T16:00:00Z"
-          description: Timestamp when entry was last updated
+          description: |
+            ISO 8601 timestamp when entry was last modified.
+            **Purpose:** Track edit history, show "last edited" information.
+            **Format:** Always in UTC with 'Z' suffix.
+            **Updated automatically:** Changes whenever entry is saved.
         visibility:
           type: string
           enum: [PUBLIC, UNLISTED, FRIENDS, PRIVATE]
           example: "PUBLIC"
           description: |
-            Visibility level of the entry:
-            - PUBLIC: Visible to everyone
-            - UNLISTED: Visible via direct link but not in public streams
-            - FRIENDS: Visible only to mutual followers
-            - PRIVATE: Visible only to the author
-      required: [type, id, contentType, content, author]
+            Access control level for this entry.
+            **Purpose:** Controls who can view this entry.
+            
+            **Visibility levels:**
+            - **PUBLIC:** Anyone can see this entry, appears in public feeds and search results.
+              - Use for: Content intended for wide audience
+              - Appears in: Author's public stream, global feeds, search results
+              
+            - **UNLISTED:** Anyone with the direct link can view, but not listed in public feeds.
+              - Use for: Semi-private content, selective sharing
+              - Appears in: Only when accessed via direct URL or share link
+              
+            - **FRIENDS:** Only mutual followers (friends) can view.
+              - Use for: Content for your friend circle
+              - Appears in: Friends' personal feeds only
+              - Requires: Mutual follow relationship
+              
+            - **PRIVATE:** Only the author can view.
+              - Use for: Drafts, personal notes, truly private content
+              - Appears in: Author's private stream only
+            
+            **Default:** PUBLIC
+            **Can be changed:** Yes, authors can update visibility after posting.
+      required: [type, id, contentType, content, author, visibility]
       example:
         type: "entry"
         title: "My First Post"
-        id: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
-        web: "http://127.0.0.1:8000/authors/550e.../entries/660e..."
+        id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001"
+        web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001"
+        description: "My very first entry on the platform"
         contentType: "text/markdown"
-        content: "This is my **first post** in the platform!"
+        content: "This is my **first post** in the platform! I'm excited to share my thoughts here."
         author:
-          type: author
-          id: "http://127.0.0.1:8000/api/authors/550e..."
+          type: "author"
+          id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000"
           host: "http://127.0.0.1:8000/api/"
           displayName: "John Doe"
-          web: "http://127.0.0.1:8000/authors/johndoe"
+          description: "Software developer"
+          github: "https://github.com/johndoe"
+          profileImage: "https://example.com/john.jpg"
+          web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000"
+        comments:
+          type: "comments"
+          id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001/comments"
+          web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001"
+          page_number: 1
+          size: 5
+          count: 3
+          src: []
+        likes:
+          type: "likes"
+          id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001/likes"
+          web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001/likes"
+          page_number: 1
+          size: 50
+          count: 15
+          src: []
         published: "2023-10-05T15:45:00Z"
+        updated: "2023-10-05T15:45:00Z"
         visibility: "PUBLIC"
 
     EntryList:
       type: object
-      description: Paginated list of entries
+      description: |
+        Paginated list of entries.
+        
+        **When to use:**
+        - Returned when listing entries for an author
+        - Used in stream/feed endpoints
+        - Provides pagination for large result sets
+        
+        **How pagination works:**
+        - Use `page` query parameter to navigate pages (1-based, default: 1)
+        - Use `size` query parameter to control items per page (default: 10)
+        - `count` field shows total items across all pages
+        - `page_number` field shows current page
+        - `src` array contains the actual entry objects for current page
+        
+        **Pagination example:**
+        - First page: `GET /authors/{id}/entries?page=1&size=10`
+        - Second page: `GET /authors/{id}/entries?page=2&size=10`
+        - Larger pages: `GET /authors/{id}/entries?page=1&size=50`
+        
+        **Best practices:**
+        - Start with page=1
+        - Use reasonable page sizes (10-50 items)
+        - Calculate total pages: `Math.ceil(count / size)`
+        - Stop when `src` is empty or page_number * size >= count
       properties:
         type:
           type: string
           example: "entries"
-          description: Type identifier, always "entries"
+          description: |
+            Type discriminator, always "entries".
+            **Purpose:** Identifies this object as a paginated entry list.
         page_number:
           type: integer
+          minimum: 1
           example: 1
-          description: Current page (1-based)
+          description: |
+            Current page number (1-based indexing).
+            **Purpose:** Indicates which page of results you're viewing.
+            **Range:** 1 to Math.ceil(count / size)
+            **Default:** 1 when not specified in request
         size:
           type: integer
+          minimum: 1
+          maximum: 100
           example: 10
-          description: Page size
+          description: |
+            Number of entries per page.
+            **Purpose:** Controls how many entries are returned in the `src` array.
+            **Default:** 10 when not specified in request
+            **Recommended range:** 10-50 for optimal performance
+            **Maximum:** 100 to prevent excessive data transfer
         count:
           type: integer
+          minimum: 0
           example: 42
-          description: Total number of entries across all pages
+          description: |
+            Total number of entries across all pages.
+            **Purpose:** Shows the complete result set size for calculating pagination.
+            **Use to calculate total pages:** `Math.ceil(count / size)`
+            **Note:** This is the total count, not the count of items in current `src` array.
         src:
           type: array
           items:
             $ref: '#/components/schemas/Entry'
-          description: Array of entry objects for current page
+          description: |
+            Array of entry objects for the current page.
+            **Purpose:** Contains the actual entry data for this page.
+            **Length:** Up to `size` items; last page may have fewer
+            **Empty array:** Indicates page beyond available results
+            **Order:** Typically newest first (by published date descending)
+      required: [type, page_number, size, count, src]
       example:
         type: "entries"
         page_number: 1
@@ -195,69 +476,200 @@ components:
         src:
           - type: "entry"
             title: "My First Post"
-            id: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
+            id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001"
+            web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001"
             contentType: "text/markdown"
             content: "This is my **first post** in the platform!"
             author:
-              type: author
-              id: "http://127.0.0.1:8000/api/authors/550e..."
+              type: "author"
+              id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000"
               host: "http://127.0.0.1:8000/api/"
               displayName: "John Doe"
-              web: "http://127.0.0.1:8000/authors/johndoe"
+              web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000"
             published: "2023-10-05T15:45:00Z"
+            updated: "2023-10-05T15:45:00Z"
             visibility: "PUBLIC"
+            comments:
+              type: "comments"
+              count: 3
+              src: []
+            likes:
+              type: "likes"
+              count: 15
+              src: []
+          - type: "entry"
+            title: "Another Update"
+            id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440002"
+            web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440002"
+            contentType: "text/plain"
+            content: "Just another update from me!"
+            author:
+              type: "author"
+              id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000"
+              host: "http://127.0.0.1:8000/api/"
+              displayName: "John Doe"
+              web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000"
+            published: "2023-10-06T10:20:00Z"
+            updated: "2023-10-06T10:20:00Z"
+            visibility: "PUBLIC"
+            comments:
+              type: "comments"
+              count: 0
+              src: []
+            likes:
+              type: "likes"
+              count: 7
+              src: []
 
     Comment:
       type: object
-      description: Represents a comment on an entry
+      description: |
+        Represents a comment on an entry.
+        
+        **When to use:**
+        - Returned when fetching comments for an entry
+        - Used when creating or retrieving individual comments
+        - Part of the social interaction features
+        
+        **Important notes:**
+        - Comments belong to a specific entry
+        - Includes full author information
+        - Has its own likes collection
+        - Cannot be edited after creation (only deleted by author or entry owner)
       properties:
         type:
           type: string
           example: "comment"
-          description: Type identifier, always "comment"
+          description: |
+            Type discriminator, always "comment".
+            **Purpose:** Identifies this object as a comment in mixed-type responses.
         id:
           type: string
-          example: "http://127.0.0.1:8000/api/authors/111/commented/770e8400-e29b-41d4-a716-446655440000"
-          description: Fully-qualified API URL for the comment
+          format: uri
+          example: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000/commented/770e8400-e29b-41d4-a716-446655440000"
+          description: |
+            Fully-qualified API URL for this comment.
+            **Purpose:** Unique identifier and API endpoint to retrieve this comment.
+            **Format:** `{host}/authors/{author_id}/commented/{comment_id}`
+            **When to use:** Use for API calls, foreign key references, or sharing between nodes.
+            **Note:** Different path structure from entries (/commented/ instead of /entries/.../comments/)
         comment:
           type: string
           example: "Great post! Thanks for sharing."
-          description: The comment text content
+          description: |
+            The comment text content.
+            **Purpose:** The actual message/response from the commenter.
+            **Validation:** Required on creation, no specific length limit but be reasonable.
+            **Format:** Plain text or markdown depending on contentType.
+            **When to use:** Always required when creating a comment.
         contentType:
           type: string
           example: "text/plain"
-          description: Content type of the comment (usually text/plain or text/markdown)
+          enum:
+            - text/plain
+            - text/markdown
+          description: |
+            MIME type indicating the format of the comment field.
+            **Purpose:** Tells clients how to render the comment text.
+            **Supported types:**
+            - `text/plain`: Unformatted text, render as-is
+            - `text/markdown`: Markdown-formatted text, requires markdown parser
+            
+            **Default:** text/plain
+            **When to use:** Set to text/markdown if comment contains markdown formatting.
         published:
           type: string
           format: date-time
           example: "2023-10-05T16:30:00Z"
-          description: Timestamp when comment was published
+          description: |
+            ISO 8601 timestamp when comment was created.
+            **Purpose:** Sort comments chronologically, display "commented on" information.
+            **Format:** Always in UTC with 'Z' suffix.
+            **Read-only:** Set automatically on creation, never changes.
         author:
           $ref: '#/components/schemas/Author'
+          description: |
+            Complete author object for the comment's creator.
+            **Purpose:** Provides full author information without additional API calls.
+            **Always included:** Yes, in all comment responses.
         entry:
           type: string
-          example: "http://127.0.0.1:8000/api/authors/550e.../entries/660e..."
-          description: API URL for the entry this comment belongs to
+          format: uri
+          example: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001"
+          description: |
+            API URL for the entry this comment belongs to.
+            **Purpose:** Links comment back to its parent entry.
+            **Format:** Complete API URL to the entry.
+            **When to use:** Use to fetch entry details or navigate to the entry.
         web:
           type: string
-          example: "http://127.0.0.1:8000/authors/johndoe/entries/660e..."
-          description: Human-facing web URL for the entry
+          format: uri
+          example: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/entries/660e8400-e29b-41d4-a716-446655440001"
+          description: |
+            Human-facing web URL to view the entry (and this comment) in a browser.
+            **Purpose:** URL for browser navigation.
+            **Difference from `entry`:** Excludes `/api/` in path; intended for humans.
         likes:
           type: object
-          description: Likes collection metadata for this comment
+          description: |
+            Metadata about likes on this comment.
+            **Purpose:** Provides like count and URL to fetch detailed like information.
+            **Structure:** Contains type, id, web, page_number, size, count, and src array.
+          properties:
+            type:
+              type: string
+              example: "likes"
+            id:
+              type: string
+              format: uri
+              example: "http://127.0.0.1:8000/api/authors/550e.../commented/770e.../likes"
+              description: "API URL to fetch likes for this comment"
+            web:
+              type: string
+              format: uri
+              example: "http://127.0.0.1:8000/authors/550e.../comments/770e.../likes"
+            page_number:
+              type: integer
+              example: 1
+            size:
+              type: integer
+              example: 50
+            count:
+              type: integer
+              example: 8
+              description: "Total number of likes on this comment"
+            src:
+              type: array
+              items:
+                type: object
+              example: []
+              description: "Array of like objects; may be populated or empty depending on context"
       required: [type, id, comment, contentType, author]
       example:
         type: "comment"
-        id: "http://127.0.0.1:8000/api/authors/111/commented/770e8400-e29b-41d4-a716-446655440000"
+        id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000/commented/770e8400-e29b-41d4-a716-446655440000"
         comment: "Great post! Thanks for sharing."
         contentType: "text/plain"
         published: "2023-10-05T16:30:00Z"
         author:
-          type: author
-          id: "http://127.0.0.1:8000/api/authors/550e..."
+          type: "author"
+          id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000"
           host: "http://127.0.0.1:8000/api/"
-          displayName: "John Doe"
-          web: "http://127.0.0.1:8000/authors/johndoe"
+          displayName: "Jane Smith"
+          description: "Tech enthusiast"
+          github: "https://github.com/janesmith"
+          profileImage: "https://example.com/jane.jpg"
+          web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000"
+        entry: "http://127.0.0.1:8000/api/authors/111/entries/660e8400-e29b-41d4-a716-446655440001"
+        web: "http://127.0.0.1:8000/authors/111/entries/660e8400-e29b-41d4-a716-446655440001"
+        likes:
+          type: "likes"
+          id: "http://127.0.0.1:8000/api/authors/550e8400-e29b-41d4-a716-446655440000/commented/770e8400-e29b-41d4-a716-446655440000/likes"
+          web: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/comments/770e8400-e29b-41d4-a716-446655440000/likes"
+          page_number: 1
+          size: 50
+          count: 8
+          src: []
 
     Likes:
       type: object
@@ -802,20 +1214,46 @@ paths:
     get:
       tags:
         - Entries
-      summary: List entries (web or API depending on Accept header)
+      summary: List entries by author (paginated)
       description: |
         ## When to Use:
-        - Fetching all entries by a specific author
-        - Displaying user's posts in a client application
+        - Fetching all entries (posts) created by a specific author
+        - Building user profile pages that show all posts
+        - Displaying author's content in a client application
+        - Implementing infinite scroll or pagination UI
         
         ## How to Use:
-        - JSON API: Send `Accept: application/json`
-        - Web interface: Send `Accept: text/html` (default)
+        ### Accept Headers:
+        - **JSON API:** Send `Accept: application/json` for programmatic access
+        - **Web interface:** Send `Accept: text/html` for browser rendering (returns HTML page)
+        
+        ### Pagination:
+        - **First page:** `GET /authors/{id}/entries?page=1&size=10`
+        - **Next pages:** Increment `page` parameter: `?page=2`, `?page=3`, etc.
+        - **Custom page size:** `?page=1&size=50` (max 100)
+        - **Calculate total pages:** `Math.ceil(count / size)` from response
+        
+        ### Visibility Rules:
+        - **Public entries:** Always visible to everyone
+        - **Unlisted entries:** Visible via direct link but not in this list
+        - **Friends entries:** Only visible if you're mutual followers with the author
+        - **Private entries:** Only visible if you are the author
+        
+        ## Why Use This Endpoint:
+        - **For client applications:** Programmatic access to author's content
+        - **For analytics:** Gather data about posting frequency and content types
+        - **For profiles:** Display comprehensive view of author's activity
+        
+        ## Why NOT Use This Endpoint:
+        - **Don't use for:** Getting entries from multiple authors (use stream endpoints instead)
+        - **Don't use for:** Real-time feeds (this is not chronologically mixed)
+        - **Avoid:** Making requests without pagination params for authors with many entries
         
         ## Important Notes:
-        - Returns entries based on visibility and authentication
-        - Private entries only visible to author
-        - Friends-only entries only visible to mutual followers
+        - Returns entries based on visibility and your authentication status
+        - Results are ordered by most recent first (published date descending)
+        - Supports both HTML and JSON responses via Accept header
+        - Empty `src` array means no more results
       parameters:
         - name: author_id
           in: path
@@ -823,17 +1261,138 @@ paths:
           schema:
             type: string
           example: "550e8400-e29b-41d4-a716-446655440000"
-          description: UUID of the author whose entries to fetch
+          description: |
+            UUID of the author whose entries to fetch.
+            **Format:** Standard UUID string
+            **How to get:** From author profile, login response, or author list endpoint
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+          description: |
+            Page number for pagination (1-based indexing).
+            **Default:** 1
+            **Min:** 1
+            **When to use:** Start with 1, increment to get next pages
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          example: 10
+          description: |
+            Number of entries per page.
+            **Default:** 10
+            **Min:** 1
+            **Max:** 100
+            **Recommended:** 10-50 for optimal performance
       responses:
         '200':
-          description: List of entries
+          description: |
+            Successfully retrieved paginated list of entries.
+            
+            **Response includes:**
+            - Pagination metadata (page_number, size, count)
+            - Array of entry objects in `src` field
+            - Each entry includes full author object and metadata
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/EntryList'
               examples:
-                public_entries:
-                  summary: Public entries list
+                first_page_with_results:
+                  summary: First page with entries
+                  description: Typical response showing first 10 entries
+                  value:
+                    type: "entries"
+                    page_number: 1
+                    size: 10
+                    count: 42
+                    src:
+                      - type: "entry"
+                        title: "My Latest Post"
+                        id: "http://127.0.0.1:8000/api/authors/550e.../entries/abc123"
+                        contentType: "text/markdown"
+                        content: "# Hello World\n\nThis is my latest post!"
+                        visibility: "PUBLIC"
+                        published: "2023-11-25T10:00:00Z"
+                        author:
+                          type: "author"
+                          id: "http://127.0.0.1:8000/api/authors/550e..."
+                          displayName: "John Doe"
+                      - type: "entry"
+                        title: "Previous Post"
+                        id: "http://127.0.0.1:8000/api/authors/550e.../entries/def456"
+                        contentType: "text/plain"
+                        content: "Another post from earlier"
+                        visibility: "PUBLIC"
+                        published: "2023-11-24T15:30:00Z"
+                        author:
+                          type: "author"
+                          id: "http://127.0.0.1:8000/api/authors/550e..."
+                          displayName: "John Doe"
+                last_page:
+                  summary: Last page with fewer items
+                  description: When page_number * size >= count
+                  value:
+                    type: "entries"
+                    page_number: 5
+                    size: 10
+                    count: 42
+                    src:
+                      - type: "entry"
+                        title: "Oldest Post"
+                        id: "http://127.0.0.1:8000/api/authors/550e.../entries/xyz789"
+                        contentType: "text/plain"
+                        content: "My very first post"
+                        visibility: "PUBLIC"
+                        published: "2023-10-01T08:00:00Z"
+                        author:
+                          type: "author"
+                          id: "http://127.0.0.1:8000/api/authors/550e..."
+                          displayName: "John Doe"
+                empty_result:
+                  summary: No entries found
+                  description: Author has no visible entries or page beyond available results
+                  value:
+                    type: "entries"
+                    page_number: 1
+                    size: 10
+                    count: 0
+                    src: []
+                with_images:
+                  summary: Page containing image entries
+                  description: Shows how image entries appear in the response
+                  value:
+                    type: "entries"
+                    page_number: 1
+                    size: 5
+                    count: 15
+                    src:
+                      - type: "entry"
+                        title: "Sunset Photo"
+                        id: "http://127.0.0.1:8000/api/authors/550e.../entries/img001"
+                        contentType: "image/png;base64"
+                        content: "iVBORw0KGgoAAAANSUhEUgAAAAUA..."
+                        visibility: "PUBLIC"
+                        published: "2023-11-25T18:00:00Z"
+                        author:
+                          type: "author"
+                          id: "http://127.0.0.1:8000/api/authors/550e..."
+                          displayName: "John Doe"
+        '404':
+          description: Author not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Author not found"
                   value:
                     type: "entries"
                     count: 3
@@ -853,19 +1412,71 @@ paths:
     post:
       tags:
         - Entries
-      summary: Create entry (JSON API)
+      summary: Create new entry (JSON API)
       description: |
         ## When to Use:
-        - Creating new posts via API clients
-        - Programmatic content creation
+        - Creating new posts programmatically via API clients
+        - Automated content publishing
+        - Integration with external systems (e.g., cross-posting from other platforms)
+        - Mobile app post creation
         
         ## How to Use:
-        Send JSON with entry content and metadata
+        ### Request Format:
+        Send JSON payload with required fields:
+        - `title`: Entry title (required, max 255 chars)
+        - `content`: Entry content (required, see contentType for format)
+        - `contentType`: Content format (required, must be valid type)
+        - `visibility`: Access control (required, PUBLIC/UNLISTED/FRIENDS/PRIVATE)
+        - `description`: Optional brief summary (max 500 chars)
         
-        ## Why Use This vs Web Form:
-        - Better for automated posting
-        - Integration with external systems
-        - More control over content formatting
+        ### Content Types:
+        **For text entries:**
+        - `text/plain`: Plain text, no formatting
+        - `text/markdown`: Markdown formatted text (supports **bold**, *italic*, # headers, etc.)
+        
+        **For image entries:**
+        - `image/png;base64`: Base64-encoded PNG image
+        - `image/jpeg;base64`: Base64-encoded JPEG image
+        - `application/base64`: Generic base64 content
+        
+        ### Image Entry Guidelines:
+        1. Encode image to base64 (without data URI prefix)
+        2. Set contentType to `image/png;base64` or `image/jpeg;base64`
+        3. Put base64 string in `content` field
+        4. Example: `{"content": "iVBORw0KGgoAAAA...", "contentType": "image/png;base64"}`
+        
+        ### Authentication:
+        - **Required:** Yes, must be authenticated via JWT cookie
+        - **Authorization:** Can only create entries for your own author account
+        - **Forbidden:** Creating entries for other users returns 403
+        
+        ## Why Use This Endpoint vs Web Form:
+        ### Use JSON API When:
+        - Building mobile or desktop applications
+        - Automating post creation
+        - Integrating with external services
+        - Need programmatic control over content
+        - Posting from non-browser clients
+        
+        ### Use Web Form (/entries/new/) When:
+        - Manual posting by humans in browser
+        - Need file upload interface for images
+        - Want form validation and UI feedback
+        - Prefer traditional web workflow
+        
+        ## Why NOT Use This Endpoint:
+        - **Don't use for:** Creating entries as another user (will fail with 403)
+        - **Don't use for:** Uploading raw image files (use multipart form endpoint instead)
+        - **Avoid:** Sending malformed base64 for images (validation will reject)
+        - **Avoid:** Very large content (> 10MB) without chunking strategy
+        
+        ## Important Notes:
+        - Entry ID is auto-generated (UUID)
+        - `published` timestamp set automatically to current time
+        - `updated` timestamp matches `published` on creation
+        - Entry URL (id field) is generated automatically
+        - Returns full entry object with all metadata
+        - Comment and like counts start at 0
       parameters:
         - name: author_id
           in: path
@@ -873,11 +1484,17 @@ paths:
           schema:
             type: string
           example: "550e8400-e29b-41d4-a716-446655440000"
-          description: UUID of the author creating the entry
+          description: |
+            UUID of the author creating the entry.
+            **Must match:** Authenticated user's ID
+            **Validation:** Returns 403 if trying to create for different author
       security:
         - cookieAuth: []
       requestBody:
         required: true
+        description: |
+          JSON payload containing entry data.
+          All fields except `description` are required.
         content:
           application/json:
             schema:
@@ -885,47 +1502,174 @@ paths:
               properties:
                 title:
                   type: string
+                  minLength: 1
+                  maxLength: 255
                   example: "My API Created Post"
-                  description: Title of the entry
+                  description: "Entry title (required, max 255 characters)"
+                description:
+                  type: string
+                  maxLength: 500
+                  example: "A brief summary of the post"
+                  description: "Optional description/excerpt (max 500 characters)"
                 content:
                   type: string
                   example: "This post was created via API"
-                  description: Content of the entry
+                  description: |
+                    Entry content. Format depends on contentType:
+                    - For text types: UTF-8 text string
+                    - For image types: Base64-encoded image data
                 contentType:
                   type: string
+                  enum: [text/plain, text/markdown, image/png;base64, image/jpeg;base64, application/base64]
                   example: "text/markdown"
-                  description: Content type (text/plain, text/markdown, image/*)
+                  description: "Content format (required, must be valid type)"
                 visibility:
                   type: string
+                  enum: [PUBLIC, UNLISTED, FRIENDS, PRIVATE]
                   example: "PUBLIC"
-                  description: Visibility level (PUBLIC, UNLISTED, FRIENDS, PRIVATE)
-            example:
-              title: "My API Created Post"
-              content: "This post was created via API"
-              contentType: "text/markdown"
-              visibility: "PUBLIC"
+                  description: "Access control level (required)"
+              required: [title, content, contentType, visibility]
+            examples:
+              text_entry:
+                summary: Create plain text entry
+                description: Simple text post with minimal formatting
+                value:
+                  title: "Quick Update"
+                  content: "Just a quick status update!"
+                  contentType: "text/plain"
+                  visibility: "PUBLIC"
+              markdown_entry:
+                summary: Create markdown entry
+                description: Rich text post with markdown formatting
+                value:
+                  title: "My API Created Post"
+                  description: "A post created through the API"
+                  content: "# Welcome\n\nThis post was created via **API**!\n\n- Feature 1\n- Feature 2"
+                  contentType: "text/markdown"
+                  visibility: "PUBLIC"
+              image_entry:
+                summary: Create image entry
+                description: Post containing a base64-encoded image
+                value:
+                  title: "Sunset Photo"
+                  description: "Beautiful sunset from yesterday"
+                  content: "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+                  contentType: "image/png;base64"
+                  visibility: "PUBLIC"
+              friends_only:
+                summary: Create friends-only entry
+                description: Private post visible only to mutual followers
+                value:
+                  title: "Friends Update"
+                  content: "Something just for my friends to see"
+                  contentType: "text/plain"
+                  visibility: "FRIENDS"
+              unlisted_entry:
+                summary: Create unlisted entry
+                description: Post accessible via direct link but not in public feeds
+                value:
+                  title: "Unlisted Share"
+                  description: "Shareable via link"
+                  content: "This won't appear in public streams but can be shared via URL"
+                  contentType: "text/markdown"
+                  visibility: "UNLISTED"
       responses:
         '201':
-          description: Created
+          description: |
+            Entry created successfully.
+            
+            **Response includes:**
+            - Complete entry object with generated ID
+            - Auto-set published and updated timestamps
+            - Full author object
+            - Empty comments and likes collections (count = 0)
+            - Generated URLs (id for API, web for browser)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Entry'
-              example:
-                type: "entry"
-                title: "My API Created Post"
-                id: "661e8400-e29b-41d4-a716-446655440000"
-                contentType: "text/markdown"
-                content: "This post was created via API"
-                author:
-                  id: "550e8400-e29b-41d4-a716-446655440000"
-                  username: "johndoe"
-                  name: "John Doe"
-                  url: "http://127.0.0.1:8000/authors/550e8400-e29b-41d4-a716-446655440000/"
-                published: "2023-10-05T16:00:00Z"
-                visibility: "PUBLIC"
+              examples:
+                created_text_entry:
+                  summary: Successfully created text entry
+                  value:
+                    type: "entry"
+                    title: "My API Created Post"
+                    id: "http://127.0.0.1:8000/api/authors/550e.../entries/661e..."
+                    web: "http://127.0.0.1:8000/authors/550e.../entries/661e..."
+                    contentType: "text/markdown"
+                    content: "This post was created via API"
+                    author:
+                      type: "author"
+                      id: "http://127.0.0.1:8000/api/authors/550e..."
+                      host: "http://127.0.0.1:8000/api/"
+                      displayName: "John Doe"
+                      web: "http://127.0.0.1:8000/authors/550e..."
+                    published: "2023-10-05T16:00:00Z"
+                    updated: "2023-10-05T16:00:00Z"
+                    visibility: "PUBLIC"
+                    comments:
+                      type: "comments"
+                      count: 0
+                      src: []
+                    likes:
+                      type: "likes"
+                      count: 0
+                      src: []
+                created_image_entry:
+                  summary: Successfully created image entry
+                  value:
+                    type: "entry"
+                    title: "Sunset Photo"
+                    id: "http://127.0.0.1:8000/api/authors/550e.../entries/662e..."
+                    web: "http://127.0.0.1:8000/authors/550e.../entries/662e..."
+                    contentType: "image/png;base64"
+                    content: "iVBORw0KGgoAAAANSUhEUgAAAAUA..."
+                    author:
+                      type: "author"
+                      id: "http://127.0.0.1:8000/api/authors/550e..."
+                      displayName: "John Doe"
+                    published: "2023-10-05T16:05:00Z"
+                    updated: "2023-10-05T16:05:00Z"
+                    visibility: "PUBLIC"
+        '400':
+          description: |
+            Validation error - malformed request or invalid data.
+            
+            **Common causes:**
+            - Missing required fields
+            - Invalid contentType value
+            - Invalid visibility value
+            - Malformed base64 for image entries
+            - Empty title or content
+            - Field exceeds maximum length
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_fields:
+                  summary: Missing required fields
+                  value:
+                    error: "Missing required fields: title, contentType"
+                    format:
+                      title: "string (required)"
+                      content: "string (required)"
+                      contentType: "text/plain | text/markdown | image/png;base64 | image/jpeg;base64 | application/base64"
+                      visibility: "PUBLIC | FRIENDS | UNLISTED | PRIVATE"
+                invalid_content_type:
+                  summary: Invalid content type
+                  value:
+                    contentType: "Invalid content type. Must be one of text/plain, text/markdown, image/png;base64, image/jpeg;base64, application/base64"
+                invalid_base64:
+                  summary: Invalid base64 for image
+                  value:
+                    content: "Invalid content. Image content must be valid base64."
         '403':
-          description: Forbidden - cannot create entries for other users
+          description: |
+            Forbidden - cannot create entries for other users.
+            
+            **Cause:** The author_id in the path doesn't match the authenticated user's ID.
+            **Solution:** Only create entries under your own author_id.
           content:
             application/json:
               schema:
@@ -1226,6 +1970,57 @@ paths:
           description: Not found or entry is not an image
 
   # Commented (Comments by Author)
+  /authors/{author_id}/comments:
+    get:
+      tags:
+        - Comments
+      summary: List all comments made by an author (flat list)
+      description: |
+        ## When to Use:
+        - Getting a flat list of all comments made by a specific author
+        - Building activity feeds or comment history
+        - Tracking user engagement across all entries
+        
+        ## How to Use:
+        - Returns comments without entry grouping
+        - Ordered by creation date
+        
+        ## Important Notes:
+        - This endpoint provides a simplified view compared to /commented
+        - Useful for quick access to author's commenting activity
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the author whose comments to fetch
+      responses:
+        '200':
+          description: List of comments by author
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    example: "comments"
+                  count:
+                    type: integer
+                    example: 5
+                  src:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+        '404':
+          description: Author not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /authors/{author_id}/commented:
     get:
       tags:
@@ -1562,6 +2357,55 @@ paths:
         '404':
           description: Not found
 
+  /authors/{author_id}/entries/{entry_id}/comments/{remote_comment_fqid}:
+    get:
+      tags:
+        - Comments
+      summary: Retrieve comment by FQID within an entry
+      description: |
+        ## When to Use:
+        - Fetching remote/federated comments using their FQID
+        - Accessing comments from other nodes in the distributed network
+        
+        ## How to Use:
+        - Use the fully-qualified ID (FQID) as the comment identifier
+        - FQID can be URL-encoded if needed
+        
+        ## Important Notes:
+        - Supports both local and remote comment FQIDs
+        - Used for federated comment resolution
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the entry author
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "660e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the entry
+        - name: remote_comment_fqid
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "http://remote-node.com/api/authors/123/commented/456"
+          description: Fully-qualified ID of the comment
+      responses:
+        '200':
+          description: Comment object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '404':
+          description: Comment not found
+
   # Likes
   /authors/{author_id}/entries/{entry_id}/likes:
     parameters:
@@ -1827,6 +2671,40 @@ paths:
       responses:
         '200':
           description: HTML friends page
+
+  /authors/{author_id}/follow-by-fqid/:
+    get:
+      tags:
+        - Followers
+      summary: HTML page to follow an author by FQID
+      description: |
+        ## When to Use:
+        - Following authors from remote/federated nodes
+        - When you have a complete author URL from another server
+        
+        ## How to Use:
+        - Displays an HTML form to input author FQID
+        - User can paste full author URL to follow remote authors
+        
+        ## Important Notes:
+        - Essential for federated social networking
+        - Allows cross-node follow relationships
+      parameters:
+        - name: author_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: UUID of the author initiating the follow
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: HTML form for following by FQID
+          content:
+            text/html:
+              example: "<html><body>Follow by FQID form</body></html>"
 
   /authors/{author_id}/followers/{foreign_author_fqid}:
     get:
@@ -2359,6 +3237,50 @@ paths:
       responses:
         '200':
           description: Likes for comment
+
+  # Documentation
+  /docs/openapi.yaml:
+    get:
+      tags:
+        - Documentation
+      summary: Get OpenAPI specification (YAML)
+      description: |
+        ## When to Use:
+        - Accessing the raw OpenAPI specification
+        - Importing API definition into tools
+        - Generating client libraries
+        
+        ## Response:
+        Returns the complete OpenAPI 3.0.3 specification in YAML format
+      responses:
+        '200':
+          description: OpenAPI specification
+          content:
+            application/yaml:
+              schema:
+                type: string
+        '404':
+          description: OpenAPI document not found
+
+  /docs/swagger/:
+    get:
+      tags:
+        - Documentation
+      summary: Swagger UI interactive documentation
+      description: |
+        ## When to Use:
+        - Exploring the API interactively
+        - Testing API endpoints in the browser
+        - Learning about available operations
+        
+        ## Response:
+        Returns an HTML page with Swagger UI rendering of the API documentation
+      responses:
+        '200':
+          description: Swagger UI HTML page
+          content:
+            text/html:
+              example: "<html><body>Swagger UI</body></html>"
 
 security:
   - {}

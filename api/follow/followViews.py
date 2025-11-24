@@ -424,11 +424,13 @@ class FollowRequestCreateView(APIView):
         target = get_object_or_404(User, id=request.data.get("target_id"))
         if target == request.user:
             return Response({"error": "Cannot follow yourself"}, status=400)
+        is_remote = not is_local_user(target)
+        default_status = Follow.Status.APPROVED if is_remote else Follow.Status.PENDING
 
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": Follow.Status.PENDING}
+            defaults={"status": default_status}
         )
         if not created and follow.status == Follow.Status.REJECTED:
             follow.status = Follow.Status.PENDING
@@ -804,6 +806,7 @@ class FollowByFQIDPageView(APIView):
             inbox_view = InboxView()
             target = inbox_view.get_or_create_remote_user(author_data)
             
+            
 
         if target == request.user:
             return Response(
@@ -815,17 +818,23 @@ class FollowByFQIDPageView(APIView):
                 template_name="follow_by_fqid.html",
                 status=400,
             )
+        is_remote = not is_local_user(target)
+        default_status = Follow.Status.APPROVED if is_remote else Follow.Status.PENDING
 
         follow, created = Follow.objects.get_or_create(
             follower=request.user,
             followee=target,
-            defaults={"status": Follow.Status.PENDING},
+            defaults={"status": default_status},
         )
-        if not created and follow.status == Follow.Status.REJECTED:
-            follow.status = Follow.Status.PENDING
-            follow.save(update_fields=["status"])
-
-        # If target is remote, send follow activity to their /inbox
+        if not created:
+            if is_remote and follow.status != Follow.Status.APPROVED:
+                follow.status = Follow.Status.PENDING
+                follow.save(update_fields=["status"])
+            elif not is_remote and follow.status == Follow.Status.REJECTED:
+                # Re-open as pending (so local receiver sees it again)
+                follow.status = Follow.Status.PENDING
+                follow.save(update_fields=["status"])
+        # If remote, send to their inbox
         if not is_local_user(target):
             send_follow_to_remote(actor=request.user, target=target, request=request)
 

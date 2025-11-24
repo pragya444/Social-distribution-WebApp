@@ -9,7 +9,7 @@ from rest_framework import status
 import json
 import base64
 import warnings
-from .models import Entry, Follow, Comment, EntryLike, CommentLike, Node
+from api.models import Entry, Follow, Comment, EntryLike, CommentLike, Node
 
 warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
 warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
@@ -263,14 +263,14 @@ class AuthenticationMiddlewareTests(TestCase):
         
     def test_jwt_token_generation(self):
         """Test JWT token is generated on login"""
-        from .utils import jwtUtils
+        from api.utils import jwtUtils
         token = jwtUtils.make_access_token(self.user.id)
         self.assertIsNotNone(token)
         self.assertIsInstance(token, str)
     
     def test_jwt_token_validation(self):
         """Test JWT token validation"""
-        from .utils import jwtUtils
+        from api.utils import jwtUtils
         token = jwtUtils.make_access_token(self.user.id)
         self.assertIsNotNone(token)
         self.assertIsInstance(token, str)

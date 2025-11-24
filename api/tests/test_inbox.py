@@ -9,7 +9,7 @@ from rest_framework import status
 import json
 import base64
 import warnings
-from .models import Entry, Follow, Comment, EntryLike, CommentLike, Node
+from api.models import Entry, Follow, Comment, EntryLike, CommentLike, Node
 
 warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
 warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
@@ -52,6 +52,8 @@ class InboxAPITests(TestCase):
             pass
     
     def test_inbox_follow_request(self):
+        self.client.force_login(self.user)
+        self.client.force_login(self.other_user)
         """Test posting a follow request to inbox"""
         url = f"/api/authors/{self.user.id}/inbox/"
         data = {
@@ -76,6 +78,8 @@ class InboxAPITests(TestCase):
         ])
     
     def test_inbox_like_post(self):
+        self.client.force_login(self.user)
+        self.client.force_login(self.other_user)
         """Test posting a like to inbox"""
         entry = Entry.objects.create(
             author=self.user,

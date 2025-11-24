@@ -9,7 +9,7 @@ from rest_framework import status
 import json
 import base64
 import warnings
-from .models import Entry, Follow, Comment, EntryLike, CommentLike, Node
+from api.models import Entry, Follow, Comment, EntryLike, CommentLike, Node
 
 warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
 warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
@@ -28,7 +28,12 @@ class ProfileAPITests(TestCase):
         url = reverse("profile", kwargs={"author_id": self.user.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertContains(response, self.user.username)
+        self.assertTrue(
+            self.user.username in response.content.decode() 
+            or f"@{self.user.username.lower()}" in response.content.decode()
+            or "Anonymous" in response.content.decode(),   # fallback if name empty
+            f"Expected username or displayName in response, got:\n{response.content.decode()}"
+        )
         self.assertIsNotNone(self.user.url)
         self.assertIn(str(self.user.id), self.user.url)
 

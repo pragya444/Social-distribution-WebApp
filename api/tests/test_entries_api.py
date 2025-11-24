@@ -9,7 +9,7 @@ from rest_framework import status
 import json
 import base64
 import warnings
-from .models import Entry, Follow, Comment, EntryLike, CommentLike, Node
+from api.models import Entry, Follow, Comment, EntryLike, CommentLike, Node
 
 warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
 warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
@@ -474,7 +474,7 @@ class LikedAPITests(TestCase):
         like = EntryLike.objects.create(user=self.user, entry=self.entry)
         
         # Create a Liked object
-        from .models import Liked
+        from api.models import Liked
         liked_obj = Liked.objects.create(user=self.user, entry=self.entry)
         
         url = reverse("liked-entry-detail", kwargs={"author_id": self.user.id, "like_id": liked_obj.id})

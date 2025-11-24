@@ -9,7 +9,7 @@ from rest_framework import status
 import json
 import base64
 import warnings
-from .models import Entry, Follow, Comment, EntryLike, CommentLike, Node
+from api.models import Entry, Follow, Comment, EntryLike, CommentLike, Node
 
 warnings.filterwarnings('ignore', category=Warning, message='.*Pagination may yield inconsistent results.*')        # filter out pagination warnings
 warnings.filterwarnings('ignore', category=UserWarning, message='.*No directory at.*staticfiles.*')     # filter out staticfiles warnings
@@ -96,7 +96,8 @@ class NodesManagementTests(TestCase):
         """Test creating a node connection directly in database"""
         node = Node.objects.create(
             host="https://example.com/api/",
-            token="test-token",
+            username="testuser",
+            password="testpass",
             is_connected=True
         )
         self.assertIsNotNone(node.id)
@@ -107,7 +108,8 @@ class NodesManagementTests(TestCase):
         """Test that node hosts must be unique"""
         Node.objects.create(
             host="https://example.com/api/",
-            token="token1",
+            username="testuser1",
+            password="testpass1",
             is_connected=True
         )
         with self.assertRaises(Exception):
@@ -121,7 +123,8 @@ class NodesManagementTests(TestCase):
         """Test toggling node connection status"""
         node = Node.objects.create(
             host="https://example.com/api/",
-            token="test-token",
+            username="testuser",
+            password="testpass",
             is_connected=True
         )
         node.is_connected = False

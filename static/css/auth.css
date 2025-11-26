@@ -128,13 +128,6 @@ body{
     linear-gradient(120deg, var(--bg1), var(--bg2));
   position:relative;
 }
-body::after{
-  /* subtle noise overlay */
-  content:"";
-  position:fixed; inset:0;
-  background-image:url("../img/noise.jpg"); 
-  opacity:.06; pointer-events:none;
-}
 
 .card{
   display: flex;
@@ -142,7 +135,7 @@ body::after{
   background:var(--panel);
   border-radius:16px;
   padding:28px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.25), 0 2px 8px rgba(0,0,0,.2);
+  box-shadow: 0 10px 30px rgba(99, 94, 94, 0.2), 0 2px 8px rgba(99, 94, 94, 0.2);
   border:1px solid rgba(0,0,0,.06);
 }
 

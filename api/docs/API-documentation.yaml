@@ -1393,7 +1393,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 detail: "Author not found"
-                  value:
+                value:
                     type: "entries"
                     count: 3
                     src:

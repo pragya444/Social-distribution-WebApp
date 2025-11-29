@@ -31,7 +31,7 @@ import logging
 import requests
 from urllib.parse import urlparse, urlunparse
 from api.inbox.inboxView import InboxView as InboxView
-
+from django.db import models
 log = logging.getLogger(__name__)
 
 User = get_user_model()

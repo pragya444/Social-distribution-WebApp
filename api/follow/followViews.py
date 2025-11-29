@@ -17,7 +17,7 @@ import urllib.request
 from django.views.decorators.csrf import csrf_exempt  
 from requests.auth import HTTPBasicAuth
 import os
-import Paginator
+from django.core.paginator import Paginator
 from api.serializers import (
     FollowRequestSerializer,
     FollowersSerializer,

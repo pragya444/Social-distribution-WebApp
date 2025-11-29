@@ -80,20 +80,33 @@ html, body {
 .logout-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: none;
-  border: 0;
-  padding: 0;
+  gap: 0.5rem;
+  color: #000000;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 1rem;
   cursor: pointer;
-  color: #FC8479;
-  font-size: 16px;
-  width: 100%;
-  text-align: left;
+  padding-left: 40px;
 }
-.logout-btn:hover {
-  opacity: 0.8;
+.logout-btn {
+  color:#F2786D;
+  transition:transform .15s ease;
 }
+.logout-btn svg{ fill:#F2786D; }
+.logout-btn:hover{ transform:scale(1.05); }
+.logout-btn:active{ transform:scale(0.98); }
 
+.icon-btn,
+.notif-btn{
+  background:none;
+  border:0;
+  cursor:pointer;
+  transition:transform .15s ease;
+}
+.icon-btn:hover,
+.notif-btn:hover{ transform:scale(1.08); }
+.icon-btn svg,
+.notif-btn svg{ fill:currentColor; }
 
 .main{ display:flex; flex-direction:column; }
 .topbar{
@@ -169,8 +182,7 @@ html, body {
 }
 
 .card{
-  background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
-  box-shadow:var(--shadow); padding:16px; margin-bottom:16px;
+  border:1px solid var(--mint); border-radius:var(--radius); box-shadow:var(--shadow); 
 }
 .card-head{ display:flex; align-items:center; justify-content:space-between; }
 .author{ display:flex; align-items:center; gap:10px; }
@@ -309,6 +321,7 @@ html, body {
   text-align: center;
 }
 
+/* css for comments  */
   /* css for comments  */
       #commentModal .small-heart {
         width: 16px;
@@ -393,6 +406,24 @@ html, body {
   fill: #ff4d4d;
   stroke: #ff4d4d;
   transform: scale(1.12);
+}
+
+/* Feed alternating accent */
+.content .card:nth-child(3n+1){ border-left:4px solid #FFA501; }
+.content .card:nth-child(3n+2){ border-left:4px solid #EE541C; }
+.content .card:nth-child(3n){   border-left:4px solid #F2786D; }
+
+/* Discover author cards (mint outline + alternating accents) */
+.author-grid .author-card{
+  border:1px solid var(--mint);
+  border-left:1px solid var(--mint);
+  border-radius:12px;
+  box-shadow: var(--shadow);
+}
+.author-grid .author-card:nth-child(3n+1),
+.author-grid .author-card:nth-child(3n+2),
+.author-grid .author-card:nth-child(3n){
+  border-left:1px solid var(--mint);
 }
 
 

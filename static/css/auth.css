@@ -206,7 +206,7 @@ input:focus{ border-color:#cbd5e1; box-shadow:0 0 0 4px rgba(255,165,0,.15) }
 
 /* Remove gradient from body background */
 body {
-  background: #72fcba !important;
+  background:var(--mint) !important;
 }
 
 h1 {

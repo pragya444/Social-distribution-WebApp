@@ -103,11 +103,7 @@ html, body {
 .icon-btn svg,
 .notif-btn svg{ fill: #F69773; }
 
-.main{ display:flex; justify-content:center; }
-.feed-wrap{ width:min(720px, 92vw); }
-.feed-header{ margin:0 auto 12px; }
-.content .card{ margin:0 auto 16px; max-width:720px; }
-
+.main{ display:flex; flex-direction:column; }
 .topbar{
   display:flex; align-items:center; justify-content:space-between;
   padding:16px 22px; background:#fff; border-bottom:1px solid var(--line);

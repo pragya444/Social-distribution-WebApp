@@ -50,6 +50,34 @@
     max-height: 80vh;
     object-fit: contain;
   }
+
+  .stream-pagination{
+  display:flex;
+  justify-content:center;
+  gap:8px;
+  margin:24px 0;
+}
+.stream-pagination a,
+.stream-pagination span{
+  padding:8px 12px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:#fff;
+  text-decoration:none;
+  color:#1e1e1e;
+  font-size:14px;
+}
+.stream-pagination a:hover{ background:var(--mint); }
+.stream-pagination .current{
+  background:#FFA501;
+  color:#fff;
+  border-color:#FFA501;
+}
+.stream-pagination .disabled{
+  color:#9ca3af;
+  background:#f3f4f6;
+  pointer-events:none;
+}
 </style>
 
 <div class="feed-header">
@@ -220,7 +248,35 @@
 {% empty %}
   <p>No entries yet.</p>
 {% endfor %}
-{# MODAL STRUCTURE ADDED #}
+
+{% if page_obj %}
+<div class="stream-pagination">
+  {% if page_obj.has_previous %}
+    <a href="?page=1">First</a>
+    <a href="?page={{ page_obj.previous_page_number }}">Prev</a>
+  {% else %}
+    <span class="disabled">First</span>
+    <span class="disabled">Prev</span>
+  {% endif %}
+
+  {% for num in page_obj.paginator.page_range %}
+    {% if page_obj.number == num %}
+      <span class="current">{{ num }}</span>
+    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+      <a href="?page={{ num }}">{{ num }}</a>
+    {% endif %}
+  {% endfor %}
+
+  {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}">Next</a>
+    <a href="?page={{ page_obj.paginator.num_pages }}">Last</a>
+  {% else %}
+    <span class="disabled">Next</span>
+    <span class="disabled">Last</span>
+  {% endif %}
+</div>
+{% endif %}
+
 <div id="deleteModal" class="modal-overlay">
   <div class="modal">
     <h2>Verdant</h2>

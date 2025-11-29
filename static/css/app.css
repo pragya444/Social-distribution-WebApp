@@ -194,8 +194,8 @@ html, body {
 
 .meta{ display:flex; align-items:center; gap:10px; position:relative; }
 .badge { font-size:12px; padding:4px 8px; border-radius:999px; color:#fff; }
-.badge-public{ background: var(--mint); color:#fff; }
-.badge-friends{ background: rgba(255, 165, 1, 0.8); color:#fff; }
+.badge-public{ background: #7BC899;; color:#fff; }
+.badge-friends{ background: rgba(255, 166, 1, 0.7); color:#fff; }
 .badge-unlisted { background:#F69673; }
 .menu { position:relative; }
 .dots { cursor:pointer; padding:4px; background:none; border:none; color:var(--muted); font-size:18px; display:flex; align-items:center; justify-content:center; }

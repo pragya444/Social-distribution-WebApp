@@ -205,7 +205,7 @@ html, body {
 .menu-pop .danger:hover {color: var(--danger) !important;}
 
 .text{ font-size:15px; line-height:1.6; margin-bottom:8px; }
-.time{ font-size:12px; color:var(--muted); }
+.time{ font-size:12px; color:var(--muted); padding:0 18px 8px; }
 
 .card-foot{ display:flex; gap:40px; color:#111; margin-top:6px; padding: 6px}
 .action{ cursor:pointer; }

@@ -180,7 +180,9 @@ html, body {
   border:1px solid var(--mint); border-radius:var(--radius); box-shadow:var(--shadow); 
 }
 .card-head{ padding:14px 18px; }
-.card-body{ padding:16px 18px; }
+.card-body{ padding:4px 18px 16px 18px; }
+.post-title{ padding-left:18px; }
+.post-content{ padding-left:18px; }
 .card-foot{ padding:12px 18px; gap:32px; }
 .card-head{ display:flex; align-items:center; justify-content:space-between; }
 .author{ display:flex; align-items:center; gap:10px; }
@@ -421,6 +423,58 @@ html, body {
 .content .card{ margin-bottom:16px; }
 .content .card-body{ padding:16px 18px; }
 .content .text{ padding:0 18px 12px; }
+
+.wrap{ 
+  max-width: 720px; 
+  margin: 0 auto 2rem; 
+  padding: 0 18px; 
+}
+.wrap h2{ 
+  margin-bottom: .5rem; 
+  font-size: 1.25rem; 
+  padding-left: 0;
+}
+.wrap p.note{ 
+  color: #555; 
+  margin-bottom: 1rem; 
+  padding-left: 0;
+}
+.wrap label{ 
+  display: block; 
+  font-weight: 600; 
+  margin: .5rem 0 .25rem; 
+  padding-left: 0;
+}
+.wrap input[type="url"]{ 
+  padding: 0.5rem; 
+  border: 1px solid #ccc; 
+  border-radius: 6px; 
+  width: 100%; 
+}
+.wrap button{ 
+  margin-top: 0.5rem; 
+}
+
+.authors-section{ 
+  max-width: 720px; 
+  margin: 0 auto; 
+  padding: 0 18px; 
+}
+.section-header{ 
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between; 
+  margin-bottom: 1rem; 
+}
+.section-header h2{ 
+  margin: 0; 
+  font-size: 1.25rem; 
+}
+.author-grid{ 
+  display: grid; 
+  gap: 1rem; 
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+}
 
 
 

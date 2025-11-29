@@ -55,15 +55,36 @@ html, body {
   padding: 24px 16px;
   display: flex;
   flex-direction: column;
+  min-height: 100vh;          /* ensures sidebar takes full height */
   border-right: 1px solid rgba(0, 0, 0, 0.06);
 }
-.nav { display:flex; flex-direction:column; gap:10px; }
+.nav { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 10px; 
+}
 .nav-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; color:#1f2937; text-decoration:none; }
 .nav-item:hover { background:var(--mint-deep); }
-.logout { margin-top:auto; }
-.logout-btn { display:flex; align-items:center; gap:0.5rem; color:#FC8479; text-decoration:none; font-weight:500; font-size:1rem; cursor:pointer; }
-.logout-btn svg { display:block; }
-.logout-btn:hover { color:#e06b6f; }
+.logout { 
+  margin-top: auto;
+  padding: 10px 12px;
+}
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: #FC8479;
+  font-size: 16px;
+  width: 100%;
+  text-align: left;
+}
+.logout-btn:hover {
+  opacity: 0.8;
+}
 
 
 .main{ display:flex; flex-direction:column; }

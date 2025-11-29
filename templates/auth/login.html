@@ -19,8 +19,8 @@
 
   <body>
     <article class="card">
-      <h1>Login to your Account</h1>
-      <h3>or <a href="{% url 'register' %}">Sign up</a></h3>
+      <h1>Welcome Back</h1>
+      <p class="auth-subtitle">Sign in to your Verdant account</p>
 
       <form method="POST">
         {% csrf_token %} 
@@ -58,6 +58,9 @@
 
         <button class="auth-btn" type="submit">Log In</button>
       </form>
+      <p class="auth-footer">
+        Not registered yet? <a href="{% url 'register' %}">Create an account</a>
+      </p>
     </article>
   </body>
 </html>

@@ -45,10 +45,24 @@ h1, h3 {
 
 h1 {
     color: var(--danger);
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 6px;
 }
 
 h3 {
     color: var(--accent);
+    font-weight: 500;
+    margin: 0 0 24px;
+}
+
+h3 a {
+    color: var(--brand);
+    text-decoration: none;
+}
+
+h3 a:hover {
+    text-decoration: underline;
 }
 
 a {
@@ -167,3 +181,34 @@ input:focus{ border-color:#cbd5e1; box-shadow:0 0 0 4px rgba(255,165,0,.15) }
   filter: brightness(1.05);
 }
 .auth-btn:active{ transform:translateY(0) }
+
+.auth-subtitle {
+  margin: 4px 0 24px;
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.auth-footer {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.auth-footer a {
+  color: #FFA500;
+  text-decoration: none;
+}
+
+.auth-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Remove gradient from body background */
+body {
+  background: #72fcba !important;
+}
+
+h1 {
+  color: #1e1e1e !important;
+}

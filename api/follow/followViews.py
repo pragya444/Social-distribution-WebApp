@@ -752,6 +752,7 @@ class FollowByFQIDPageView(APIView):
     """
     Simple page where a logged-in local author can paste a remote author FQID
     and send them a follow activity to their /inbox.
+    Also displays all authors (local + remote from connected nodes).
     """
     permission_classes = [IsAuthenticated]
     renderer_classes = [TemplateHTMLRenderer]
@@ -762,22 +763,69 @@ class FollowByFQIDPageView(APIView):
         if str(request.user.id) != str(author_id):
             return HttpResponseForbidden("Not your account")
 
-        # Add author list for discovery
         page_num = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('size', 10))
         
-        all_authors = User.objects.filter(is_active=True).exclude(id=request.user.id).order_by('-created')
-        paginator = Paginator(all_authors, page_size)
+        # 1. Get LOCAL authors (no host or host matches our local base)
+        local_base = getattr(settings, "LOCAL_API_BASE", "").rstrip("/")
+        local_authors = list(User.objects.filter(
+            is_active=True
+        ).exclude(id=request.user.id).filter(
+            models.Q(host__isnull=True) | 
+            models.Q(host="") | 
+            models.Q(host=local_base) |
+            models.Q(host=local_base + "/")
+        ))
+        
+        log.info(f"Found {len(local_authors)} local authors")
+        
+        # 2. Fetch REMOTE authors from all connected nodes
+        remote_authors = []
+        connected_nodes = Node.objects.filter(is_connected=True)
+        
+        log.info(f"Fetching from {connected_nodes.count()} connected nodes")
+        
+        for node in connected_nodes:
+            fetched = fetch_remote_authors_from_node(node)
+            remote_authors.extend(fetched)
+        
+        log.info(f"Found {len(remote_authors)} remote authors")
+        
+        # 3. Combine and deduplicate by URL
+        all_authors = local_authors + remote_authors
+        
+        seen = {}
+        for author in all_authors:
+            key = author.url or str(author.id)
+            if key not in seen:
+                seen[key] = author
+        
+        unique_authors = list(seen.values())
+        unique_authors.sort(key=lambda x: x.created, reverse=True)
+        
+        log.info(f"Total unique authors: {len(unique_authors)}")
+        
+        # 4. Paginate
+        paginator = Paginator(unique_authors, page_size)
         page_obj = paginator.get_page(page_num)
         
-        # Add follow status
+        # 5. Add follow status for current page only (optimization)
+        author_ids = [a.id for a in page_obj.object_list]
+        followed_ids = set(Follow.objects.filter(
+            follower=request.user,
+            followee_id__in=author_ids,
+            status=Follow.Status.APPROVED
+        ).values_list('followee_id', flat=True))
+        
+        pending_ids = set(Follow.objects.filter(
+            follower=request.user,
+            followee_id__in=author_ids,
+            status=Follow.Status.PENDING
+        ).values_list('followee_id', flat=True))
+        
         for author in page_obj.object_list:
-            author.is_followed = Follow.objects.filter(
-                follower=request.user, followee=author, status=Follow.Status.APPROVED
-            ).exists()
-            author.is_pending = Follow.objects.filter(
-                follower=request.user, followee=author, status=Follow.Status.PENDING
-            ).exists()
+            author.is_followed = author.id in followed_ids
+            author.is_pending = author.id in pending_ids
         
         return Response({
             'message': None,

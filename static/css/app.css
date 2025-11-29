@@ -3,7 +3,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Londrina+Shadow&display=swap');
 
 
-
+@import url('https://fonts.googleapis.com/css2?family=Tangerine:wght@400;700&display=swap');
 
 
 
@@ -43,15 +43,11 @@ html, body {
 
 
 .layout{ display:grid; grid-template-columns: 260px 1fr; min-height:100vh; }
-.brand { 
-  text-align: left; 
-  font-weight: 700; 
-  font-size: 24px; 
-  padding-left: 20px;
-  margin-bottom: 24px; 
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-  letter-spacing: -0.02em; 
-  color: #1e1e1e;
+.brand{
+  font-family: "Tangerine", cursive;
+  font-weight: 700;
+  font-size: 44px;
+  letter-spacing: 0.02em;
 }
 .logout{ margin-top:auto; color:#e06b6f; }
 .sidebar {

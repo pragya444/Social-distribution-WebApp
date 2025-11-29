@@ -52,174 +52,181 @@
   }
 </style>
 
-<div class="feed-header">
-  <h1>Your Stream</h1>
-  <div class="filter-tabs">
-    <a href="?tab=all" class="tab {% if tab == 'all' %}active{% endif %}">All</a>
-    <a href="?tab=following" class="tab {% if tab == 'following' %}active{% endif %}">Following</a>
-    <a href="?tab=friends" class="tab {% if tab == 'friends' %}active{% endif %}">Friends</a>
-    <a href="?tab=private" class="tab {% if tab == 'private' %}active{% endif %}">My Entries</a>
+<div class="main">
+  <div class="feed-wrap">
+    <div class="feed-header">
+      <h1>Your Stream</h1>
+      <div class="filter-tabs">
+        <a href="?tab=all" class="tab {% if tab == 'all' %}active{% endif %}">All</a>
+        <a href="?tab=following" class="tab {% if tab == 'following' %}active{% endif %}">Following</a>
+        <a href="?tab=friends" class="tab {% if tab == 'friends' %}active{% endif %}">Friends</a>
+        <a href="?tab=private" class="tab {% if tab == 'private' %}active{% endif %}">My Entries</a>
+      </div>
+    </div>
+
+    <div class="content">
+      {% for e in entries %}
+        <article class="card">
+          <div class="card-head">
+            <div class="author">
+              {% if e.author.profile_picture %}
+                <img class="avatar" src="{{ e.author.profile_picture }}" alt="{{ e.author.name }}'s profile picture" />
+              {% else %}
+                <a class="avatar" href="{% url 'profile' author_id=e.author.id %}" aria-label="View profile">👤</a>
+              {% endif %}
+
+              <div class="name">
+                <div class="display">{{ e.author.name }}</div>
+                <div class="handle">
+                {% if e.author.host and request.get_host in e.author.host %}
+                  <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                    @{{ e.author.username|lower }}
+                  </a>
+
+                {% elif e.author.host %}
+                  {% if "/api" in e.author.host %}
+                    {% with clean_host=e.author.host|cut:"/api" %}
+                      <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                        {{ clean_host }}
+                      </a>
+                    {% endwith %}
+                  {% else %}
+                    <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                      {{ e.author.host }}
+                    </a>
+                  {% endif %}
+
+                {% else %}
+                  <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                    @{{ e.author.username|lower }}
+                  </a>
+                {% endif %}
+              </div>
+              </div>
+
+            </div>
+
+            <div class="meta">
+              {% if e.visibility == "PUBLIC" %}
+                <span class="badge badge-public">public</span>
+              {% elif e.visibility == "FRIENDS" %}
+                <span class="badge badge-friends">friends</span>
+              {% elif e.visibility == "UNLISTED" %}
+                <span class="badge badge-unlisted">unlisted</span>
+              {% endif %}
+
+              {% if e.author == request.user %}
+              <div class="menu" tabindex="0" aria-label="entry actions">
+                <span class="dots">⋯</span>
+
+                <div class="menu-pop">
+                  <a href="{% url 'entry-edit-page' author_id=author.id entry_id=e.id %}">Edit</a>
+
+                  {# MODAL TRIGGER BUTTON ADDED #}
+                  <button type="button" class="link danger" onclick="openDeleteModal('{{ e.id }}')">Delete</button>
+
+                  {# MODAL FORM (hidden) #}
+                  <form id="deleteForm-{{ e.id }}" method="POST" action="{% url 'entry-retrieve-update' author_id=author.id entry_id=e.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="_method" value="DELETE">
+                  </form>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="card-body">
+           <div class="text">
+              <h2 class="title encode-sans-semi-expanded-medium">{{ e.title|default:"(untitled)" }}</h2>
+
+
+              {# image entries: show via binary endpoint #}
+              {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
+                <img
+                  src="{% url 'entry-image' author_id=e.author.id entry_id=e.id %}"
+                  alt="{{ e.title|default:'image' }}"
+                  style="max-width:100%;height:auto;border-radius:8px;"
+                />
+              {% else %}
+                {# text/markdown or plain text: backend already pre-rendered to HTML #}
+                {{ e.rendered|safe }}
+              {% endif %}
+            </div>
+            <div class="time">{{ e.updated }}</div>
+          </div>
+
+
+          <div class="card-foot">
+            <div class="action">
+              <!-- Like -->
+              <button
+                type="button"
+                class="action like-toggle {% if e.user_liked %}liked{% endif %}"
+                aria-pressed="{{ e.user_liked|yesno:'true,false' }}"
+                data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
+                data-inbox-url="/api/authors/{{ e.author_id }}/inbox/"
+                data-object-fqid="{{ e.url }}"
+                data-remote-host="{% if e.author.username|slice:':7' == 'remote_' %}{{ e.author.host }}{% endif %}"
+                data-remote-author-id="{{e.author_id}}"
+              >
+              <!-- data-likes-url="{{e.author.host}}authors/{{ e.author_id }}/inbox/" -->
+
+              <script>
+                  console.log("Entry {{ e.id }} - user_liked =", "{{ e.user_liked }}");
+              </script>
+                <!-- Heart icon -->
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M21 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35l-.45-.41C6.4 15.36 3 12.28 3 8.5A4.5 4.5 0 0 1 7.5 4c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 4 4.5 4.5 0 0 1 21 8.5z"/>
+                </svg>
+                <span class="sr-only">Like</span>
+                <span data-like-count>{{e.like_count}}</span>
+              </button>
+
+              <!-- COMMENTS -->
+              <button
+                type="button"
+                class="action-icon comment-trigger"
+                aria-label="Comments"
+                data-comments-url="{% url 'comments-list-create' author_id=e.author.id entry_id=e.id %}?page=1&size=50"
+              >
+                <svg class="icon icon-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M21 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v9z"/>
+                </svg>
+                <span class="count" data-comment-count>{{e.comment_count}}</span>
+              </button>
+              
+
+              
+
+
+
+              <div class="action">
+                <!-- Replaced share emoji with heroicon -->
+                <svg class="share-icon" data-author_id="{{ e.author.id }}" data-entry_id="{{ e.id }}" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="6" r="3" />
+                  <circle cx="18" cy="18" r="3" />
+                  <line x1="8.7" y1="10.7" x2="15.3" y2="7.3" />
+                  <line x1="8.7" y1="13.3" x2="15.3" y2="16.7" />
+                </svg>
+                Share
+              </div>
+            </div>
+          </div>
+
+        </article>
+      {% empty %}
+        <p>No entries yet.</p>
+      {% endfor %}
+    </div>
   </div>
 </div>
 
-{% for e in entries %}
-  <article class="card">
-    <div class="card-head">
-      <div class="author">
-        {% if e.author.profile_picture %}
-          <img class="avatar" src="{{ e.author.profile_picture }}" alt="{{ e.author.name }}'s profile picture" />
-        {% else %}
-          <a class="avatar" href="{% url 'profile' author_id=e.author.id %}" aria-label="View profile">👤</a>
-        {% endif %}
-
-        <div class="name">
-          <div class="display">{{ e.author.name }}</div>
-          <div class="handle">
-          {% if e.author.host and request.get_host in e.author.host %}
-            <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
-              @{{ e.author.username|lower }}
-            </a>
-
-          {% elif e.author.host %}
-            {% if "/api" in e.author.host %}
-              {% with clean_host=e.author.host|cut:"/api" %}
-                <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
-                  {{ clean_host }}
-                </a>
-              {% endwith %}
-            {% else %}
-              <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
-                {{ e.author.host }}
-              </a>
-            {% endif %}
-
-          {% else %}
-            <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
-              @{{ e.author.username|lower }}
-            </a>
-          {% endif %}
-        </div>
-        </div>
-
-      </div>
-
-      <div class="meta">
-        {% if e.visibility == "PUBLIC" %}
-          <span class="badge badge-public">public</span>
-        {% elif e.visibility == "FRIENDS" %}
-          <span class="badge badge-friends">friends</span>
-        {% elif e.visibility == "UNLISTED" %}
-          <span class="badge badge-unlisted">unlisted</span>
-        {% endif %}
-
-        {% if e.author == request.user %}
-        <div class="menu" tabindex="0" aria-label="entry actions">
-          <span class="dots">⋯</span>
-
-          <div class="menu-pop">
-            <a href="{% url 'entry-edit-page' author_id=author.id entry_id=e.id %}">Edit</a>
-
-            {# MODAL TRIGGER BUTTON ADDED #}
-            <button type="button" class="link danger" onclick="openDeleteModal('{{ e.id }}')">Delete</button>
-
-            {# MODAL FORM (hidden) #}
-            <form id="deleteForm-{{ e.id }}" method="POST" action="{% url 'entry-retrieve-update' author_id=author.id entry_id=e.id %}">
-              {% csrf_token %}
-              <input type="hidden" name="_method" value="DELETE">
-            </form>
-          </div>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-    
-    <div class="card-body">
-     <div class="text">
-        <h2 class="title encode-sans-semi-expanded-medium">{{ e.title|default:"(untitled)" }}</h2>
-
-
-        {# image entries: show via binary endpoint #}
-        {% if e.content_type and e.content_type|lower|slice:"0:6" == "image/" %}
-          <img
-            src="{% url 'entry-image' author_id=e.author.id entry_id=e.id %}"
-            alt="{{ e.title|default:'image' }}"
-            style="max-width:100%;height:auto;border-radius:8px;"
-          />
-        {% else %}
-          {# text/markdown or plain text: backend already pre-rendered to HTML #}
-          {{ e.rendered|safe }}
-        {% endif %}
-      </div>
-      <div class="time">{{ e.updated }}</div>
-    </div>
-
-
-    <div class="card-foot">
-      <div class="action">
-        <!-- Like -->
-        <button
-          type="button"
-          class="action like-toggle {% if e.user_liked %}liked{% endif %}"
-          aria-pressed="{{ e.user_liked|yesno:'true,false' }}"
-          data-likes-url="/api/authors/{{ e.author_id }}/entries/{{ e.id }}/likes"
-          data-inbox-url="/api/authors/{{ e.author_id }}/inbox/"
-          data-object-fqid="{{ e.url }}"
-          data-remote-host="{% if e.author.username|slice:':7' == 'remote_' %}{{ e.author.host }}{% endif %}"
-          data-remote-author-id="{{e.author_id}}"
-        >
-        <!-- data-likes-url="{{e.author.host}}authors/{{ e.author_id }}/inbox/" -->
-
-        <script>
-            console.log("Entry {{ e.id }} - user_liked =", "{{ e.user_liked }}");
-        </script>
-          <!-- Heart icon -->
-          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M21 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35l-.45-.41C6.4 15.36 3 12.28 3 8.5A4.5 4.5 0 0 1 7.5 4c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 4 4.5 4.5 0 0 1 21 8.5z"/>
-          </svg>
-          <span class="sr-only">Like</span>
-          <span data-like-count>{{e.like_count}}</span>
-        </button>
-
-        <!-- COMMENTS -->
-        <button
-          type="button"
-          class="action-icon comment-trigger"
-          aria-label="Comments"
-          data-comments-url="{% url 'comments-list-create' author_id=e.author.id entry_id=e.id %}?page=1&size=50"
-        >
-          <svg class="icon icon-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M21 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v9z"/>
-          </svg>
-          <span class="count" data-comment-count>{{e.comment_count}}</span>
-        </button>
-        
-
-        
-
-
-
-        <div class="action">
-          <!-- Replaced share emoji with heroicon -->
-          <svg class="share-icon" data-author_id="{{ e.author.id }}" data-entry_id="{{ e.id }}" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-            <circle cx="6" cy="12" r="3" />
-            <circle cx="18" cy="6" r="3" />
-            <circle cx="18" cy="18" r="3" />
-            <line x1="8.7" y1="10.7" x2="15.3" y2="7.3" />
-            <line x1="8.7" y1="13.3" x2="15.3" y2="16.7" />
-          </svg>
-          Share
-        </div>
-      </div>
-    </div>
-
-  </article>
-{% empty %}
-  <p>No entries yet.</p>
-{% endfor %}
 {# MODAL STRUCTURE ADDED #}
 <div id="deleteModal" class="modal-overlay">
   <div class="modal">

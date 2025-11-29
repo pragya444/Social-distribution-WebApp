@@ -758,17 +758,34 @@ class FollowByFQIDPageView(APIView):
     authentication_classes = [SessionAuthentication]
 
     def get(self, request, author_id):
+        """Render the follow-by-FQID page with author discovery list"""
         if str(request.user.id) != str(author_id):
             return HttpResponseForbidden("Not your account")
 
-        return Response(
-            {
-                "message": None,
-                "error": None,
-                "fqid": "",
-            },
-            template_name="follow_by_fqid.html",
-        )
+        # Add author list for discovery
+        page_num = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('size', 10))
+        
+        all_authors = User.objects.filter(is_active=True).exclude(id=request.user.id).order_by('-created')
+        paginator = Paginator(all_authors, page_size)
+        page_obj = paginator.get_page(page_num)
+        
+        # Add follow status
+        for author in page_obj.object_list:
+            author.is_followed = Follow.objects.filter(
+                follower=request.user, followee=author, status=Follow.Status.APPROVED
+            ).exists()
+            author.is_pending = Follow.objects.filter(
+                follower=request.user, followee=author, status=Follow.Status.PENDING
+            ).exists()
+        
+        return Response({
+            'message': None,
+            'error': None,
+            'fqid': '',
+            'authors': page_obj.object_list,
+            'page_obj': page_obj,
+        }, template_name='follow_by_fqid.html')
 
     def post(self, request, author_id):
         if str(request.user.id) != str(author_id):

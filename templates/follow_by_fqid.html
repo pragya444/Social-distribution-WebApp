@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}Discover{% endblock %}
 
 {% block content %}
 <style>
@@ -19,6 +20,155 @@
   .ok { background: #eef9f1; border: 1px solid #bfe7c9; color: #1b6a3b; }
   .err { background: #fff2f2; border: 1px solid #ffd6d6; color: #8f1d1d; }
   .example { margin-top: .5rem; font-size: .9rem; color: #666; word-break: break-all; }
+  .authors-section { 
+    margin-top: 3rem; 
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .section-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 1.5rem; 
+    border-bottom: 2px solid #f3f4f6;
+    padding-bottom: 1rem;
+  }
+  .section-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #1f2937;
+  }
+  .author-grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+    gap: 1.5rem; 
+  }
+  .author-card { 
+    background: #fff; 
+    border: 1px solid #e5e7eb; 
+    border-radius: 12px; 
+    padding: 1.5rem;
+    transition: all 0.2s;
+  }
+  .author-card:hover { 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+  }
+  .author-header { 
+    display: flex; 
+    gap: 1rem; 
+    margin-bottom: 1rem; 
+  }
+  .author-avatar { 
+    width: 50px; 
+    height: 50px; 
+    border-radius: 50%; 
+    background: #f3f4f6; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+  .author-avatar img { 
+    width: 100%; 
+    height: 100%; 
+    border-radius: 50%; 
+    object-fit: cover; 
+  }
+  .author-info { flex: 1; min-width: 0; }
+  .author-info h3 { 
+    margin: 0; 
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .author-handle { 
+    color: #6b7280; 
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .remote-badge { 
+    background: #dbeafe; 
+    color: #1e40af; 
+    padding: 0.2rem 0.4rem; 
+    border-radius: 4px; 
+    font-size: 0.7rem; 
+    margin-left: 0.3rem;
+    font-weight: 500;
+  }
+  .author-actions { 
+    display: flex; 
+    gap: 0.5rem; 
+    margin-top: 1rem; 
+  }
+  .btn-sm { 
+    padding: 0.4rem 0.8rem; 
+    border-radius: 6px; 
+    border: none; 
+    cursor: pointer; 
+    font-size: 0.85rem; 
+    text-decoration: none; 
+    display: inline-block; 
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .btn-follow { 
+    background: #FFA500; 
+    color: white; 
+    flex: 1; 
+  }
+  .btn-follow:hover { background: #ff8c00; }
+  .btn-unfollow { 
+    background: #e5e7eb; 
+    color: #374151; 
+    flex: 1; 
+  }
+  .btn-unfollow:hover { background: #d1d5db; }
+  .btn-pending { 
+    background: #fef3c7; 
+    color: #92400e; 
+    flex: 1; 
+    cursor: not-allowed; 
+  }
+  .btn-profile { 
+    background: #f3f4f6; 
+    color: #374151; 
+  }
+  .btn-profile:hover { background: #e5e7eb; }
+  .pagination { 
+    display: flex; 
+    justify-content: center; 
+    gap: 0.5rem; 
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e5e7eb;
+  }
+  .pagination a, .pagination span { 
+    padding: 0.5rem 1rem; 
+    border: 1px solid #e5e7eb; 
+    border-radius: 6px; 
+    text-decoration: none; 
+    color: #374151;
+    transition: all 0.2s;
+  }
+  .pagination a:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+  }
+  .pagination .current { 
+    background: #FFA500; 
+    color: white; 
+    border-color: #FFA500;
+    font-weight: 600;
+  }
 </style>
 
 <div class="wrap">
@@ -53,4 +203,96 @@
     {% endif %}
   </form>
 </div>
+
+<div class="authors-section">
+  <div class="section-header">
+    <h2>Discover Authors</h2>
+    <span style="color: #6b7280; font-size: 0.9rem;">
+      {{ page_obj.paginator.count }} author{{ page_obj.paginator.count|pluralize }}
+    </span>
+  </div>
+  
+  <div class="author-grid">
+    {% for author in authors %}
+    <div class="author-card">
+      <div class="author-header">
+        <div class="author-avatar">
+          {% if author.profile_picture %}
+            <img src="{{ author.profile_picture }}" alt="{{ author.name }}">
+          {% else %}
+            👤
+          {% endif %}
+        </div>
+        <div class="author-info">
+          <h3>
+            {{ author.name }}
+            {% if author.host and request.get_host not in author.host %}
+              <span class="remote-badge">remote</span>
+            {% endif %}
+          </h3>
+          <div class="author-handle">
+            {% if author.host and request.get_host not in author.host %}
+              {{ author.host|cut:"/api"|truncatechars:30 }}
+            {% else %}
+              @{{ author.username|lower }}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      
+      <div class="author-actions">
+        {% if author.is_followed %}
+          <button class="btn-sm btn-unfollow" onclick="toggleFollow('{{ author.id }}', false)">
+            Following
+          </button>
+        {% elif author.is_pending %}
+          <button class="btn-sm btn-pending" disabled>
+            Pending
+          </button>
+        {% else %}
+          <button class="btn-sm btn-follow" onclick="toggleFollow('{{ author.id }}', true)">
+            Follow
+          </button>
+        {% endif %}
+        <a href="{% url 'profile' author_id=author.id %}" class="btn-sm btn-profile">
+          View
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}">← Prev</a>
+    {% endif %}
+    <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}">Next →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<script>
+async function toggleFollow(authorId, shouldFollow) {
+  const url = `/api/authors/{{ user.id }}/followers/${authorId}/`;
+  try {
+    const res = await fetch(url, {
+      method: shouldFollow ? 'PUT' : 'DELETE',
+      headers: { 
+        'X-CSRFToken': '{{ csrf_token }}', 
+        'Content-Type': 'application/json' 
+      },
+      credentials: 'same-origin'
+    });
+    if (res.ok) location.reload();
+    else alert('Failed to update follow status');
+  } catch(err) { 
+    console.error(err);
+    alert('Error updating follow status'); 
+  }
+}
+</script>
 {% endblock %}

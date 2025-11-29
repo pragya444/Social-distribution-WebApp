@@ -177,8 +177,8 @@ html, body {
 }
 .card-head{ padding:14px 18px; }
 .card-body{ padding:4px 18px 16px 18px; }
-.post-title{ padding-left:18px; }
-.post-content{ padding-left:18px; }
+.post-title{ margin:0 0 8px; padding:0 18px; }
+.post-content{ padding:0 18px 12px; }
 .card-foot{ padding:12px 18px; gap:32px; }
 .card-head{ display:flex; align-items:center; justify-content:space-between; }
 .author{ display:flex; align-items:center; gap:10px; }

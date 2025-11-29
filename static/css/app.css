@@ -101,7 +101,7 @@ html, body {
 .icon-btn:hover,
 .notif-btn:hover{ transform:scale(1.08); }
 .icon-btn svg,
-.notif-btn svg{ fill:#F76F62; }
+.notif-btn svg{ fill: #F69773; }
 
 .main{ display:flex; flex-direction:column; }
 .topbar{
@@ -138,7 +138,7 @@ html, body {
 .filter-tabs{ background:#eef2f1; justify-content: space-around; border-radius:12px; padding:6px; display:flex; gap:4px; }
 
 .tab{ border:0; background:transparent; padding:8px 12px; border-radius:10px; cursor:pointer; }
-.tab.active{ background:#FFA501; color:#fff; }
+.tab.active{ background:#fff; color:#1e1e1e; border:2px solid #FFA501; }
 
 .btn{
   background:var(--accent); color:#000; border:0; padding:10px 14px; border-radius:999px; cursor:pointer;
@@ -189,7 +189,7 @@ html, body {
 .filter-tabs { display:flex;align-items: center; gap:12px;; background:var(--mint); padding:6px 12px; border-radius:12px; }
 .filter-tabs .tab { text-decoration:none; padding:8px 16px; border-radius:20px; font-size:14px; font-weight:500; color:var(--muted); background:transparent; transition:background 0.3s ease, color 0.3s ease; }
 .filter-tabs .tab:hover { background:var(--mint-deep); color:var(--ink); }
-.filter-tabs .tab.active { background:#FFA501; color:#fff; }
+.filter-tabs .tab.active { background:#fff; color:#1e1e1e; border:2px solid #FFA501; }
 .handle{ color:var(--muted); font-size:13px; }
 
 .meta{ display:flex; align-items:center; gap:10px; position:relative; }
@@ -418,6 +418,9 @@ html, body {
 .author-grid .author-card:nth-child(3n){
   border-left:1px solid var(--mint);
 }
+.content .card{ margin-bottom:16px; }
+.content .card-body{ padding:16px 18px; }
+.content .text{ padding:0 18px 12px; }
 
 
 

@@ -173,7 +173,7 @@ html, body {
 }
 
 .card{
-  border:1px solid var(--mint); border-radius:var(--radius); box-shadow:var(--shadow); 
+  border:1px solid var(--mint); border-radius:var(--radius); box-shadow:var(--shadow); background: var(--card);  
 }
 .card-head{ padding:14px 18px; }
 .post-title{ margin:0 0 8px; padding:0 18px; }

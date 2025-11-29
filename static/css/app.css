@@ -3,11 +3,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Londrina+Shadow&display=swap');
 
 
-.londrina-shadow-regular {
-  font-family: "Londrina Shadow", sans-serif;
-  font-weight: 400;
-  font-style: normal;
-}
+
 
 
 
@@ -47,7 +43,16 @@ html, body {
 
 
 .layout{ display:grid; grid-template-columns: 260px 1fr; min-height:100vh; }
-.brand{ text-align: left; font-weight:700; font-size:20px; padding-left: 20px; }
+.brand { 
+  text-align: left; 
+  font-weight: 700; 
+  font-size: 24px; 
+  padding-left: 20px;
+  margin-bottom: 24px; 
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+  letter-spacing: -0.02em; 
+  color: #1e1e1e;
+}
 .logout{ margin-top:auto; color:#e06b6f; }
 .sidebar {
   width: 260px;
@@ -55,8 +60,11 @@ html, body {
   padding: 24px 16px;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;          /* ensures sidebar takes full height */
+  height: 100vh;              
+  position: sticky;           
+  top: 0;                    
   border-right: 1px solid rgba(0, 0, 0, 0.06);
+  overflow-y: auto;         
 }
 .nav { 
   display: flex; 

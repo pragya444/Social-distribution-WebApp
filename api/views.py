@@ -450,6 +450,8 @@ class AuthorStreamView(APIView):
 
     def get(self, request, author_id):
         tab = request.GET.get('tab', 'all')
+        page_num = int(request.GET.get('page', 1))
+        page_size = 10
         me = request.user
         if str(me.id) != str(author_id):
             author_id = me.id
@@ -486,23 +488,33 @@ class AuthorStreamView(APIView):
             friends_only_from_friends = Entry.objects.filter(author__in=friend_users, visibility='FRIENDS', is_deleted=False)
             entries = (public_entries | my_entries | unlisted_from_followed | friends_only_from_friends).order_by('-updated')
 
+        paginator = Paginator(entries, page_size)
+        page_obj = paginator.get_page(page_num)
+        page_entries = list(page_obj.object_list)
+
         liked_ids = set()
-        if request.user.is_authenticated and entries:
-            liked_ids = set(EntryLike.objects.filter(user=request.user, entry__in=entries).values_list('entry_id', flat=True))
-        
-        for e in entries:
+        if request.user.is_authenticated and page_entries:
+            liked_ids = set(EntryLike.objects.filter(user=request.user, entry__in=page_entries).values_list('entry_id', flat=True))
+        for e in page_entries:
             e.user_liked = e.id in liked_ids
             e.rendered = helpers.render_entry(e)
 
         if request.accepted_renderer.format == 'html':
             return Response({
                 'author': request.user,
-                'entries': entries,
+                'entries': page_entries,
                 'tab': tab,
+                'page_obj': page_obj,
             }, template_name='author_all_entries.html')
 
-        serializer = EntrySerializer(entries, many=True, context={"request": request})
-        return Response(serializer.data, status=200)
+        serializer = EntrySerializer(page_entries, many=True, context={"request": request})
+        return Response({
+            "type": "entries",
+            "page_number": page_obj.number,
+            "size": page_size,
+            "count": paginator.count,
+            "src": serializer.data
+        }, status=200)
 
 
 class EntryCreateView(APIView):

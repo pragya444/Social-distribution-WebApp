@@ -189,7 +189,7 @@ html, body {
 .filter-tabs { display:flex;align-items: center; gap:12px;; background:var(--mint); padding:6px 12px; border-radius:12px; }
 .filter-tabs .tab { text-decoration:none; padding:8px 16px; border-radius:20px; font-size:14px; font-weight:500; color:var(--muted); background:transparent; transition:background 0.3s ease, color 0.3s ease; }
 .filter-tabs .tab:hover { background:var(--mint-deep); color:var(--ink); }
-.filter-tabs .tab.active { background:#fff; color:#1e1e1e; border:2px solid #FFA501; }
+.filter-tabs .tab.active { background:#fff; color:#1e1e1e; }
 .handle{ color:var(--muted); font-size:13px; }
 
 .meta{ display:flex; align-items:center; gap:10px; position:relative; }

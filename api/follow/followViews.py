@@ -982,51 +982,104 @@ def fetch_remote_authors_from_node(node):
     Ensures NOT NULL fields get empty strings instead of None.
     """
     try:
-        authors_url = node.host.rstrip("/") + "/api/authors/"
+        base = (node.host or "").rstrip("/")
+        if not base:
+            log.warning(f"Empty host for node {node.id}")
+            return []
+        
+        candidates = [
+            base + "/api/authors/",
+            base + "/api/authors",
+            base + "/authors/",
+            base + "/authors"
+        ]
+        
         auth = HTTPBasicAuth(node.username, node.password) if node.username and node.password else None
-        log.info(f"Fetching authors from {authors_url}")
-        resp = requests.get(
-            authors_url,
-            headers={"Accept": "application/json"},
-            auth=auth,
-            timeout=10,
-        )
-        if resp.status_code != 200:
-            log.warning(f"Failed authors fetch {node.host}: {resp.status_code}")
+        
+        resp = None
+        successful_url = None
+        for url in candidates:
+            log.info(f"Trying remote authors URL: {url}")
+            try:
+                r = requests.get(
+                    url,
+                    headers={"Accept": "application/json"},
+                    auth=auth,
+                    timeout=10,
+                )
+                log.info(f"Response status: {r.status_code}")
+                if r.status_code == 200:
+                    resp = r
+                    successful_url = url
+                    log.info(f"SUCCESS: {url}")
+                    break
+                else:
+                    log.warning(f"FAILED: {url} returned {r.status_code}, body: {r.text[:200]}")
+            except Exception as e:
+                log.warning(f"Request error for {url}: {e}")
+                continue
+        
+        if not resp:
+            log.warning(f"No successful authors endpoint for node {node.host}")
             return []
 
         data = resp.json()
-        items = data.get("items", []) if isinstance(data, dict) else data
+        log.info(f"Raw JSON type: {type(data)}")
+        log.info(f"Raw JSON keys: {list(data.keys()) if isinstance(data, dict) else 'N/A (list)'}")
+        log.info(f"Raw JSON sample: {str(data)[:500]}")
+        
+        items = data.get("items") or data.get("authors") or data.get("data") or (data if isinstance(data, list) else [])
+        
+        if not isinstance(items, list):
+            log.warning(f"Unexpected payload type: {type(items)}")
+            return []
+        
+        log.info(f"Found {len(items)} items to process")
 
         inbox_view = InboxView()
         remote_users = []
 
-        for raw in items:
+        for idx, raw in enumerate(items):
             try:
-                # Normalize & sanitize
+                log.info(f"Processing author {idx + 1}/{len(items)}: {raw.get('id', 'NO-ID')}")
+                
+                author_id = (raw.get("id") or raw.get("url") or "").strip().rstrip("/")
+                if not author_id:
+                    log.warning(f"Skipping author with no id: {raw}")
+                    continue
+                
                 display_name = (raw.get("displayName") or raw.get("username") or "Remote User").strip()
-                github = raw.get("github") or ""          # convert None → ''
+                github = raw.get("github") or ""
                 profile_image = raw.get("profileImage") or raw.get("profile_image") or ""
-                host_val = (raw.get("host") or node.host).rstrip("/") + "/"
-                author_id = raw.get("id") or raw.get("url") or ""
+                host_val = ((raw.get("host") or node.host) or "").rstrip("/") + "/"
 
                 normalized = {
-                    "id": author_id,               # full FQID
+                    "id": author_id,
                     "displayName": display_name,
                     "host": host_val,
                     "github": github,
                     "profileImage": profile_image,
                 }
+                
+                log.info(f"Normalized: {normalized}")
 
                 user = inbox_view.get_or_create_remote_user(normalized)
+                
                 if user:
-                    remote_users.append(user)
+                    log.info(f"Created/found user: {user.username} (url={user.url})")
+                    if user.url:
+                        remote_users.append(user)
+                    else:
+                        log.warning(f"User {user.username} has no URL set!")
+                else:
+                    log.warning(f"get_or_create_remote_user returned None for: {author_id}")
+                    
             except Exception as e:
-                log.warning(f"Failed remote author {raw.get('id')}: {e}")
+                log.exception(f"Failed processing author {raw.get('id')}: {e}")
                 continue
 
-        log.info(f"Imported {len(remote_users)} remote authors from {node.host}")
+        log.info(f"Successfully imported {len(remote_users)} remote authors from {node.host}")
         return remote_users
     except Exception as e:
-        log.exception(f"Remote authors fetch error {node.host}: {e}")
+        log.exception(f"Fatal error fetching authors from {node.host}: {e}")
         return []

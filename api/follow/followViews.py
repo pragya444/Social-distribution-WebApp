@@ -978,55 +978,55 @@ class FollowByFQIDPageView(APIView):
 
 def fetch_remote_authors_from_node(node):
     """
-    Fetch all authors from a connected remote node's /authors endpoint.
-    Returns a list of User objects (created or updated locally).
+    Fetch authors from remote node and create/update local User rows.
+    Ensures NOT NULL fields get empty strings instead of None.
     """
     try:
         authors_url = node.host.rstrip("/") + "/api/authors/"
-        auth = HTTPBasicAuth(node.username, node.password)
-        
+        auth = HTTPBasicAuth(node.username, node.password) if node.username and node.password else None
         log.info(f"Fetching authors from {authors_url}")
-        
-        response = requests.get(
+        resp = requests.get(
             authors_url,
             headers={"Accept": "application/json"},
             auth=auth,
-            timeout=10
+            timeout=10,
         )
-        
-        if response.status_code != 200:
-            log.warning(f"Failed to fetch authors from {node.host}: {response.status_code}")
+        if resp.status_code != 200:
+            log.warning(f"Failed authors fetch {node.host}: {resp.status_code}")
             return []
-        
-        data = response.json()
-        # Handle both {"type": "authors", "items": [...]} and direct array
+
+        data = resp.json()
         items = data.get("items", []) if isinstance(data, dict) else data
-        
-        remote_users = []
+
         inbox_view = InboxView()
-        
-        for author_data in items:
+        remote_users = []
+
+        for raw in items:
             try:
-                # Normalize the author data to match your inbox format
+                # Normalize & sanitize
+                display_name = (raw.get("displayName") or raw.get("username") or "Remote User").strip()
+                github = raw.get("github") or ""          # convert None → ''
+                profile_image = raw.get("profileImage") or raw.get("profile_image") or ""
+                host_val = (raw.get("host") or node.host).rstrip("/") + "/"
+                author_id = raw.get("id") or raw.get("url") or ""
+
                 normalized = {
-                    "id": author_data.get("id", ""),
-                    "displayName": author_data.get("displayName", "Unknown"),
-                    "host": author_data.get("host", node.host),
-                    "github": author_data.get("github", ""),
-                    "profileImage": author_data.get("profileImage", ""),
+                    "id": author_id,               # full FQID
+                    "displayName": display_name,
+                    "host": host_val,
+                    "github": github,
+                    "profileImage": profile_image,
                 }
-                
-                # Reuse inbox logic to create/update remote user locally
+
                 user = inbox_view.get_or_create_remote_user(normalized)
                 if user:
                     remote_users.append(user)
             except Exception as e:
-                log.warning(f"Failed to process remote author {author_data.get('id', 'unknown')}: {e}")
+                log.warning(f"Failed remote author {raw.get('id')}: {e}")
                 continue
-        
-        log.info(f"Successfully fetched {len(remote_users)} authors from {node.host}")
+
+        log.info(f"Imported {len(remote_users)} remote authors from {node.host}")
         return remote_users
-        
     except Exception as e:
-        log.exception(f"Error fetching authors from {node.host}: {e}")
+        log.exception(f"Remote authors fetch error {node.host}: {e}")
         return []

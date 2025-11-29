@@ -459,7 +459,6 @@ class EntryView(APIView):
                 'author': author,
                 'entries': page_obj.object_list,
                 'tab': 'all',
-                'page_obj': page_obj,          # added
             }, template_name='author_all_entries.html')
         
         # JSON response

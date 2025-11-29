@@ -49,7 +49,14 @@ html, body {
 .layout{ display:grid; grid-template-columns: 260px 1fr; min-height:100vh; }
 .brand{ text-align: left; font-weight:700; font-size:20px; padding-left: 20px; }
 .logout{ margin-top:auto; color:#e06b6f; }
-.sidebar { position:sticky; top:0; height:100vh; padding:24px 18px; display:flex; flex-direction:column; gap:24px; background:var(--mint); border-right:1px solid var(--mint-deep); }
+.sidebar {
+  width: 260px;
+  background: var(--mint); 
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
 .nav { display:flex; flex-direction:column; gap:10px; }
 .nav-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; color:#1f2937; text-decoration:none; }
 .nav-item:hover { background:var(--mint-deep); }
@@ -70,8 +77,9 @@ html, body {
   outline:none;
 }
 .icons { display:flex; align-items:center; gap:16px; }
-.icon-btn { background:none; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:50%; transition:background 0.2s ease; }
-.icon-btn:hover { background:var(--mint-deep); }
+.icon-btn { background:none; border:none; cursor:pointer; position:relative; padding:8px; border-radius:8px; transition:transform 0.2s ease; }
+.icon-btn:hover { transform:scale(1.1); background:none; }
+.icon-btn:active { transform:scale(0.95); }
 .bell svg, .avatar svg { width:24px; height:24px; }
 .avatar { width:40px; height:40px; background:var(--line); border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 .avatar img { width:100%; height:100%; object-fit:cover; }

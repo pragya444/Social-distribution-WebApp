@@ -986,12 +986,15 @@ def fetch_remote_authors_from_node(node):
         if not base:
             log.warning(f"Empty host for node {node.id}")
             return []
-        
+
+        # Normalize candidate endpoints without duplicating /api
+        api_base = base if base.endswith("/api") else base + "/api"
+        root_base = base
         candidates = [
-            base + "/api/authors/",
-            base + "/api/authors",
-            base + "/authors/",
-            base + "/authors"
+            api_base + "/authors/",
+            api_base + "/authors",
+            root_base + "/authors/",
+            root_base + "/authors",
         ]
         
         auth = HTTPBasicAuth(node.username, node.password) if node.username and node.password else None
@@ -1051,7 +1054,15 @@ def fetch_remote_authors_from_node(node):
                 display_name = (raw.get("displayName") or raw.get("username") or "Remote User").strip()
                 github = raw.get("github") or ""
                 profile_image = raw.get("profileImage") or raw.get("profile_image") or ""
-                host_val = ((raw.get("host") or node.host) or "").rstrip("/") + "/"
+                
+                # Always derive host from the author's id/url to avoid cross-node contamination
+                parsed = urlparse(author_id)
+                if parsed.scheme and parsed.netloc:
+                    host_val = f"{parsed.scheme}://{parsed.netloc}/api/"
+                else:
+                    # Last-resort fallback: normalize node.host to /api/
+                    node_base = node.host.rstrip("/")
+                    host_val = (node_base + "/api/") if not node_base.endswith("/api") else (node_base + "/")
 
                 normalized = {
                     "id": author_id,
@@ -1061,25 +1072,13 @@ def fetch_remote_authors_from_node(node):
                     "profileImage": profile_image,
                 }
                 
-                log.info(f"Normalized: {normalized}")
-
                 user = inbox_view.get_or_create_remote_user(normalized)
-                
-                if user:
-                    log.info(f"Created/found user: {user.username} (url={user.url})")
-                    if user.url:
-                        remote_users.append(user)
-                    else:
-                        log.warning(f"User {user.username} has no URL set!")
-                else:
-                    log.warning(f"get_or_create_remote_user returned None for: {author_id}")
-                    
+                if user and user.url:
+                    remote_users.append(user)
             except Exception as e:
-                log.exception(f"Failed processing author {raw.get('id')}: {e}")
+                log.exception(f"Failed processing author: {e}")
                 continue
 
-        log.info(f"Successfully imported {len(remote_users)} remote authors from {node.host}")
-        return remote_users
     except Exception as e:
         log.exception(f"Fatal error fetching authors from {node.host}: {e}")
         return []

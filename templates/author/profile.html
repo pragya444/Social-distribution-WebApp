@@ -6,7 +6,7 @@
 
 <style>
   :root {
-    --mint: #d9f0e5;
+    --mint: #C3EDD2;
     --mint-deep: #bfe3d1;
     --ink: #1e1e1e;
     --muted: #6b7280;
@@ -319,25 +319,25 @@
                   <div class="display">{{ e.author.name }}</div>
                   <div class="handle">
                   {% if e.author.host and request.get_host in e.author.host %}
-                    <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                    <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none; font-weight:400;">
                       @{{ e.author.username|lower }}
                     </a>
 
                   {% elif e.author.host %}
                     {% if "/api" in e.author.host %}
                       {% with clean_host=e.author.host|cut:"/api" %}
-                        <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                        <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none; font-weight:400;">
                           {{ clean_host }}
                         </a>
                       {% endwith %}
                     {% else %}
-                      <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                      <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none; font-weight:400;">
                         {{ e.author.host }}
                       </a>
                     {% endif %}
 
                   {% else %}
-                    <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
+                    <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none; font-weight:400;">
                       @{{ e.author.username|lower }}
                     </a>
                   {% endif %}

@@ -809,6 +809,24 @@ class FollowByFQIDPageView(APIView):
         paginator = Paginator(unique_authors, page_size)
         page_obj = paginator.get_page(page_num)
         
+        # 5. Add follow status for current page only (optimization)
+        author_ids = [a.id for a in page_obj.object_list]
+        followed_ids = set(Follow.objects.filter(
+            follower=request.user,
+            followee_id__in=author_ids,
+            status=Follow.Status.APPROVED
+        ).values_list('followee_id', flat=True))
+        
+        pending_ids = set(Follow.objects.filter(
+            follower=request.user,
+            followee_id__in=author_ids,
+            status=Follow.Status.PENDING
+        ).values_list('followee_id', flat=True))
+        
+        for author in page_obj.object_list:
+            author.is_followed = author.id in followed_ids
+            author.is_pending = author.id in pending_ids
+        
         return Response({
             'message': None,
             'error': None,
@@ -1033,19 +1051,7 @@ def fetch_remote_authors_from_node(node):
                 display_name = (raw.get("displayName") or raw.get("username") or "Remote User").strip()
                 github = raw.get("github") or ""
                 profile_image = raw.get("profileImage") or raw.get("profile_image") or ""
-                
-                # FIX: Properly handle host field
-                raw_host = raw.get("host")
-                if raw_host:
-                    # Use host from API response
-                    host_val = raw_host.rstrip("/") + "/"
-                else:
-                    # Construct from node.host, ensuring /api/ is included
-                    node_base = node.host.rstrip("/")
-                    if not node_base.endswith("/api"):
-                        host_val = node_base + "/api/"
-                    else:
-                        host_val = node_base + "/"
+                host_val = ((raw.get("host") or node.host) or "").rstrip("/") + "/"
 
                 normalized = {
                     "id": author_id,
@@ -1060,7 +1066,7 @@ def fetch_remote_authors_from_node(node):
                 user = inbox_view.get_or_create_remote_user(normalized)
                 
                 if user:
-                    log.info(f"Created/found user: {user.username} (url={user.url}, host={user.host})")
+                    log.info(f"Created/found user: {user.username} (url={user.url})")
                     if user.url:
                         remote_users.append(user)
                     else:

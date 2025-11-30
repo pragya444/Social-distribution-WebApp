@@ -1075,9 +1075,10 @@ def fetch_remote_authors_from_node(node):
                 user = inbox_view.get_or_create_remote_user(normalized)
                 if user and user.url:
                     remote_users.append(user)
+                return remote_users
             except Exception as e:
                 log.exception(f"Failed processing author: {e}")
-                continue
+                return []
 
     except Exception as e:
         log.exception(f"Fatal error fetching authors from {node.host}: {e}")

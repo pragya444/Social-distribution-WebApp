@@ -6,7 +6,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Register</title>
-    <link rel="icon" type="image/png" href="{% static 'images/android-chrome-512x512.png' %}" />
     <link rel="stylesheet" href="{% static 'css/auth.css' %}" />
   </head>
   <style>
@@ -17,8 +16,8 @@
   </style>
   <body>
     <article class="card">
-      <h1>Join InterLink</h1>
-      <p class="auth-subtitle">Create your account to get started</p>
+      <h1>Sign Up</h1>
+      <h3>or <a href="{% url 'login' %}">Log In</a></h3>
 
       <form method="POST">
         {% csrf_token %}
@@ -82,9 +81,6 @@
 
         <button class="auth-btn" type="submit">Register</button>
       </form>
-       <p class="auth-footer">
-        Already have an account? <a href="{% url 'login' %}">Login</a>
-      </p>
     </article>
   </body>
 </html>

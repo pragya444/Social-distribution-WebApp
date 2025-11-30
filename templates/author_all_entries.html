@@ -104,7 +104,7 @@
           <div class="display">{{ e.author.name }}</div>
           <div class="handle">
           {% if e.author.host and request.get_host in e.author.host %}
-            <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none; ">
+            <a href="{% url 'profile' author_id=e.author.id %}" style="text-decoration:none;">
               @{{ e.author.username|lower }}
             </a>
 

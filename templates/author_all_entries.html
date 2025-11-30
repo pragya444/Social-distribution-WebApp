@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}InterLink{% endblock %}
+{% block title %}Crimson{% endblock %}
 
 
 {% block content %}
@@ -50,34 +50,6 @@
     max-height: 80vh;
     object-fit: contain;
   }
-
-  .stream-pagination{
-  display:flex;
-  justify-content:center;
-  gap:8px;
-  margin:24px 0;
-}
-.stream-pagination a,
-.stream-pagination span{
-  padding:8px 12px;
-  border:1px solid var(--line);
-  border-radius:8px;
-  background:#fff;
-  text-decoration:none;
-  color:#1e1e1e;
-  font-size:14px;
-}
-.stream-pagination a:hover{ background:var(--mint); }
-.stream-pagination .current{
-  background:#FFA501;
-  color:#fff;
-  border-color:#FFA501;
-}
-.stream-pagination .disabled{
-  color:#9ca3af;
-  background:#f3f4f6;
-  pointer-events:none;
-}
 </style>
 
 <div class="feed-header">
@@ -88,6 +60,7 @@
     <a href="?tab=friends" class="tab {% if tab == 'friends' %}active{% endif %}">Friends</a>
     <a href="?tab=private" class="tab {% if tab == 'private' %}active{% endif %}">My Entries</a>
   </div>
+  <a class="btn" href="{% url 'entry-create-page' author_id=author.id %}">+ New Entry</a>
 </div>
 
 {% for e in entries %}
@@ -248,38 +221,10 @@
 {% empty %}
   <p>No entries yet.</p>
 {% endfor %}
-
-{% if page_obj %}
-<div class="stream-pagination">
-  {% if page_obj.has_previous %}
-    <a href="?page=1">First</a>
-    <a href="?page={{ page_obj.previous_page_number }}">Prev</a>
-  {% else %}
-    <span class="disabled">First</span>
-    <span class="disabled">Prev</span>
-  {% endif %}
-
-  {% for num in page_obj.paginator.page_range %}
-    {% if page_obj.number == num %}
-      <span class="current">{{ num }}</span>
-    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-      <a href="?page={{ num }}">{{ num }}</a>
-    {% endif %}
-  {% endfor %}
-
-  {% if page_obj.has_next %}
-    <a href="?page={{ page_obj.next_page_number }}">Next</a>
-    <a href="?page={{ page_obj.paginator.num_pages }}">Last</a>
-  {% else %}
-    <span class="disabled">Next</span>
-    <span class="disabled">Last</span>
-  {% endif %}
-</div>
-{% endif %}
-
+{# MODAL STRUCTURE ADDED #}
 <div id="deleteModal" class="modal-overlay">
   <div class="modal">
-    <h2>InterLink</h2>
+    <h2>TheConnection</h2>
     <p>Are you sure you want to delete this entry? This action cannot be undone.</p>
     <button class="confirm" onclick="confirmDelete()">Delete</button>
     <button class="cancel" onclick="closeDeleteModal()">Cancel</button>

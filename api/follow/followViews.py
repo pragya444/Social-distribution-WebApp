@@ -17,7 +17,7 @@ import urllib.request
 from django.views.decorators.csrf import csrf_exempt  
 from requests.auth import HTTPBasicAuth
 import os
-from django.core.paginator import Paginator
+
 from api.serializers import (
     FollowRequestSerializer,
     FollowersSerializer,
@@ -31,7 +31,7 @@ import logging
 import requests
 from urllib.parse import urlparse, urlunparse
 from api.inbox.inboxView import InboxView as InboxView
-from django.db import models
+
 log = logging.getLogger(__name__)
 
 User = get_user_model()
@@ -752,88 +752,23 @@ class FollowByFQIDPageView(APIView):
     """
     Simple page where a logged-in local author can paste a remote author FQID
     and send them a follow activity to their /inbox.
-    Also displays all authors (local + remote from connected nodes).
     """
     permission_classes = [IsAuthenticated]
     renderer_classes = [TemplateHTMLRenderer]
     authentication_classes = [SessionAuthentication]
 
     def get(self, request, author_id):
-        """Render the follow-by-FQID page with author discovery list"""
         if str(request.user.id) != str(author_id):
             return HttpResponseForbidden("Not your account")
 
-        page_num = int(request.GET.get('page', 1))
-        page_size = int(request.GET.get('size', 10))
-        
-        # 1. Get LOCAL authors (no host or host matches our local base)
-        local_base = getattr(settings, "LOCAL_API_BASE", "").rstrip("/")
-        local_authors = list(User.objects.filter(
-            is_active=True
-        ).exclude(id=request.user.id).filter(
-            models.Q(host__isnull=True) | 
-            models.Q(host="") | 
-            models.Q(host=local_base) |
-            models.Q(host=local_base + "/")
-        ))
-        
-        log.info(f"Found {len(local_authors)} local authors")
-        
-        # 2. Fetch REMOTE authors from all connected nodes
-        remote_authors = []
-        connected_nodes = Node.objects.filter(is_connected=True)
-        
-        log.info(f"Fetching from {connected_nodes.count()} connected nodes")
-        
-        for node in connected_nodes:
-            fetched = fetch_remote_authors_from_node(node)
-            remote_authors.extend(fetched)
-        
-        log.info(f"Found {len(remote_authors)} remote authors")
-        
-        # 3. Combine and deduplicate by URL
-        all_authors = local_authors + remote_authors
-        
-        seen = {}
-        for author in all_authors:
-            key = author.url or str(author.id)
-            if key not in seen:
-                seen[key] = author
-        
-        unique_authors = list(seen.values())
-        unique_authors.sort(key=lambda x: x.created, reverse=True)
-        
-        log.info(f"Total unique authors: {len(unique_authors)}")
-        
-        # 4. Paginate
-        paginator = Paginator(unique_authors, page_size)
-        page_obj = paginator.get_page(page_num)
-        
-        # 5. Add follow status for current page only (optimization)
-        author_ids = [a.id for a in page_obj.object_list]
-        followed_ids = set(Follow.objects.filter(
-            follower=request.user,
-            followee_id__in=author_ids,
-            status=Follow.Status.APPROVED
-        ).values_list('followee_id', flat=True))
-        
-        pending_ids = set(Follow.objects.filter(
-            follower=request.user,
-            followee_id__in=author_ids,
-            status=Follow.Status.PENDING
-        ).values_list('followee_id', flat=True))
-        
-        for author in page_obj.object_list:
-            author.is_followed = author.id in followed_ids
-            author.is_pending = author.id in pending_ids
-        
-        return Response({
-            'message': None,
-            'error': None,
-            'fqid': '',
-            'authors': page_obj.object_list,
-            'page_obj': page_obj,
-        }, template_name='follow_by_fqid.html')
+        return Response(
+            {
+                "message": None,
+                "error": None,
+                "fqid": "",
+            },
+            template_name="follow_by_fqid.html",
+        )
 
     def post(self, request, author_id):
         if str(request.user.id) != str(author_id):
@@ -975,111 +910,3 @@ class FollowByFQIDPageView(APIView):
                 template_name="follow_by_fqid.html",
                 status=500,
             )
-
-def fetch_remote_authors_from_node(node):
-    """
-    Fetch authors from remote node and create/update local User rows.
-    Ensures NOT NULL fields get empty strings instead of None.
-    """
-    try:
-        base = (node.host or "").rstrip("/")
-        if not base:
-            log.warning(f"Empty host for node {node.id}")
-            return []
-        
-        candidates = [
-            base + "/api/authors/",
-            base + "/api/authors",
-            base + "/authors/",
-            base + "/authors"
-        ]
-        
-        auth = HTTPBasicAuth(node.username, node.password) if node.username and node.password else None
-        
-        resp = None
-        successful_url = None
-        for url in candidates:
-            log.info(f"Trying remote authors URL: {url}")
-            try:
-                r = requests.get(
-                    url,
-                    headers={"Accept": "application/json"},
-                    auth=auth,
-                    timeout=10,
-                )
-                log.info(f"Response status: {r.status_code}")
-                if r.status_code == 200:
-                    resp = r
-                    successful_url = url
-                    log.info(f"SUCCESS: {url}")
-                    break
-                else:
-                    log.warning(f"FAILED: {url} returned {r.status_code}, body: {r.text[:200]}")
-            except Exception as e:
-                log.warning(f"Request error for {url}: {e}")
-                continue
-        
-        if not resp:
-            log.warning(f"No successful authors endpoint for node {node.host}")
-            return []
-
-        data = resp.json()
-        log.info(f"Raw JSON type: {type(data)}")
-        log.info(f"Raw JSON keys: {list(data.keys()) if isinstance(data, dict) else 'N/A (list)'}")
-        log.info(f"Raw JSON sample: {str(data)[:500]}")
-        
-        items = data.get("items") or data.get("authors") or data.get("data") or (data if isinstance(data, list) else [])
-        
-        if not isinstance(items, list):
-            log.warning(f"Unexpected payload type: {type(items)}")
-            return []
-        
-        log.info(f"Found {len(items)} items to process")
-
-        inbox_view = InboxView()
-        remote_users = []
-
-        for idx, raw in enumerate(items):
-            try:
-                log.info(f"Processing author {idx + 1}/{len(items)}: {raw.get('id', 'NO-ID')}")
-                
-                author_id = (raw.get("id") or raw.get("url") or "").strip().rstrip("/")
-                if not author_id:
-                    log.warning(f"Skipping author with no id: {raw}")
-                    continue
-                
-                display_name = (raw.get("displayName") or raw.get("username") or "Remote User").strip()
-                github = raw.get("github") or ""
-                profile_image = raw.get("profileImage") or raw.get("profile_image") or ""
-                host_val = ((raw.get("host") or node.host) or "").rstrip("/") + "/"
-
-                normalized = {
-                    "id": author_id,
-                    "displayName": display_name,
-                    "host": host_val,
-                    "github": github,
-                    "profileImage": profile_image,
-                }
-                
-                log.info(f"Normalized: {normalized}")
-
-                user = inbox_view.get_or_create_remote_user(normalized)
-                
-                if user:
-                    log.info(f"Created/found user: {user.username} (url={user.url})")
-                    if user.url:
-                        remote_users.append(user)
-                    else:
-                        log.warning(f"User {user.username} has no URL set!")
-                else:
-                    log.warning(f"get_or_create_remote_user returned None for: {author_id}")
-                    
-            except Exception as e:
-                log.exception(f"Failed processing author {raw.get('id')}: {e}")
-                continue
-
-        log.info(f"Successfully imported {len(remote_users)} remote authors from {node.host}")
-        return remote_users
-    except Exception as e:
-        log.exception(f"Fatal error fetching authors from {node.host}: {e}")
-        return []

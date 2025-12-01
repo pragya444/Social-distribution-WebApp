@@ -14,6 +14,7 @@ import requests
 import pprint
 from urllib.parse import urlparse
 from requests.auth import HTTPBasicAuth
+import hashlib
 
 
 User = get_user_model()
@@ -159,9 +160,30 @@ class InboxView(APIView):
     
 
     def get_or_create_remote_user(self, user_data):
-        def make_remote_username(fqid):
-            slug = slugify(fqid)
-            return f"remote_{slug}"[:150]
+        def make_remote_username(fqid: str) -> str:
+            """
+            Create a deterministic, collision-resistant username from fqid.
+            Example: remote_https-example-com-users-123_ab12cd34
+            """
+            if not fqid:
+                fqid = "unknown-remote-user"
+
+            # Stable slug from fqid
+            slug = slugify(fqid) or "remote-user"
+
+            # Short stable hash from fqid (8 hex chars)
+            digest = hashlib.sha256(fqid.encode("utf-8")).hexdigest()[:8]
+
+            prefix = "remote_"
+            # We want: prefix + slug + '_' + digest  <= 255 chars
+            max_len = User._meta.get_field("username").max_length  # 255
+            # reserve len(prefix) + 1 + len(digest) for fixed parts
+            reserved = len(prefix) + 1 + len(digest)
+            max_slug_len = max_len - reserved
+
+            slug = slug[:max_slug_len]
+
+            return f"{prefix}{slug}_{digest}"
 
         user_fqid = user_data.get('id', '')
 

@@ -1,39 +1,74 @@
 {% extends "base.html" %}
 {% block title %}{{ title }}{% endblock %}
+
 {% block content %}
 <style>
-  .userlist { display:grid; gap:12px; margin-top:1rem; }
-  .usercard { display:flex; align-items:center; gap:12px; padding:12px;
-              background:#fff; border:1px solid #e5e7eb; border-radius:12px; }
-  .avatar { width:40px; height:40px; border-radius:999px; background:#eee; object-fit:cover; }
-  .meta { display:flex; flex-direction:column; }
-  .name { font-weight:700; }
-  .username { color:#6b7280; font-size:14px; }
+  .authors-section{
+    margin-top: 0;
+    background: #fff; border-radius: 12px; padding: 2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .section-header{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:1.5rem; border-bottom:2px solid #f3f4f6; padding-bottom:1rem;
+  }
+  .section-header h2{ margin:0; font-size:1.5rem; color:#1f2937; }
+  .author-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr));
+    gap:1.5rem;
+  }
+  .author-card{
+    background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+    padding:1.5rem; transition:all .2s;
+  }
+  .author-card:hover{ box-shadow:0 4px 12px rgba(0,0,0,.1); transform:translateY(-2px); }
+  .author-info{ display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
+  .avatar{
+    width:50px; height:50px; border-radius:50%; background:#f3f4f6;
+    display:flex; align-items:center; justify-content:center; font-size:1.5rem; flex-shrink:0;
+  }
+  .avatar img{ width:100%; height:100%; object-fit:cover; border-radius:50%; }
+  .author-details{ flex:1; min-width:0; }
+  .author-details h3{ margin:0; font-size:1rem; font-weight:600; color:#111827; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .username{ color:#6b7280; font-size:.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .author-actions{ display:flex; gap:.5rem; margin-top:1rem; }
+  .view-btn{
+    padding:.4rem .8rem; border-radius:6px; border:none; cursor:pointer; font-size:.85rem;
+    text-decoration:none; display:inline-block; text-align:center; background:#f3f4f6; color:#374151; transition:all .2s;
+  }
+  .view-btn:hover{ background:#e5e7eb; }
 </style>
 
-<h1>{{ title }}</h1>
+<section class="authors-section">
+  <div class="section-header">
+    <h2>{{ title }}</h2>
+    <span class="count">{{ users|length }} user{{ users|length|pluralize }}</span>
+  </div>
 
-<div class="userlist">
-  {% for u in users %}
-    <div class="usercard">
-      {% if u.profile_picture %}
-        <img class="avatar" src="{{ u.profile_picture }}" alt="{{ u.name }}">
-      {% else %}
-        <div class="avatar" aria-hidden="true"></div>
-      {% endif %}
-      <div class="meta">
-        <a class="name" href="{% url 'profile' author_id=u.id %}">{{ u.name|default:u.username }}</a>
-        <div class="username">
-          {% if u.host %}
-            {{ u.host }}
+  <div class="author-grid">
+    {% for u in users %}
+      <div class="author-card">
+        <div class="author-info">
+          {% if u.profile_picture %}
+            <img src="{{ u.profile_picture }}" alt="{{ u.name|default:u.username }}" class="avatar">
+
           {% else %}
-            @{{ u.username }}
+<div class="avatar">{{ u.name|default:u.username|slice:":2"|upper }}</div>
           {% endif %}
+          <div class="author-details">
+            <h3>{{ u.name|default:u.username }}</h3>
+            <p class="username">
+              {% if u.host %}{{ u.host }}{% else %}@{{ u.username }}{% endif %}
+            </p>
+          </div>
+        </div>
+        <div class="author-actions">
+          <a href="{% url 'profile' author_id=u.id %}" class="view-btn">View</a>
         </div>
       </div>
-    </div>
-  {% empty %}
-    <p>No users to show.</p>
-  {% endfor %}
-</div>
+    {% empty %}
+      <p>No users to show.</p>
+    {% endfor %}
+  </div>
+</section>
 {% endblock %}

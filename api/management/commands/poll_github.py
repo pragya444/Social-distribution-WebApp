@@ -37,7 +37,7 @@ class Command(BaseCommand):
 
                     response = requests.get(f"https://api.github.com/users/{github_username}/events", headers=headers)
                     if response.status_code == 200:
-                        print("Success for user: ", user.username)
+                        # print("Success for user: ", user.username)
                         print(response.headers.get("ETag"))
                         data = response.json()
                         if len(data) != 0:

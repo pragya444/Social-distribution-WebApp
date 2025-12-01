@@ -619,8 +619,7 @@ class EntryImageFQIDView(APIView):
         # Look up the Entry using the parsed IDs
         entry = get_object_or_404(
             Entry,
-            id=entry_id,
-            author_id=author_id,
+            fqid=entry_fqid,
             is_deleted=False,
         )
 

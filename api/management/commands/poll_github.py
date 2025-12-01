@@ -52,7 +52,8 @@ class Command(BaseCommand):
                         user.latest_github_event_id = latest_event_id
                         user.save()
                     elif response.status_code == 304:
-                        print("No change in github for: ", user.username)
+                        # print("No change in github for: ", user.username)
+                        pass
                     else:
                         print("Error in API call, ", response.status_code)
 

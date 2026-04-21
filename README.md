@@ -1,24 +1,18 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/etkNZkSE)
-CMPUT404-project-socialdistribution
-===================================
+# Social Distribution App
 
-CMPUT404-project-socialdistribution
-
-See [the web page](https://uofa-cmput404.github.io/general/project.html) for a description of the project.
-
-Make a distributed social network!
+Making a distributed social network!
 
 ## Team Members
 
-| Name        | CCID   | GitHub Username |
-| ----------- | ------ | --------------- |
-| Utsha Samanta | usamanta | utshasamanta     |
-| Raiyana Rahman| raiyana2 | raiyana2     |
-| Pragya Das | pragya4 | pragya444     |
-| Ling Zhuo | lzhuo2 | lz22222     |
-| Kevin Ho He | hohe | kevinhh12     |
-| Kehan Chen | kehan | KarlFranzman     |
-| Amitoj Singh | amitoj2 | amitojxsingh |
+| Name        | GitHub Username |
+| ----------- | --------------- |
+| Pragya Das | pragya444     |
+| Utsha Samanta | utshasamanta     |
+| Raiyana Rahman| raiyana2     |
+| Ling Zhuo | lz22222     |
+| Kevin Ho He | kevinhh12     |
+| Kehan Chen | KarlFranzman     |
+| Amitoj Singh | amitojxsingh |
 
 ## License
 
@@ -35,9 +29,3 @@ The authors claiming copyright for this project:
 - Kehan Chen  
 - Amitoj Singh
 
-
-## Collaboration (AI)
-
-- The following test cases (EntryModelTests, AuthorEntriesViewTests) were written with the asistance of OpenAI, ChatGPT-5. 2025-10-19.
-
-- The model Entry was written with the assistance of OpenAI, ChatGPT-5. 2025-10-19.
